@@ -2,7 +2,7 @@
 // Sorgu yalnızca config/marketplaces.ts'teki alan adlarıyla sınırlanır.
 import { marketplaceFor, marketplaceSearchDomains } from "../lib/domain.ts";
 import { normalizeName } from "../lib/productName.ts";
-import { brandTokens, modelCoverage, modelTokens } from "./match.ts";
+import { brandTokens, modelCoverage, modelTokens, tokens } from "./match.ts";
 
 export type SearchResult = { title: string; url: string; content: string };
 export type SearchOutcome =
@@ -89,9 +89,15 @@ export type MarketplaceMatch = { url: string; why: string };
  *  - modelin ilk kelimesi geçmeli ve model kelimelerinin en az %60'ı başlık+açıklamada bulunmalı.
  * Markanın pazaryerindeki resmi mağaza sayfası (amazon.com/stores/Marka) da kanıt sayılır.
  */
-export function findMarketplaceListing(results: SearchResult[], brandDomain: string, productName: string): MarketplaceMatch | null {
-  const brands = brandTokens(brandDomain, productName);
-  const model = modelTokens(brandDomain, productName);
+export function findMarketplaceListing(
+  results: SearchResult[],
+  brandDomain: string,
+  productName: string,
+  /** Marka sözcükleri bilinen durumlarda (yeni mağaza: mağaza adı + alan adı) ürün adının ilk sözcüğü marka sayılmaz. */
+  brandWords?: string[],
+): MarketplaceMatch | null {
+  const brands = brandWords?.length ? brandWords : brandTokens(brandDomain, productName);
+  const model = brandWords?.length ? tokens(productName).filter((t) => !brands.includes(t)) : modelTokens(brandDomain, productName);
   for (const r of results) {
     const marketplace = marketplaceFor(r.url);
     // Toptan/tedarik platformundaki ilan eleme sebebi değildir (tedarikçi adayıdır).

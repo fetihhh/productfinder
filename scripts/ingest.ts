@@ -101,7 +101,12 @@ async function verify(): Promise<boolean> {
               trancoRank: p.brands.tranco_rank,
             }
           : null);
-      const r = await verifyProduct({ brandDomain: p.brand_domain, productUrl: p.product_url, productName: p.name, brand }, deps);
+      // Yeni mağaza keşfinden gelen ürünlerin adı markayla başlamaz (marka = mağaza adı).
+      const fromStore = p.mentions.length > 0 && p.mentions.every((m) => m.source === "yenimagaza");
+      const r = await verifyProduct(
+        { brandDomain: p.brand_domain, productUrl: p.product_url, productName: p.name, brand, nameStartsWithBrand: !fromStore },
+        deps,
+      );
       await saveVerification(p, r);
       if (r.brandCheck) {
         brandCache.set(p.brand_domain, {

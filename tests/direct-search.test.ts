@@ -133,3 +133,18 @@ test("Doğrudan arama temiz + Tavily temiz → tam doğrulama ve marka 'clean'",
   assert.equal(r.brandCheck?.status, "clean");
   assert.match(r.reason, /Doğrudan arama: Amazon\.com temiz/);
 });
+
+test("Yeni mağaza ürünü: adın ilk sözcüğü marka sayılmaz (genel Amazon ilanı markanın ilanı değildir)", async () => {
+  const direct = async (): Promise<SearchOutcome> => ({
+    ok: true,
+    results: [{ title: "Lumen Lamp Dimmable Bedside Light", url: "https://www.amazon.com/dp/B000000002", content: "" }],
+    checked: ["Amazon.com"],
+    failed: [],
+  });
+  const storeInput = { ...input, productName: "Lumen Lamp Dimmable", nameStartsWithBrand: false };
+  const r = await verifyProduct(storeInput, deps(direct, null));
+  assert.equal(r.status, "verified", r.reason);
+  // Blog başlığı varsayımıyla ("Lumen" marka) aynı ilan eşleşir.
+  const blog = await verifyProduct({ ...storeInput, nameStartsWithBrand: true }, deps(direct, null));
+  assert.equal(blog.status, "rejected_marketplace");
+});

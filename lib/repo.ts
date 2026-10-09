@@ -116,6 +116,7 @@ export type ProductToVerify = {
     marketplace_checked_at: string | null;
     tranco_rank: number | null;
   } | null;
+  mentions: { source: string }[];
 };
 
 /**
@@ -126,7 +127,7 @@ export async function productsToVerify(limit: number, recheckAll = false): Promi
   const stale = new Date(recheckAll ? Date.now() + 86_400_000 : Date.now() - REVERIFY_AFTER_DAYS * 86_400_000).toISOString();
   const { data, error } = await db()
     .from("products")
-    .select("id, name, brand_domain, product_url, dtc_status, brands(marketplace_status, marketplace_evidence, marketplace_checked_at, tranco_rank)")
+    .select("id, name, brand_domain, product_url, dtc_status, brands(marketplace_status, marketplace_evidence, marketplace_checked_at, tranco_rank), mentions(source)")
     .or(`dtc_checked_at.is.null,and(dtc_status.eq.verified,dtc_checked_at.lt.${stale})`)
     .order("dtc_checked_at", { ascending: true, nullsFirst: true })
     .order("first_seen_at", { ascending: false })

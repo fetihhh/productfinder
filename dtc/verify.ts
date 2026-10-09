@@ -4,6 +4,7 @@
 import { parse } from "tldts";
 import { BIG_BRAND_MAX_RANK, BRAND_RECHECK_DAYS, STRICT_BRAND_CHECK, VERIFY_WITH_DIRECT_ONLY } from "../config/limits.ts";
 import { classifyDomain, registrableDomain } from "../lib/domain.ts";
+import { normalizeName } from "../lib/productName.ts";
 import type { FetchResult } from "../lib/http.ts";
 import { visitsFromRank } from "../lib/winner.ts";
 import { buildBrandQuery, buildQuery, findBrandListing, findMarketplaceListing, type SearchFn } from "./marketplaceSearch.ts";
@@ -59,7 +60,14 @@ export function bigBrandReason(rank: number): string {
   return `Büyük marka: site dünya sıralamasında #${rank.toLocaleString("tr-TR")} (≈ ${fmt.format(v.mid)} ziyaret/ay; sınır #${BIG_BRAND_MAX_RANK.toLocaleString("tr-TR")})`;
 }
 
-export type VerifyInput = { brandDomain: string; productUrl: string | null; productName: string; brand?: BrandState | null };
+export type VerifyInput = {
+  brandDomain: string;
+  productUrl: string | null;
+  productName: string;
+  brand?: BrandState | null;
+  /** false → ürün adı markayla başlamıyor (yeni mağaza keşfi); marka = mağaza adı + alan adı. Varsayılan: blog başlığı, ilk sözcük marka. */
+  nameStartsWithBrand?: boolean;
+};
 
 export type VerifyDeps = {
   fetchPage: (url: string, accept?: string) => Promise<FetchResult>;
@@ -292,11 +300,16 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
 
   // 9) Doğrudan pazaryeri araması (Amazon.com, AliExpress, Otto; kotasız): ürün ve marka.
   const brandName = r.store.brandName ?? input.brandDomain.split(".")[0];
+  const compactName = normalizeName(brandName).replace(/\s+/g, "");
+  const brandWords =
+    input.nameStartsWithBrand === false
+      ? [...new Set([normalizeName(input.brandDomain.split(".")[0]).replace(/\s+/g, ""), compactName].filter((w) => w.length >= 3))]
+      : undefined;
   let directComplete = false;
   if (deps.directSearch) {
     const d = await deps.directSearch(directQuery(brandName, input.productName));
     if (d.ok) {
-      const listing = findMarketplaceListing(d.results, input.brandDomain, input.productName);
+      const listing = findMarketplaceListing(d.results, input.brandDomain, input.productName, brandWords);
       if (listing) {
         if (STRICT_BRAND_CHECK) r.brandCheck = { status: "found", evidence: `${listing.why}: ${listing.url}` };
         return done("rejected_marketplace", `Pazaryerinde bulundu (${listing.why}, doğrudan arama): ${listing.url}`);
@@ -334,7 +347,7 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
     if (outcome.quota && directComplete && VERIFY_WITH_DIRECT_ONLY) return done("verified", WIDE_PENDING, true);
     return done("unverified", `${QUOTA_PREFIX}: ${outcome.reason}`, true);
   }
-  const listing = findMarketplaceListing(outcome.results, input.brandDomain, input.productName);
+  const listing = findMarketplaceListing(outcome.results, input.brandDomain, input.productName, brandWords);
   if (listing) {
     // Markanın bir ürünü pazaryerinde → katı modda marka da "found" (aynı markanın diğer ürünleri de elenir).
     if (STRICT_BRAND_CHECK) r.brandCheck = { status: "found", evidence: `${listing.why}: ${listing.url}` };

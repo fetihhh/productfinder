@@ -59,6 +59,8 @@ function SalesFacts({ p }: { p: ProductRow }) {
         : ["Toptan", p.supplier_count ? `${p.supplier_count} benzer ilan (fiyat yok)` : "benzeri bulunamadı", "Toptancı araması"],
     );
   }
+  const ads = p.brands?.ads_active;
+  if (ads) facts.push(["Reklam", `${ads} reklam yayında`, "Meta Reklam Kütüphanesi (Facebook/Instagram, AB'de gösterilen reklamlar)"]);
   if (p.margin_ratio !== null) facts.push(["Marj", `≈ ${Number(p.margin_ratio).toLocaleString("tr-TR")}×`, "Perakende fiyat / en düşük toptan fiyat (kargo, gümrük ve vergi hariç)"]);
   const w = p.winner_breakdown;
   if (w?.visits) facts.push(["Trafik", `≈ ${rangeLabel(w.visits)} ziyaret/ay`, `Tranco sırası #${w.rank?.toLocaleString("tr-TR")} → kaba tahmin`]);
@@ -77,7 +79,7 @@ function SalesFacts({ p }: { p: ProductRow }) {
           <dt className="text-zinc-500">{k}</dt>
           <dd
             className={
-              (k === "Türkiye" && tr) || (k === "Marj" && Number(p.margin_ratio) >= 3)
+              (k === "Türkiye" && tr) || (k === "Marj" && Number(p.margin_ratio) >= 3) || k === "Reklam"
                 ? "font-medium text-emerald-700 dark:text-emerald-400"
                 : ""
             }

@@ -4,6 +4,7 @@ import type { SalesSnapshot } from "../dtc/sales.ts";
 import type { SupplierResult } from "../dtc/suppliers.ts";
 import { bigBrandReason, type VerifyResult } from "../dtc/verify.ts";
 import type { Candidate, SeenItem } from "../sources/types.ts";
+import { adPointsByDomain } from "./ads.ts";
 import { db } from "./db.ts";
 import { normalizeName } from "./productName.ts";
 import { trendScore, type MentionLite } from "./score.ts";
@@ -257,10 +258,11 @@ export async function saveTrafficRanks(day: string, domains: string[], ranks: Ma
 /** Tüm ürünlerin winner skorunu satış ölçümleri, trafik sırası ve trend skorundan yeniden hesaplar. */
 export async function updateWinnerScores(): Promise<number> {
   const since = new Date(Date.now() - 45 * 86_400_000).toISOString().slice(0, 10);
-  const [products, snaps, ranks] = await Promise.all([
+  const [products, snaps, ranks, ads] = await Promise.all([
     db().from("products").select("id, brand_domain, review_count, rating, price, currency, trend_score, score_breakdown, supplier_min_usd, margin_ratio"),
     db().from("product_snapshots").select("product_id, day, review_count").gte("day", since),
     db().from("traffic_ranks").select("domain, day, rank").gte("day", since),
+    adPointsByDomain(),
   ]);
   for (const r of [products, snaps, ranks]) if (r.error) throw new Error(`winner verisi okunamadı: ${r.error.message}`);
   const group = <T, K extends keyof T>(rows: T[], key: K) => {
@@ -283,6 +285,8 @@ export async function updateWinnerScores(): Promise<number> {
       snapshots: snapsBy.get(p.id) ?? [],
       supplierMinUsd: p.supplier_min_usd === null ? null : Number(p.supplier_min_usd),
       marginRatio: p.margin_ratio === null ? null : Number(p.margin_ratio),
+      adPoints: ads.get(p.brand_domain)?.points ?? 0,
+      newAds14d: ads.get(p.brand_domain)?.newAds14d ?? 0,
     });
     const { error } = await db().from("products").update({ winner_score: score, winner_breakdown: breakdown, momentum_score: breakdown.momentum.score }).eq("id", p.id);
     if (error) throw new Error(`winner skoru yazılamadı: ${error.message}`);

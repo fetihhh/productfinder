@@ -5,6 +5,8 @@ import { SOURCE_NAMES, STATUS } from "@/components/ProductCard";
 import { TrackingForm } from "@/components/TrackingForm";
 import { availabilityLabel, compact, countryLabel, dayLabel, formatPrice, launchLabel, moneyRange, rangeLabel } from "@/lib/format";
 import { getProduct } from "@/lib/products";
+import { adLibraryPageUrl } from "@/dtc/adLibrary";
+import type { AdSignalRow } from "@/lib/ads";
 import { SOURCE_NAMES as SUPPLIER_SOURCES } from "@/dtc/suppliers";
 import { REVIEW_TO_SALES, visitsFromRank } from "@/lib/winner";
 
@@ -28,11 +30,74 @@ function Panel({ title, note, children }: { title: string; note?: string; childr
   );
 }
 
+function AdsSection({ domain, ads, history }: { domain: string; ads: AdSignalRow | null; history: { day: string; active_ads: number }[] }) {
+  return (
+    <section className="mt-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-medium">Reklamlar (Facebook / Instagram)</h2>
+        <a href={adLibraryPageUrl(ads?.page_id ?? null, domain)} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
+          Reklam Kütüphanesi&apos;nde aç ↗
+        </a>
+      </div>
+      <p className="mb-3 text-xs text-zinc-500">
+        Meta Reklam Kütüphanesi: son 150 günde AB&apos;de gösterilen reklamlar. Haftalarca yayında kalan ve sayısı artan reklamlar, ürünün sattığının en güçlü açık işaretidir.
+      </p>
+      {!ads ? (
+        <p className="text-sm text-zinc-500">Henüz aranmadı (Meta anahtarı eklendiyse bir sonraki günlük çalıştırmada aranır).</p>
+      ) : ads.total_ads === 0 ? (
+        <p className="text-sm text-zinc-500">Reklam bulunamadı · son arama {dayLabel(ads.checked_at.slice(0, 10))}</p>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Kpi label="Yayında" value={String(ads.active_ads)} sub={`toplam ${ads.total_ads}`} />
+              <Kpi label="En eski reklam" value={ads.longest_active_days !== null ? `${ads.longest_active_days} gün` : "—"} sub="hâlâ yayında" />
+              <Kpi label="Son 14 gün" value={`+${ads.new_ads_14d}`} sub="yeni reklam" />
+              <Kpi label="AB erişimi" value={ads.eu_reach !== null ? compact(ads.eu_reach) : "—"} sub="kişi (tahmini)" />
+            </div>
+            <ul className="space-y-2 text-sm">
+              {ads.samples.map((s) => (
+                <li key={s.id} className="rounded border border-zinc-200 p-2 dark:border-zinc-800">
+                  <div className="flex items-baseline justify-between gap-2 text-xs text-zinc-500">
+                    <span>
+                      {s.active ? "Yayında" : "Durdu"}
+                      {s.start ? ` · ${dayLabel(s.start.slice(0, 10))} başladı` : ""}
+                    </span>
+                    <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline dark:text-blue-400">Reklamı gör ↗</a>
+                  </div>
+                  {s.title && <p className="font-medium">{s.title}</p>}
+                  {s.body && <p className="line-clamp-3 text-zinc-600 dark:text-zinc-400">{s.body}</p>}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-zinc-500">
+              {ads.page_name ? `Sayfa: ${ads.page_name} · ` : ""}
+              {ads.platforms.length ? `${ads.platforms.join(", ")} · ` : ""}son arama {dayLabel(ads.checked_at.slice(0, 10))}
+            </p>
+          </div>
+          <div>
+            <h3 className="mb-1 text-sm font-medium">Yayındaki reklam sayısı</h3>
+            <LineChart
+              points={history.map((h) => ({ day: h.day, y: h.active_ads }))}
+              format={(n) => String(Math.round(n))}
+              minZero
+              color="stroke-emerald-500"
+              dot="fill-emerald-500"
+              area="fill-emerald-500/10"
+              empty="Geçmiş birikiyor"
+            />
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
   const { id } = await params;
   const data = await getProduct(id);
   if (!data) notFound();
-  const { p, history, ranks, suppliers } = data;
+  const { p, history, ranks, suppliers, ads, adHistory } = data;
   const w = p.winner_breakdown;
   const brand = p.brands;
   const href = p.product_url ?? `https://${p.brand_domain}`;
@@ -176,6 +241,8 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
         )}
       </section>
 
+      <AdsSection domain={p.brand_domain} ads={ads} history={adHistory} />
+
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Panel
           title="Site trafiği — tahmini aylık ziyaret"
@@ -212,6 +279,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
                 { label: "Gündem", value: w.parts.gundem, max: 10, hint: "Bloglarda anılma (trend skoru)" },
                 { label: "Fiyat", value: w.parts.fiyat, max: 10, hint: "25–150 $ bandı tam puan" },
                 { label: "Tedarik", value: w.parts.tedarik ?? 0, max: 20, hint: "Toptancıda benzer ürün 8 + kâr marjı (≥4× = 12)" },
+                { label: "Reklam", value: w.parts.reklam ?? 0, max: 15, hint: "Meta'da yayındaki reklam sayısı ve en eski reklamın yaşı" },
               ]}
             />
           ) : (
@@ -225,6 +293,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
                   { label: "Yorum hızı", value: w.momentum.parts.yorum, max: 45, hint: "Aylık yorum büyümesi (%30/ay = tam)" },
                   { label: "Trafik hızı", value: w.momentum.parts.trafik, max: 35, hint: "30 günde Tranco sırası iyileşmesi (%20 = tam)" },
                   { label: "Gündem", value: w.momentum.parts.gundem, max: 20, hint: "Son 7 günde blog yazısı (2 = tam)" },
+                  { label: "Yeni reklam", value: w.momentum.parts.reklam ?? 0, max: 25, hint: "Son 14 günde açılan reklam (3 = tam): reklam bütçesi artıyor" },
                 ]}
               />
             </>

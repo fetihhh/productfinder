@@ -100,7 +100,7 @@ test("winnerScore: bileşenler ve satış tahminleri", () => {
     supplierMinUsd: 20,
     marginRatio: 5,
   });
-  assert.deepEqual(breakdown.parts, { talep: 25, ivme: 20, trafik: 15, gundem: 4, fiyat: 10, tedarik: 20 });
+  assert.deepEqual(breakdown.parts, { talep: 25, ivme: 20, trafik: 15, gundem: 4, fiyat: 10, tedarik: 20, reklam: 0 });
   assert.equal(score, 94);
   assert.deepEqual(breakdown.sales, { low: 9990, high: 49950 });
   assert.equal(breakdown.reviewsPerMonth, 90);
@@ -141,9 +141,9 @@ test("readSales: ürün JSON'u ve Yotpo özetinden günlük ölçüm", async () 
 
 test("momentumScore: büyüklükten bağımsız hız ölçer", () => {
   // 50 yorumluk üründe ayda 15 yeni yorum = %30 büyüme → tam yorum puanı
-  assert.deepEqual(momentumScore(50, 15, 1.2, 2), { score: 100, parts: { yorum: 45, trafik: 35, gundem: 20 }, reviewGrowth: 0.3 });
+  assert.deepEqual(momentumScore(50, 15, 1.2, 2), { score: 100, parts: { yorum: 45, trafik: 35, gundem: 20, reklam: 0 }, reviewGrowth: 0.3 });
   // 5000 yorumluk üründe ayda 15 yeni yorum = %0,3 → çok küçük
   assert.ok(momentumScore(5000, 15, null, 0).score < 1);
   // ayda 3'ten az yeni yorum gürültü sayılır; trafik kötüleşmesi eksi puan vermez
-  assert.deepEqual(momentumScore(10, 2, 0.8, 1), { score: 10, parts: { yorum: 0, trafik: 0, gundem: 10 }, reviewGrowth: null });
+  assert.deepEqual(momentumScore(10, 2, 0.8, 1), { score: 10, parts: { yorum: 0, trafik: 0, gundem: 10, reklam: 0 }, reviewGrowth: null });
 });

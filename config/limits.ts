@@ -51,3 +51,16 @@ export const STORE_CHECKS_PER_RUN = Number(process.env.STORE_CHECKS_PER_RUN) || 
 export const STORE_CHECK_CONCURRENCY = 12;
 export const STORE_PROMOTE_PER_RUN = 40;
 export const STORE_PROMOTE_MIN_SCORE = 55;
+
+/**
+ * Reklam sinyali (Meta Reklam Kütüphanesi API'si, ücretsiz; kimliği doğrulanmış bir Facebook hesabının erişim anahtarı gerekir).
+ * AD_CHECKS_PER_RUN: bir çalıştırmada aranan alan adı (alan adı başına 1 istek; API'nin saatlik sınırının altında kalır).
+ * AD_MIN_STORE_SCORE: yeni mağazalardan yalnızca bu puanın üstündekiler aranır (istek tasarrufu).
+ * Reklamı bulunan alan adı 3 günde, bulunmayan 10 günde bir yeniden aranır.
+ * AD_COUNTRIES: tüm konulardaki (ticari) reklamlar yalnızca AB/İngiltere'de gösterilenler için arşivlenir.
+ */
+export const AD_CHECKS_PER_RUN = Number(process.env.AD_CHECKS_PER_RUN) || 150;
+export const AD_MIN_STORE_SCORE = 35;
+export const AD_RECHECK_DAYS = { found: 3, none: 10 } as const;
+export const AD_COUNTRIES = ["DE", "FR", "IT", "ES", "NL", "BE", "AT", "PL", "SE", "IE", "DK", "FI", "PT"];
+export const GRAPH_API_VERSION = "v24.0";

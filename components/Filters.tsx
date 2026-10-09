@@ -81,6 +81,10 @@ export function Filters({ f, categories, platforms, countries }: { f: F; categor
         <input type="checkbox" name="sup" value="1" defaultChecked={f.supplier} className="h-4 w-4" />
         Yalnızca toptancısı bulunanlar
       </label>
+      <label className="col-span-2 flex items-center gap-2 text-sm sm:col-span-2" title="Meta Reklam Kütüphanesi'nde yayında reklamı olan markalar">
+        <input type="checkbox" name="ads" value="1" defaultChecked={f.ads} className="h-4 w-4" />
+        Yalnızca reklam verenler
+      </label>
       <div className="col-span-2 flex gap-2 sm:col-span-4 lg:col-span-2 lg:justify-end">
         <a href="/" className="px-2 py-1.5 text-sm text-zinc-500 hover:underline">Sıfırla</a>
         <button className="rounded bg-zinc-900 px-4 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900">Filtrele</button>

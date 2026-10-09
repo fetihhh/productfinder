@@ -1,4 +1,4 @@
-// Günlük iş: kaynaklar + yeni mağaza keşfi → aday ürünler → büyük marka elemesi → DTC doğrulama → satış ölçümü
+// Günlük iş: kaynaklar + yeni mağaza keşfi → reklam sinyali → aday ürünler → büyük marka elemesi → DTC doğrulama → satış ölçümü
 // → toptancı araması → marka yaşı → trend, winner ve yükseliş skorları.
 // Çalıştırma: npm run ingest            (toplama + doğrulama; GitHub Actions cron'u bunu çağırır)
 //             npm run ingest -- verify  (toplama hariç hepsi)
@@ -34,6 +34,7 @@ import {
 } from "../lib/repo.ts";
 import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranco.ts";
 import { enabledAdapters } from "../sources/index.ts";
+import { adSignals } from "./ads.ts";
 import { brandAges, checkStores, discoverStores, promoteStores } from "./stores.ts";
 
 async function collect(): Promise<boolean> {
@@ -210,6 +211,8 @@ async function main() {
   const skipStores = process.argv.includes("no-stores");
   const discovered = onlyVerify || skipStores ? true : await discoverStores();
   const checked = skipStores ? true : await checkStores();
+  // Reklam sinyali aday seçiminden önce: reklam veren mağazaların toplam puanı yükselir.
+  const advertised = await adSignals();
   const promoted = skipStores ? true : await promoteStores();
   // Trafik sırası doğrulamadan önce: büyük markalar ağa çıkmadan ve Tavily kredisi harcanmadan elenir.
   const ranked = await traffic();
@@ -227,7 +230,7 @@ async function main() {
   console.log(`\n▶ Trend skoru: ${scores.total} ürün, ${scores.updated} değişti`);
   console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
   console.log(`\nBitti: ${((Date.now() - started) / 1000).toFixed(1)} sn`);
-  if (![collected, discovered, checked, promoted, verified, ranked, measured, sourced, aged].every(Boolean)) process.exitCode = 1;
+  if (![collected, discovered, checked, advertised, promoted, verified, ranked, measured, sourced, aged].every(Boolean)) process.exitCode = 1;
 }
 
 await main();

@@ -124,18 +124,18 @@ export type StoreToPromote = {
   store_score: number;
 };
 
-/** Puanı yüksek, yeni (≤ 150 gün), açık ve henüz aday yapılmamış mağazalar. */
+/** Toplam puanı (mağaza + reklam) yüksek, yeni (≤ 150 gün), açık ve henüz aday yapılmamış mağazalar. */
 export async function storesToPromote(limit: number, minScore: number): Promise<StoreToPromote[]> {
   const since = new Date(Date.now() - NEW_STORE_MAX_AGE_DAYS * DAY).toISOString();
   const { data, error } = await db()
     .from("stores")
-    .select("domain, shop_name, hero_handle, hero_title, hero_image, first_product_at, store_score")
+    .select("domain, shop_name, hero_handle, hero_title, hero_image, first_product_at, store_score:total_score")
     .eq("status", "live")
     .is("product_id", null)
     .not("hero_handle", "is", null)
-    .gte("store_score", minScore)
+    .gte("total_score", minScore)
     .gte("first_product_at", since)
-    .order("store_score", { ascending: false })
+    .order("total_score", { ascending: false })
     .limit(limit);
   if (error) throw new Error(`stores okunamadı: ${error.message}`);
   return data as StoreToPromote[];

@@ -1,4 +1,5 @@
 // Arayüz için ürün sorguları (yalnızca sunucu).
+import { adHistory, adSignalsFor, type AdSignalRow } from "./ads.ts";
 import { db } from "./db.ts";
 import type { ScoreBreakdown } from "./score.ts";
 import type { WinnerBreakdown } from "./winner.ts";
@@ -24,6 +25,8 @@ export type Filters = {
   supplier: boolean;
   /** Mağaza yaşı sınırı (gün; 0 = hepsi): ilk ürün ya da alan adı kaydı bu kadar günden yeni */
   age: 0 | 30 | 90 | 150;
+  /** Yalnızca Meta'da yayında reklamı olan markalar */
+  ads: boolean;
 };
 
 export type ProductRow = {
@@ -60,6 +63,8 @@ export type ProductRow = {
     tranco_rank: number | null;
     registered_at: string | null;
     first_product_at: string | null;
+    ads_active: number | null;
+    ad_points: number;
   } | null;
   mentions: { source: string; url: string; title: string | null; posted_at: string }[];
   tracking: {
@@ -98,6 +103,7 @@ export function parseFilters(sp: Record<string, string | string[] | undefined>):
     country: /^[A-Z]{2}$/.test(country) ? country : "",
     shipsTr: one(sp.tr) === "1",
     supplier: one(sp.sup) === "1",
+    ads: one(sp.ads) === "1",
     age: ([30, 90, 150] as const).find((a) => a === Number(one(sp.age))) ?? 0,
     minScore: nonNegative(one(sp.min), 100),
     minReviews: nonNegative(one(sp.reviews)),
@@ -115,11 +121,11 @@ function safeLike(s: string): string {
 }
 
 export async function listProducts(f: Filters): Promise<{ rows: ProductRow[]; error: string | null }> {
-  const brandFilter = Boolean(f.platform || f.country || f.shipsTr || f.age);
+  const brandFilter = Boolean(f.platform || f.country || f.shipsTr || f.age || f.ads);
   const select = [
     "id, name, brand_domain, product_url, image_url, category, dtc_status, dtc_reason, trend_score, score_breakdown, winner_score, winner_breakdown, momentum_score, first_seen_at",
     "price, currency, review_count, rating, availability, launched_at, variant_count, product_type, supplier_count, supplier_min_usd, margin_ratio, supplier_checked_at",
-    `brands${brandFilter ? "!inner" : ""}(platform, country, ships_to_tr, tranco_rank, registered_at, first_product_at)`,
+    `brands${brandFilter ? "!inner" : ""}(platform, country, ships_to_tr, tranco_rank, registered_at, first_product_at, ads_active, ad_points)`,
     "mentions(source, url, title, posted_at)",
     `tracking${f.track !== "all" ? "!inner" : ""}(status, note, tr_competitor, tr_est_cost, tr_note)`,
   ].join(", ");
@@ -131,6 +137,7 @@ export async function listProducts(f: Filters): Promise<{ rows: ProductRow[]; er
   if (f.country) query = query.eq("brands.country", f.country);
   if (f.shipsTr) query = query.eq("brands.ships_to_tr", true);
   if (f.supplier) query = query.gt("supplier_count", 0);
+  if (f.ads) query = query.gte("brands.ads_active", 1);
   if (f.age) {
     const since = new Date(Date.now() - f.age * 86_400_000).toISOString();
     query = query.or(`first_product_at.gte.${since},registered_at.gte.${since.slice(0, 10)}`, { referencedTable: "brands" });
@@ -195,7 +202,14 @@ export type HistoryPoint = { day: string; price: number | null; currency: string
 /** Ürün detay sayfası: ürün, günlük satış ölçümleri ve markanın trafik sırası geçmişi. */
 export async function getProduct(
   id: string,
-): Promise<{ p: ProductDetail; history: HistoryPoint[]; ranks: { day: string; rank: number | null }[]; suppliers: SupplierRow[] } | null> {
+): Promise<{
+  p: ProductDetail;
+  history: HistoryPoint[];
+  ranks: { day: string; rank: number | null }[];
+  suppliers: SupplierRow[];
+  ads: AdSignalRow | null;
+  adHistory: { day: string; active_ads: number }[];
+} | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const { data, error } = await db()
     .from("products")
@@ -203,7 +217,7 @@ export async function getProduct(
       [
         "id, name, brand_domain, product_url, image_url, category, dtc_status, dtc_reason, trend_score, score_breakdown, winner_score, winner_breakdown, momentum_score, first_seen_at",
         "price, currency, review_count, rating, availability, launched_at, variant_count, product_type, supplier_count, supplier_min_usd, margin_ratio, supplier_checked_at",
-        "brands(platform, country, ships_to_tr, tranco_rank, tranco_day, marketplace_evidence)",
+        "brands(platform, country, ships_to_tr, tranco_rank, tranco_day, marketplace_evidence, registered_at, first_product_at, ads_active, ad_points)",
         "mentions(source, url, title, posted_at)",
         "tracking(status, note, tr_competitor, tr_est_cost, tr_note)",
       ].join(", "),
@@ -213,10 +227,12 @@ export async function getProduct(
   if (error) throw new Error(error.message);
   if (!data) return null;
   const p = data as unknown as ProductDetail;
-  const [history, ranks, suppliers] = await Promise.all([
+  const [history, ranks, suppliers, ads, adHist] = await Promise.all([
     db().from("product_snapshots").select("day, price, currency, review_count, rating, availability").eq("product_id", id).order("day").limit(400),
     db().from("traffic_ranks").select("day, rank").eq("domain", p.brand_domain).order("day").limit(400),
     db().from("suppliers").select("url, source, title, image_url, price_min, price_max, currency, moq, sold, supplier_name, similarity").eq("product_id", id).order("similarity", { ascending: false }).limit(15),
+    adSignalsFor([p.brand_domain]),
+    adHistory(p.brand_domain),
   ]);
   if (suppliers.error) throw new Error(suppliers.error.message);
   if (history.error) throw new Error(history.error.message);
@@ -231,6 +247,8 @@ export async function getProduct(
       price_max: s.price_max === null ? null : Number(s.price_max),
       similarity: Number(s.similarity),
     })),
+    ads: ads.get(p.brand_domain) ?? null,
+    adHistory: adHist,
   };
 }
 

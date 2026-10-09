@@ -29,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0009`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0010`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -43,6 +43,7 @@ cp .env.example .env.local   # değerleri doldurun
 | `SUPABASE_URL` | Vercel, GitHub, yerel | Supabase → Project Settings → API |
 | `SUPABASE_SECRET_KEY` | Vercel, GitHub, yerel | Supabase → API Keys → **secret** (`sb_secret_…`). RLS'i aşar, asla `NEXT_PUBLIC_` önekiyle tanımlamayın |
 | `TAVILY_API_KEY` | GitHub, yerel | tavily.com ücretsiz hesap (kart istemez) |
+| `META_ACCESS_TOKEN` | GitHub, yerel | Meta Reklam Kütüphanesi erişim anahtarı (ücretsiz, ~60 günde bir yenilenir). Kurulum: aşağıda **Reklam sinyali**. Yoksa reklam adımı atlanır |
 | `TAVILY_DAILY_LIMIT` | isteğe bağlı | Tek seferlik toplu kontroller için günlük sınırı geçici olarak değiştirir (aylık 950 sınırı sabit) |
 | `REDDIT_CLIENT_ID/SECRET` | — | Kullanılmıyor; Reddit API onayı alınırsa ileride |
 
@@ -67,6 +68,7 @@ cp .env.example .env.local   # değerleri doldurun
 | **GitHub Actions** (private repo) | 2.000 dakika/ay (public repoda sınırsız) | İlk ~10 gün (60 günlük geriye dönük tarama) ~35 dk/gün, sonra ~20–25 dk/gün ≈ 700 dk/ay. Public repolarda 60 gün commit olmazsa zamanlanmış iş durur |
 | **Vercel Hobby** | 100 GB veri aktarımı, 1M fonksiyon çağrısı, 4 CPU-saat/ay; fonksiyon süresi 300 sn. **Yalnızca kişisel, ticari olmayan kullanım** | Tek kullanıcı, çok düşük trafik |
 | **Tavily Free** | 1.000 kredi/ay, kart istemez (basic arama = 1 kredi) | Kod sınırı: günde 30, ayda 950. Kota dolarsa ürün ertesi güne kalır, ücretli kullanıma **asla** geçilmez |
+| **Meta Reklam Kütüphanesi API'si** (graph.facebook.com/ads_archive) | Ücretsiz, kart istemez; kimliği doğrulanmış Facebook hesabı gerekir. Hız sınırı API tarafından uygulanır (aşılırsa istek reddedilir, ücret çıkmaz) | Günde en fazla 150 arama, saniyede 1. Hız sınırına takılırsa kalan aramalar ertesi güne kalır |
 | **WhoisDS yeni kayıtlı alan adları** (ücretsiz günlük liste) | Ücretsiz, kayıt gerekmez; "ticari dahil yeniden kullanılabilir" | Günde 1 zip (~70 bin alan adı) |
 | **cenk/nrd** (WhoisDS listelerinin 60 günlük birikimi, dl.cenk.app) | Ücretsiz, robots.txt izinli | Yalnızca ilk kurulumda, liste bitene kadar günde 1 indirme (~75 MB) |
 | **DNS** (sistem çözümleyicisi) | Ücretsiz | Günde ~35–300 bin sorgu; sitelere istek gönderilmez |
@@ -87,6 +89,7 @@ gh repo create productfinder --private --source . --push
 gh secret set SUPABASE_URL             # değeri yapıştırın
 gh secret set SUPABASE_SECRET_KEY
 gh secret set TAVILY_API_KEY
+gh secret set META_ACCESS_TOKEN        # isteğe bağlı: reklam sinyali
 ```
 
 İş akışı: `.github/workflows/daily-ingest.yml` (her gün 05:00 UTC = 08:00 TR). Elle çalıştırmak için GitHub → Actions → "Günlük toplama ve doğrulama" → **Run workflow**.
@@ -123,12 +126,32 @@ Amaç: **son 5 ayda açılmış küçük dropshipping mağazalarını** yakalama
 2. **DNS ile Shopify tespiti:** Shopify'a bağlı alan adları 23.227.38.x adresine çözülür (~%3: günde ~1.000 yeni mağaza). DNS sorgusu siteye istek göndermez.
 3. **Kontrol takvimi:** ilk kontrol kayıttan 5 gün sonra. Şifreli/boş mağaza 14 günde bir (90 günde açılmazsa bırakılır), açık mağaza **haftada bir** (ilk ürünü 150 günü geçince bırakılır). Her kontrol `/products.json` (gerekirse `/meta.json` ve ana sayfa) okur; şifre sayfasına girilmez, robots.txt'ye uyulur.
 4. **Mağaza puanı (0–100):** odak 25 (tek ürün mağazası tam), yenilik 15, **dropship işareti 20** (ürün açıklamasında "7-15 business days" gibi uzun teslimat aralığı ya da dünya geneli gönderim), indirim 10 (compare-at fiyat), fiyat 10 (15–150), **hareket 20** (iki kontrol arasında yeni ürün eklendi +10, varyant stoğu tükendi +10). Baskılı giyim/merch mağazaları −20, dijital ağırlıklı mağazalar 0.
-5. **Aday:** puanı ≥ 55, açık ve ilk ürünü son 150 gün içinde olan mağazanın ana sayfasında öne çıkardığı ürün (yoksa en yeni fiziksel ürün) aday olur; sonra normal hattan geçer: pazaryeri kontrolü → toptancı araması → skorlar.
+5. **Aday:** toplam puanı (mağaza puanı + reklam puanı, en fazla 100) ≥ 55, açık ve ilk ürünü son 150 gün içinde olan mağazanın ana sayfasında öne çıkardığı ürün (yoksa en yeni fiziksel ürün) aday olur; sonra normal hattan geçer: pazaryeri kontrolü → toptancı araması → skorlar.
 
 **Yeni mağazalar** sayfası (`/yeni`): açık yeni mağazalar, mağaza yaşı, ürün sayısı, indirim ve dropship işaretleri, Türkiye'ye gönderim, toptan fiyat/marj ve keşif hattının özeti (bulunan / açık / kapalı / kapanmış). Ana listede de **Mağaza yaşı** filtresi (≤ 30 / 90 / 150 gün) vardır; markaların yaşı RDAP kayıt tarihi ve Shopify'daki ilk ürün tarihinden hesaplanır.
 
 **Bilinen sınırlar:** WhoisDS ücretsiz listesi tüm kayıtları değil bir kısmını içerir; 60 günden eski mağazalar ancak izlemeye alındıktan sonra yaşlanarak listede kalır (5 aylık pencere birkaç ay içinde dolar). "Hareket" işaretleri en az iki haftalık kontrol gerektirir.
 
+## Reklam sinyali (`dtc/adLibrary.ts`, `scripts/ads.ts`)
+
+Bir dropshipping mağazası bir ürüne haftalarca reklam veriyorsa ürün büyük ihtimalle satıyordur: kârsız reklam birkaç gün içinde kapatılır. Bu sinyal Meta'nın resmi ve ücretsiz **Reklam Kütüphanesi API'si**nden okunur.
+
+- **Kimler aranır:** doğrulanmış ürünlerin markaları, sonra puanı ≥ 35 olan açık yeni mağazalar (puana göre). Günde en fazla 150 alan adı, saniyede 1 istek. Reklamı bulunan alan adı 3 günde, bulunmayan 10 günde bir yeniden aranır.
+- **Nasıl eşleşir:** önce alan adıyla aranır; reklamın bağlantı başlığında/metninde alan adı geçmeli ya da reklamı veren sayfanın adı mağaza adıyla aynı olmalı. Sayfa bir kez bulununca sonraki aramalar o sayfanın tüm reklamlarını getirir.
+- **Kapsam:** tüm konulardaki (ticari) reklamlar yalnızca **AB/İngiltere'de gösterilenler** için arşivlenir; arama AB ülkeleriyle yapılır. Yalnızca ABD'ye reklam veren mağaza görünmez.
+- **Reklam puanı (0–25):** yayındaki reklam 1 → 8, ≥ 3 → 12, ≥ 10 → 16; hâlâ yayında olan en eski reklam ≥ 14 gün → +5, ≥ 30 gün → +9. Yayında reklam yok ama son 150 günde reklam verilmişse 3. Mağaza puanına eklenir (aday seçimi), winner skoruna 15 üzerinden, yükseliş skoruna "son 14 günde açılan reklam" olarak girer.
+- **Gösterim:** ürün sayfasında reklam bölümü (yayındaki reklam sayısı, en eski reklamın yaşı, son 14 günde açılanlar, AB erişimi, örnek reklamlar ve geçmiş grafiği), yeni mağaza kartlarında "Reklam" satırı, iki listede de **Reklam verenler** filtresi.
+- Erişim anahtarı URL'ye değil `Authorization` başlığına konur. API'nin döndürdüğü `ad_snapshot_url` anahtarı içerdiği için saklanmaz; bağlantılar herkese açık `facebook.com/ads/library/?id=…` sayfasına gider.
+
+**Kurulum (bir kez, ücretsiz):**
+
+1. https://www.facebook.com/ID adresinden kimlik ve konum doğrulaması yapın (Meta'nın onayı birkaç gün sürebilir).
+2. https://developers.facebook.com adresinde geliştirici hesabı açın → **My Apps → Create App** (ad: ör. "ProductFinder"; kullanım türü olarak reklam/işletme dışı bir seçenek yeterli).
+3. **Tools → Graph API Explorer**: uygulamanızı seçin → **Generate Access Token** (ek izin gerekmez). Bu anahtar ~1 saat geçerlidir.
+4. **Tools → Access Token Debugger**: anahtarı yapıştırın → **Debug** → **Extend Access Token**. Çıkan uzun süreli anahtar ~60 gün geçerlidir.
+5. Anahtarı ekleyin: `gh secret set META_ACCESS_TOKEN` (GitHub) ve yerelde `.env.local` içine `META_ACCESS_TOKEN=`.
+
+**Yenileme (~60 günde bir):** 3–5. adımları tekrarlayın. `/yeni` sayfası son 10 günde uyarır; anahtar geçersizse günlük iş başarısız görünür ve sayfada kırmızı uyarı çıkar.
 ## DTC doğrulama (`dtc/verify.ts`)
 
 Her ürün sırayla şu adımlardan geçer; ilk başarısız adımda durur ve gerekçe `products.dtc_reason`'a yazılır:
@@ -202,6 +225,9 @@ Günlük iş doğrulanmış ürünlerin (ve favori/incelenecek listesindekilerin
 | Gündem | 10 | `10 × trend skoru / 100` |
 | Fiyat | 10 | 25–150 $ → 10; 15–25 $ veya 150–300 $ → 5; diğer → 0 (yaklaşık sabit kurlarla dolara çevrilir) |
 | Tedarik | 20 | Toptancıda benzer ürün (≥ %70) → 8; kâr marjı ≥ 4× → +12, ≥ 3× → +9, ≥ 2× → +5 |
+| Reklam | 15 | `15 × reklam puanı / 25` (Meta'da yayındaki reklam sayısı ve en eski reklamın yaşı; aşağıda **Reklam sinyali**) |
+
+Toplam en fazla 100.
 
 "İvme" ve trafik değişimi ilk hafta 0'dır; ölçümler biriktikçe hızla büyüyen ürünler öne çıkar.
 
@@ -212,6 +238,7 @@ Günlük iş doğrulanmış ürünlerin (ve favori/incelenecek listesindekilerin
 | Yorum hızı | 45 | `45 × min(1, büyüme / 0,30)`; büyüme = aylık yeni yorum / max(20, toplam yorum). Ayda 3'ten az yeni yorum sayılmaz |
 | Trafik hızı | 35 | `35 × min(1, (eski sıra / yeni sıra − 1) / 0,2)` (30 günde %20 iyileşme = tam; düşüş eksi puan vermez) |
 | Gündem | 20 | `20 × min(1, son 7 gündeki blog yazısı / 2)` |
+| Yeni reklam | 25 | `25 × min(1, son 14 günde açılan reklam / 3)`: marka reklam bütçesini artırıyor. Toplam en fazla 100 |
 
 40 ve üstü kartta "↗ Yükselişte" rozeti gösterir. Yorum ve trafik hızı en az 7 günlük ölçümden sonra hesaplanır.
 

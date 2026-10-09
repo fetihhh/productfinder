@@ -12,11 +12,14 @@
 //   gündem  10 × trend skoru / 100                                  (bloglarda anılma)
 //   fiyat   10 → 25–150 $, 5 → 15–25 $ veya 150–300 $, 0 → diğer   (yeniden satış için uygun fiyat bandı)
 //   tedarik 20 → toptancıda benzer ürün (benzerlik ≥ %70) 8 + marj puanı (perakende / toptan ≥ 4 → 12, ≥ 3 → 9, ≥ 2 → 5)
+//   reklam  15 × reklam puanı / 25   (Meta Reklam Kütüphanesi: yayındaki reklam sayısı ve en eski reklamın yaşı)
+//   Toplam en fazla 100.
 //
 // Yükseliş skoru ("Yükselenler" görünümü, 0–100): büyüklükten bağımsız, HIZ ölçer.
 //   yorum   45 × min(1, aylık büyüme / %30)     aylık büyüme = aylık yeni yorum / max(20, toplam yorum); en az 3 yeni yorum/ay
 //   trafik  35 × min(1, (eski sıra / yeni sıra − 1) / 0,2)   (30 günde %20 sıra iyileşmesi = tam)
 //   gündem  20 × min(1, son 7 gündeki blog yazısı / 2)
+//   reklam  25 × min(1, son 14 günde açılan reklam / 3)   (reklam bütçesinin artırılması). Toplam en fazla 100.
 
 export type RankPoint = { day: string; rank: number | null };
 export type SnapshotPoint = { day: string; review_count: number | null };
@@ -35,17 +38,20 @@ export type WinnerInput = {
   /** Toptancı araması: en iyi eşleşmelerin en düşük birim fiyatı (USD) ve kâr marjı (perakende / toptan). */
   supplierMinUsd?: number | null;
   marginRatio?: number | null;
+  /** Reklam puanı (0–25) ve son 14 günde açılan reklam sayısı (Meta Reklam Kütüphanesi). */
+  adPoints?: number;
+  newAds14d?: number;
 };
 
 export type Momentum = {
   score: number;
-  parts: { yorum: number; trafik: number; gundem: number };
+  parts: { yorum: number; trafik: number; gundem: number; reklam: number };
   /** Aylık yorum büyümesi (0,25 = %25). */
   reviewGrowth: number | null;
 };
 
 export type WinnerBreakdown = {
-  parts: { talep: number; ivme: number; trafik: number; gundem: number; fiyat: number; tedarik: number };
+  parts: { talep: number; ivme: number; trafik: number; gundem: number; fiyat: number; tedarik: number; reklam: number };
   rank: number | null;
   rankChange: number | null;
   visits: Range | null;
@@ -58,15 +64,16 @@ export type WinnerBreakdown = {
   momentum: Momentum;
 };
 
-export function momentumScore(reviews: number | null, rpm: number | null, change: number | null, mentions7d: number): Momentum {
+export function momentumScore(reviews: number | null, rpm: number | null, change: number | null, mentions7d: number, newAds14d = 0): Momentum {
   const reviewGrowth = rpm !== null && rpm >= 3 ? rpm / Math.max(20, reviews ?? 0) : null;
   const parts = {
     yorum: round1(reviewGrowth === null ? 0 : 45 * clamp01(reviewGrowth / 0.3)),
     trafik: round1(change === null ? 0 : 35 * clamp01((change - 1) / 0.2)),
     gundem: round1(20 * clamp01(mentions7d / 2)),
+    reklam: round1(25 * clamp01(newAds14d / 3)),
   };
   return {
-    score: round1(parts.yorum + parts.trafik + parts.gundem),
+    score: round1(Math.min(100, parts.yorum + parts.trafik + parts.gundem + parts.reklam)),
     parts,
     reviewGrowth: reviewGrowth === null ? null : Math.round(reviewGrowth * 1000) / 1000,
   };
@@ -175,12 +182,13 @@ export function winnerScore(input: WinnerInput): { score: number; breakdown: Win
   const gundem = 10 * clamp01(Number(input.trendScore) / 100);
   const fiyat = pricePoints(priceUsd);
   const tedarik = supplyPoints(input.supplierMinUsd ?? null, input.marginRatio ?? null);
+  const reklam = 15 * clamp01((input.adPoints ?? 0) / 25);
 
   const salesPerMonth = rpm === null ? null : scale(rpm, REVIEW_TO_SALES);
   const days = new Set([...input.snapshots.map((s) => s.day), ...input.ranks.map((r) => r.day)]);
-  const parts = { talep: round1(talep), ivme: round1(ivme), trafik: round1(trafik), gundem: round1(gundem), fiyat, tedarik };
+  const parts = { talep: round1(talep), ivme: round1(ivme), trafik: round1(trafik), gundem: round1(gundem), fiyat, tedarik, reklam: round1(reklam) };
   return {
-    score: round1(parts.talep + parts.ivme + parts.trafik + parts.gundem + parts.fiyat + parts.tedarik),
+    score: round1(Math.min(100, parts.talep + parts.ivme + parts.trafik + parts.gundem + parts.fiyat + parts.tedarik + parts.reklam)),
     breakdown: {
       parts,
       rank: latestRank,
@@ -192,7 +200,7 @@ export function winnerScore(input: WinnerInput): { score: number; breakdown: Win
       revenuePerMonth: salesPerMonth && input.price !== null ? scale(Number(input.price), salesPerMonth) : null,
       priceUsd: priceUsd === null ? null : round1(priceUsd),
       historyDays: days.size,
-      momentum: momentumScore(reviews, rpm, change, input.mentions7d ?? 0),
+      momentum: momentumScore(reviews, rpm, change, input.mentions7d ?? 0, input.newAds14d ?? 0),
     },
   };
 }

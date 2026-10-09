@@ -1,10 +1,12 @@
 // Toplama işinin veritabanı yazma katmanı (yalnızca sunucu/cron).
 import { REVERIFY_AFTER_DAYS } from "../config/limits.ts";
+import type { SalesSnapshot } from "../dtc/sales.ts";
 import type { VerifyResult } from "../dtc/verify.ts";
 import type { Candidate, SeenItem } from "../sources/types.ts";
 import { db } from "./db.ts";
 import { normalizeName } from "./productName.ts";
 import { trendScore, type MentionLite } from "./score.ts";
+import { winnerScore } from "./winner.ts";
 
 export async function filterNewItemIds(source: string, ids: string[]): Promise<Set<string>> {
   const fresh = new Set(ids);
@@ -152,6 +154,9 @@ export async function saveVerification(p: ProductToVerify, r: VerifyResult): Pro
 
   const { error } = await db().from("products").update(update).eq("id", p.id);
   if (error) throw new Error(`products güncellenemedi: ${error.message}`);
+  if (r.status === "verified" && !r.retryable && (r.sales.reviewCount !== null || r.sales.price !== null)) {
+    await saveSnapshot(p.id, { ...r.sales, price: Number.isNaN(r.sales.price) ? null : r.sales.price });
+  }
 
   const brand: Record<string, unknown> = {};
   if (r.platform) Object.assign(brand, { platform: r.platform, has_checkout: r.hasCheckout, check_reason: r.reason, checked_at: now });
@@ -168,6 +173,107 @@ export async function saveVerification(p: ProductToVerify, r: VerifyResult): Pro
     const { error: brandErr } = await db().from("brands").update(brand).eq("domain", p.brand_domain);
     if (brandErr) throw new Error(`brands güncellenemedi: ${brandErr.message}`);
   }
+}
+
+export const today = () => new Date().toISOString().slice(0, 10);
+
+/** Günlük satış ölçümü (grafikler ve satış hızı için); ürünün güncel değerlerini de yeniler. */
+export async function saveSnapshot(productId: string, s: SalesSnapshot): Promise<void> {
+  const { error } = await db().from("product_snapshots").upsert(
+    {
+      product_id: productId,
+      day: today(),
+      price: s.price,
+      currency: s.currency,
+      review_count: s.reviewCount,
+      rating: s.rating,
+      availability: s.availability,
+    },
+    { onConflict: "product_id,day" },
+  );
+  if (error) throw new Error(`product_snapshots yazılamadı: ${error.message}`);
+  const update: Record<string, string | number> = {};
+  if (s.price !== null) update.price = s.price;
+  if (s.currency) update.currency = s.currency;
+  if (s.reviewCount !== null) update.review_count = s.reviewCount;
+  if (s.rating !== null) update.rating = s.rating;
+  if (s.availability) update.availability = s.availability;
+  if (Object.keys(update).length === 0) return;
+  const { error: upErr } = await db().from("products").update(update).eq("id", productId);
+  if (upErr) throw new Error(`products güncellenemedi: ${upErr.message}`);
+}
+
+/** Bugün ölçümü alınmamış doğrulanmış ürünler ile favori/incelenecek listesindekiler. */
+export async function productsToSnapshot(limit: number): Promise<{ id: string; name: string; product_url: string }[]> {
+  const [verified, tracked, done] = await Promise.all([
+    db().from("products").select("id, name, product_url").eq("dtc_status", "verified").not("product_url", "is", null),
+    db().from("products").select("id, name, product_url, tracking!inner(status)").in("tracking.status", ["favorite", "review"]).not("product_url", "is", null),
+    db().from("product_snapshots").select("product_id").eq("day", today()),
+  ]);
+  for (const r of [verified, tracked, done]) if (r.error) throw new Error(`ölçüm listesi okunamadı: ${r.error.message}`);
+  const skip = new Set(done.data!.map((d) => d.product_id as string));
+  const byId = new Map<string, { id: string; name: string; product_url: string }>();
+  for (const p of [...verified.data!, ...tracked.data!]) {
+    if (!skip.has(p.id)) byId.set(p.id, { id: p.id, name: p.name, product_url: p.product_url });
+  }
+  return [...byId.values()].slice(0, limit);
+}
+
+export async function brandDomains(): Promise<string[]> {
+  const { data, error } = await db().from("brands").select("domain");
+  if (error) throw new Error(`brands okunamadı: ${error.message}`);
+  return data.map((b) => b.domain as string);
+}
+
+export async function latestTrafficDay(): Promise<string | null> {
+  const { data, error } = await db().from("traffic_ranks").select("day").order("day", { ascending: false }).limit(1);
+  if (error) throw new Error(`traffic_ranks okunamadı: ${error.message}`);
+  return (data[0]?.day as string | undefined) ?? null;
+}
+
+/** Listedeki günün sıraları; listede olmayan markalar için rank null yazılır. */
+export async function saveTrafficRanks(day: string, domains: string[], ranks: Map<string, number>): Promise<void> {
+  if (domains.length === 0) return;
+  const rows = domains.map((domain) => ({ domain, day, rank: ranks.get(domain) ?? null }));
+  const { error } = await db().from("traffic_ranks").upsert(rows, { onConflict: "domain,day" });
+  if (error) throw new Error(`traffic_ranks yazılamadı: ${error.message}`);
+  for (const r of rows) {
+    const { error: bErr } = await db().from("brands").update({ tranco_rank: r.rank, tranco_day: day }).eq("domain", r.domain);
+    if (bErr) throw new Error(`brands güncellenemedi: ${bErr.message}`);
+  }
+}
+
+/** Tüm ürünlerin winner skorunu satış ölçümleri, trafik sırası ve trend skorundan yeniden hesaplar. */
+export async function updateWinnerScores(): Promise<number> {
+  const since = new Date(Date.now() - 45 * 86_400_000).toISOString().slice(0, 10);
+  const [products, snaps, ranks] = await Promise.all([
+    db().from("products").select("id, brand_domain, review_count, rating, price, currency, trend_score"),
+    db().from("product_snapshots").select("product_id, day, review_count").gte("day", since),
+    db().from("traffic_ranks").select("domain, day, rank").gte("day", since),
+  ]);
+  for (const r of [products, snaps, ranks]) if (r.error) throw new Error(`winner verisi okunamadı: ${r.error.message}`);
+  const group = <T, K extends keyof T>(rows: T[], key: K) => {
+    const m = new Map<T[K], T[]>();
+    for (const row of rows) m.set(row[key], [...(m.get(row[key]) ?? []), row]);
+    return m;
+  };
+  const snapsBy = group(snaps.data as { product_id: string; day: string; review_count: number | null }[], "product_id");
+  const ranksBy = group(ranks.data as { domain: string; day: string; rank: number | null }[], "domain");
+
+  for (const p of products.data!) {
+    const { score, breakdown } = winnerScore({
+      reviewCount: p.review_count,
+      rating: p.rating === null ? null : Number(p.rating),
+      price: p.price === null ? null : Number(p.price),
+      currency: p.currency,
+      trendScore: Number(p.trend_score),
+      ranks: ranksBy.get(p.brand_domain) ?? [],
+      snapshots: snapsBy.get(p.id) ?? [],
+    });
+    const { error } = await db().from("products").update({ winner_score: score, winner_breakdown: breakdown }).eq("id", p.id);
+    if (error) throw new Error(`winner skoru yazılamadı: ${error.message}`);
+  }
+  return products.data!.length;
 }
 
 /** Atomik kota sayacı: limit aşılacaksa false döner ve sayaç artmaz. */

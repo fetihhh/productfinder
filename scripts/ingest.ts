@@ -1,20 +1,29 @@
-// Günlük iş: kaynaklar → aday ürünler → DTC doğrulama → trend skoru.
+// Günlük iş: kaynaklar → aday ürünler → DTC doğrulama → trafik sırası → satış ölçümü → trend ve winner skoru.
 // Çalıştırma: npm run ingest            (toplama + doğrulama; GitHub Actions cron'u bunu çağırır)
 //             npm run ingest -- verify  (yalnızca doğrulama)
-import { STRICT_BRAND_CHECK, TAVILY_DAILY_LIMIT, TAVILY_MONTHLY_LIMIT, VERIFY_PER_RUN } from "../config/limits.ts";
+import { SNAPSHOT_PER_RUN, STRICT_BRAND_CHECK, TAVILY_DAILY_LIMIT, TAVILY_MONTHLY_LIMIT, VERIFY_PER_RUN } from "../config/limits.ts";
 import { tavilySearch, type SearchFn } from "../dtc/marketplaceSearch.ts";
+import { readSales } from "../dtc/sales.ts";
 import { verifyProduct, type BrandState } from "../dtc/verify.ts";
-import { politeFetch } from "../lib/http.ts";
+import { politeFetch, politeFetchBytes } from "../lib/http.ts";
 import {
+  brandDomains,
   filterNewItemIds,
+  latestTrafficDay,
   markSeen,
+  productsToSnapshot,
   propagateBrandRejections,
   productsToVerify,
   saveCandidate,
+  saveSnapshot,
+  saveTrafficRanks,
   saveVerification,
+  today,
   tryConsumeQuota,
   updateTrendScores,
+  updateWinnerScores,
 } from "../lib/repo.ts";
+import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranco.ts";
 import { enabledAdapters } from "../sources/index.ts";
 
 async function collect(): Promise<boolean> {
@@ -102,6 +111,56 @@ async function verify(): Promise<boolean> {
   return ok;
 }
 
+/** Tranco top-1M listesinden markaların günlük trafik sırası (liste günde bir güncellenir). */
+async function traffic(): Promise<boolean> {
+  console.log("\n▶ Trafik sırası (Tranco)");
+  const latest = await latestTrafficDay();
+  const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  if (latest && latest >= yesterday) {
+    console.log(`  son liste zaten kayıtlı (${latest})`);
+    return true;
+  }
+  const res = await politeFetchBytes(TRANCO_URL, TRANCO_MAX_BYTES);
+  if (!res.ok) {
+    console.error(`  ✖ Tranco indirilemedi: ${res.reason}`);
+    return false;
+  }
+  try {
+    const entry = unzipFirst(res.bytes);
+    const domains = await brandDomains();
+    const ranks = ranksFor(entry.data.toString("utf8"), domains);
+    const day = entry.date ?? today();
+    await saveTrafficRanks(day, domains, ranks);
+    console.log(`  liste ${day}: ${domains.length} markanın ${ranks.size} tanesi ilk 1 milyonda`);
+    return true;
+  } catch (err) {
+    console.error(`  ✖ ${(err as Error).message}`);
+    return false;
+  }
+}
+
+/** Doğrulanmış/takip edilen ürünlerin günlük fiyat-yorum-stok ölçümü. */
+async function snapshots(): Promise<boolean> {
+  const products = await productsToSnapshot(SNAPSHOT_PER_RUN);
+  console.log(`\n▶ Satış ölçümü: ${products.length} ürün`);
+  let ok = true;
+  for (const p of products) {
+    try {
+      const r = await readSales(p.product_url, politeFetch);
+      if (!r.ok) {
+        console.log(`  ? ${p.name} — ${r.reason}`);
+        continue;
+      }
+      await saveSnapshot(p.id, r.sales);
+      console.log(`  • ${p.name} — yorum ${r.sales.reviewCount ?? "?"}, fiyat ${r.sales.price ?? "?"} ${r.sales.currency ?? ""}`);
+    } catch (err) {
+      ok = false;
+      console.error(`  ! ${p.name}: ${(err as Error).message}`);
+    }
+  }
+  return ok;
+}
+
 async function main() {
   const started = Date.now();
   const onlyVerify = process.argv.includes("verify");
@@ -111,10 +170,13 @@ async function main() {
     const n = await propagateBrandRejections();
     if (n) console.log(`\n▶ Katı mod: pazaryerinde satan markaların ${n} ürünü daha elendi`);
   }
+  const ranked = await traffic();
+  const measured = await snapshots();
   const scores = await updateTrendScores();
   console.log(`\n▶ Trend skoru: ${scores.total} ürün, ${scores.updated} değişti`);
+  console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
   console.log(`\nBitti: ${((Date.now() - started) / 1000).toFixed(1)} sn`);
-  if (!collected || !verified) process.exitCode = 1;
+  if (!collected || !verified || !ranked || !measured) process.exitCode = 1;
 }
 
 await main();

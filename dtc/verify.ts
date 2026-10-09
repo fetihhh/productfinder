@@ -7,6 +7,7 @@ import { classifyDomain, registrableDomain } from "../lib/domain.ts";
 import type { FetchResult } from "../lib/http.ts";
 import { buildBrandQuery, buildQuery, findBrandListing, findMarketplaceListing, type SearchFn } from "./marketplaceSearch.ts";
 import { modelCoverage, modelTokens } from "./match.ts";
+import { readRating } from "./sales.ts";
 import {
   countryFromTld,
   detectPlatform,
@@ -14,10 +15,8 @@ import {
   parseShopifyCatalog,
   parseShopifyMeta,
   parseShopifyProduct,
-  parseYotpoBottomline,
   shopifyProductJsonUrl,
   type Platform,
-  type Rating,
   type ShopifyListing,
   type ShopifyMeta,
 } from "./signals.ts";
@@ -212,14 +211,7 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
   r.sales.currency = signals.offer?.currency ?? meta?.currency ?? null;
   if (!fromCatalog) r.sales.availability = signals.offer?.availability ?? null;
 
-  let rating: Rating | null = signals.rating;
-  if (!rating && signals.yotpoAppKey && shopifyProductId) {
-    const res = await deps.fetchPage(
-      `https://api-cdn.yotpo.com/products/${signals.yotpoAppKey}/${shopifyProductId}/bottomline`,
-      "application/json",
-    );
-    rating = res.ok ? parseYotpoBottomline(res.text) : null;
-  }
+  const rating = await readRating(signals, shopifyProductId, deps.fetchPage);
   if (rating) {
     r.sales.reviewCount = rating.count;
     r.sales.rating = rating.value;

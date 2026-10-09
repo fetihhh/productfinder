@@ -52,13 +52,14 @@ export function Filters({ f, categories, platforms, countries }: { f: F; categor
         <option value="rejected">Elendi</option>
       </select>
       <input type="number" name="reviews" min={0} defaultValue={f.minReviews || ""} placeholder="Min yorum" className={field} aria-label="Minimum yorum sayısı" />
-      <input type="number" name="min" min={0} max={100} defaultValue={f.minScore || ""} placeholder="Min skor" className={field} aria-label="Minimum trend skoru" />
+      <input type="number" name="min" min={0} max={100} defaultValue={f.minScore || ""} placeholder="Min winner" className={field} aria-label="Minimum winner skoru" />
       <div className="flex gap-2">
         <input type="number" name="pmin" min={0} defaultValue={f.priceMin || ""} placeholder="Fiyat ≥" className={`${field} w-full`} aria-label="Minimum fiyat" />
         <input type="number" name="pmax" min={0} defaultValue={f.priceMax || ""} placeholder="≤" className={`${field} w-full`} aria-label="Maksimum fiyat" />
       </div>
       <select name="sort" defaultValue={f.sort} className={field} aria-label="Sıralama">
-        <option value="score">Sırala: skor</option>
+        <option value="winner">Sırala: winner skoru</option>
+        <option value="score">Sırala: trend skoru</option>
         <option value="reviews">Sırala: yorum sayısı</option>
         <option value="new">Sırala: en yeni</option>
         <option value="price">Sırala: fiyat (artan)</option>

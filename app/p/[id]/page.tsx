@@ -1,0 +1,187 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { LineChart, ScoreBars } from "@/components/Charts";
+import { SOURCE_NAMES, STATUS } from "@/components/ProductCard";
+import { TrackingForm } from "@/components/TrackingForm";
+import { availabilityLabel, compact, countryLabel, dayLabel, formatPrice, launchLabel, moneyRange, rangeLabel } from "@/lib/format";
+import { getProduct } from "@/lib/products";
+import { REVIEW_TO_SALES, visitsFromRank } from "@/lib/winner";
+
+function Kpi({ label, value, sub, hint }: { label: string; value: string; sub?: string; hint?: string }) {
+  return (
+    <div title={hint} className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="text-xs text-zinc-500">{label}</div>
+      <div className="mt-1 text-lg font-semibold tabular-nums">{value}</div>
+      {sub && <div className="text-xs text-zinc-500">{sub}</div>}
+    </div>
+  );
+}
+
+function Panel({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <h2 className="font-medium">{title}</h2>
+      {note && <p className="mb-2 text-xs text-zinc-500">{note}</p>}
+      {children}
+    </section>
+  );
+}
+
+export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
+  const { id } = await params;
+  const data = await getProduct(id);
+  if (!data) notFound();
+  const { p, history, ranks } = data;
+  const w = p.winner_breakdown;
+  const brand = p.brands;
+  const href = p.product_url ?? `https://${p.brand_domain}`;
+  const currency = p.currency ?? history.findLast((h) => h.currency)?.currency ?? null;
+
+  const visitPoints = ranks.map((r) => ({ day: r.day, y: r.rank ? visitsFromRank(r.rank).mid : null }));
+  const rankPoints = ranks.map((r) => ({ day: r.day, y: r.rank }));
+  const reviewPoints = history.map((h) => ({ day: h.day, y: h.review_count }));
+  const salesPoints = history.map((h) => ({ day: h.day, y: h.review_count === null ? null : h.review_count * ((REVIEW_TO_SALES.low + REVIEW_TO_SALES.high) / 2) }));
+  const pricePoints = history.map((h) => ({ day: h.day, y: h.price }));
+  const latestRank = ranks.findLast((r) => r.rank !== null) ?? null;
+  const notRanked = ranks.length > 0 && ranks[ranks.length - 1].rank === null;
+  const accumulating = `Günlük ölçüm birikiyor (${history.length} gün). Grafik her gün otomatik dolar.`;
+
+  return (
+    <main className="mx-auto w-full max-w-6xl px-4 py-6">
+      <Link href="/" className="text-sm text-zinc-500 hover:underline">← Ürünler</Link>
+
+      <header className="mt-3 grid gap-4 md:grid-cols-[240px_1fr]">
+        <a href={href} target="_blank" rel="noopener noreferrer" className="block aspect-[4/3] overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-900">
+          {p.image_url && <img src={p.image_url} alt={p.name} referrerPolicy="no-referrer" className="h-full w-full object-cover" />}
+        </a>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${STATUS[p.dtc_status].cls}`}>{STATUS[p.dtc_status].label}</span>
+            {brand?.platform && brand.platform !== "unknown" && (
+              <span className="rounded bg-violet-100 px-1.5 py-0.5 text-xs font-medium text-violet-800 dark:bg-violet-950 dark:text-violet-300">{brand.platform}</span>
+            )}
+            {brand?.country && <span className="text-xs text-zinc-500">{countryLabel(brand.country)}</span>}
+            {brand?.ships_to_tr !== null && brand?.ships_to_tr !== undefined && (
+              <span className={`text-xs ${brand.ships_to_tr ? "text-emerald-700 dark:text-emerald-400" : "text-zinc-500"}`}>
+                · Türkiye'ye {brand.ships_to_tr ? "gönderim var" : "gönderim yok"}
+              </span>
+            )}
+          </div>
+          <h1 className="text-xl font-semibold leading-snug">
+            <a href={href} target="_blank" rel="noopener noreferrer" className="hover:underline">{p.name}</a>
+          </h1>
+          <a href={`https://${p.brand_domain}`} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
+            {p.brand_domain} ↗
+          </a>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            {[
+              formatPrice(p.price, p.currency) && `Fiyat ${formatPrice(p.price, p.currency)}${p.variant_count && p.variant_count > 1 ? "'den" : ""}`,
+              p.review_count !== null && `${p.review_count.toLocaleString("tr-TR")} yorum${p.rating !== null ? ` · ★ ${Number(p.rating).toFixed(1)}` : ""}`,
+              availabilityLabel(p.availability),
+              launchLabel(p.launched_at) && `Satışta: ${launchLabel(p.launched_at)}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          {p.dtc_reason && <p className="text-xs text-zinc-500">{p.dtc_reason}</p>}
+        </div>
+      </header>
+
+      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <Kpi label="Winner skoru" value={`${Number(p.winner_score).toFixed(0)}/100`} sub={`Trend ${Number(p.trend_score).toFixed(0)}`} />
+        <Kpi
+          label="Site trafiği"
+          value={w?.visits ? `≈ ${rangeLabel(w.visits)}` : notRanked ? "< ~100 B" : "—"}
+          sub="ziyaret / ay (tahmini)"
+          hint="Tranco sırasından kaba tahmin; aralık ×0,5–×2"
+        />
+        <Kpi
+          label="Tranco sırası"
+          value={latestRank?.rank ? `#${latestRank.rank.toLocaleString("tr-TR")}` : notRanked ? "1 Mn dışında" : "—"}
+          sub={w?.rankChange ? `30 gün: ${w.rankChange >= 1 ? "↑" : "↓"} %${Math.abs(Math.round((w.rankChange - 1) * 100))}` : latestRank ? dayLabel(latestRank.day) : undefined}
+          hint="Dünya genelinde site popülerlik sırası (küçük = daha popüler)"
+        />
+        <Kpi
+          label="Toplam satış"
+          value={w?.sales ? `≈ ${rangeLabel(w.sales)}` : "—"}
+          sub="adet (yorum × 10–50)"
+          hint="Alıcıların yaklaşık %2–10'u yorum bırakır varsayımı"
+        />
+        <Kpi
+          label="Aylık satış"
+          value={w?.salesPerMonth ? `≈ ${rangeLabel(w.salesPerMonth)}` : "—"}
+          sub={w?.salesPerMonth ? `${w.reviewsPerMonth} yeni yorum/ay` : "en az 7 günlük ölçüm gerekir"}
+        />
+        <Kpi
+          label="Aylık ciro"
+          value={w?.revenuePerMonth ? `≈ ${moneyRange(w.revenuePerMonth, currency)}` : "—"}
+          sub={w?.revenuePerMonth ? "aylık satış × fiyat" : "aylık satış bekleniyor"}
+        />
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Panel
+          title="Site trafiği — tahmini aylık ziyaret"
+          note={notRanked ? "Site şu an Tranco ilk 1 milyonunda değil (≈ 100 binden az ziyaret/ay); boşluklar listede olmadığı günler." : "Tranco sırasından türetilir (2,4·10¹⁰ × sıra^−0,9). Kesin değer değil, eğilimi gösterir."}
+        >
+          <LineChart points={visitPoints} format={compact} minZero empty={ranks.length ? "Site ilk 1 milyonda değil" : "Trafik verisi yarınki çalıştırmada gelecek"} />
+        </Panel>
+        <Panel title="Tranco sırası" note="Küçük sayı = daha popüler site. Düşen çizgi trafiğin arttığını gösterir.">
+          <LineChart points={rankPoints} format={(n) => `#${Math.round(n).toLocaleString("tr-TR")}`} color="stroke-sky-500" dot="fill-sky-500" area="fill-sky-500/10" empty="Sıra verisi yok" />
+        </Panel>
+        <Panel title="Yorum sayısı" note={history.length < 7 ? accumulating : "Yorum artış hızı satış hızının en iyi açık göstergesidir."}>
+          <LineChart points={reviewPoints} format={compact} color="stroke-amber-500" dot="fill-amber-500" area="fill-amber-500/10" empty="Bu üründe yorum bilgisi okunamadı" />
+        </Panel>
+        <Panel title="Tahmini toplam satış (adet)" note="Yorum sayısı × 30 (×10–50 aralığının ortası).">
+          <LineChart points={salesPoints} format={compact} color="stroke-violet-500" dot="fill-violet-500" area="fill-violet-500/10" empty="Yorum bilgisi olmadan satış tahmini yapılamıyor" />
+        </Panel>
+        <Panel title="Fiyat" note={currency ? `Para birimi: ${currency}. İndirim/zam günleri burada görünür.` : undefined}>
+          <LineChart
+            points={pricePoints}
+            format={(n) => formatPrice(n, currency) ?? String(n)}
+            color="stroke-rose-500"
+            dot="fill-rose-500"
+            area="fill-rose-500/10"
+            empty="Fiyat okunamadı"
+          />
+        </Panel>
+        <Panel title="Winner skoru nasıl oluştu?" note="Her çubuk kendi azami puanına göre dolar. Ayrıntılar README'de.">
+          {w ? (
+            <ScoreBars
+              parts={[
+                { label: "Talep", value: w.parts.talep, max: 30, hint: "Toplam yorum (1000 yorum = tam), düşük puanda azalır" },
+                { label: "İvme", value: w.parts.ivme, max: 25, hint: "Aylık yeni yorum (30/ay = tam); 7 günlük ölçüm gerekir" },
+                { label: "Trafik", value: w.parts.trafik, max: 20, hint: "Tranco sırası + 30 günlük iyileşme" },
+                { label: "Gündem", value: w.parts.gundem, max: 15, hint: "Bloglarda anılma (trend skoru)" },
+                { label: "Fiyat", value: w.parts.fiyat, max: 10, hint: "25–150 $ bandı tam puan" },
+              ]}
+            />
+          ) : (
+            <p className="text-sm text-zinc-500">Skor bir sonraki çalıştırmada hesaplanacak.</p>
+          )}
+          <p className="mt-3 text-xs text-zinc-500">
+            Ölçüm geçmişi: {w?.historyDays ?? 0} gün. Satış tahminleri yorum oranı varsayımına dayanır; kesin satış sayısını yalnızca marka bilir.
+          </p>
+        </Panel>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Panel title="Kaynaklar">
+          <ul className="space-y-1 text-sm">
+            {p.mentions.map((m) => (
+              <li key={m.url}>
+                <a href={m.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                  {SOURCE_NAMES[m.source] ?? m.source} · {dayLabel(m.posted_at.slice(0, 10))}
+                  {m.title ? ` — ${m.title}` : ""}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+        <Panel title="Takip ve Türkiye notu">
+          <TrackingForm productId={p.id} t={p.tracking} />
+        </Panel>
+      </div>
+    </main>
+  );
+}

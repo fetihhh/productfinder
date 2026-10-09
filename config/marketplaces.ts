@@ -72,7 +72,8 @@ export const MARKETPLACES: Marketplace[] = [
     ["Fnac", "fnac.com"], ["Darty", "darty.com"], ["Allegro", "allegro.pl"], ["Kaufland", "kaufland.de"],
     ["Decathlon", "decathlon.com"], ["Galaxus", "galaxus.ch"], ["Digitec", "digitec.ch"], ["Coolblue", "coolblue.nl"],
     ["Elgiganten", "elgiganten.se"], ["Conrad", "conrad.com"], ["ManoMano", "manomano.fr"], ["Fruugo", "fruugo.com"],
-    ["OnBuy", "onbuy.com"],
+    ["OnBuy", "onbuy.com"], ["IKEA", "ikea.com"], ["H&M", "hm.com"], ["Primark", "primark.com"],
+    ["Lidl", "lidl.de"], ["Aldi", "aldi.com"],
     // Türkiye
     ["Teknosa", "teknosa.com"], ["Vatan Bilgisayar", "vatanbilgisayar.com"], ["Boyner", "boyner.com.tr"],
     ["Beymen", "beymen.com"], ["Koçtaş", "koctas.com.tr"],

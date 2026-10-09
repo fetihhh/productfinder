@@ -48,3 +48,33 @@ export function launchLabel(iso: string | null): string | null {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : monthFmt.format(d);
 }
+
+const compactFmt = new Intl.NumberFormat("tr-TR", { notation: "compact", maximumFractionDigits: 1 });
+
+/** 12345 → "12,3 B", 2400000 → "2,4 Mn" */
+export function compact(n: number): string {
+  return compactFmt.format(n);
+}
+
+export function rangeLabel(r: { low: number; high: number } | null, unit = ""): string | null {
+  if (!r) return null;
+  return `${compact(r.low)}–${compact(r.high)}${unit}`;
+}
+
+/** Fiyat aralığı (ör. tahmini ciro) para birimiyle, kısaltılmış. */
+export function moneyRange(r: { low: number; high: number } | null, currency: string | null): string | null {
+  if (!r) return null;
+  try {
+    const f = new Intl.NumberFormat("tr-TR", { style: "currency", currency: currency ?? "USD", notation: "compact", maximumFractionDigits: 1 });
+    return `${f.format(r.low)}–${f.format(r.high)}`;
+  } catch {
+    return `${compact(r.low)}–${compact(r.high)} ${currency ?? ""}`.trim();
+  }
+}
+
+const dayFmt = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", timeZone: "UTC" });
+
+/** "2026-10-08" → "8 Eki" */
+export function dayLabel(day: string): string {
+  return dayFmt.format(new Date(`${day}T00:00:00Z`));
+}

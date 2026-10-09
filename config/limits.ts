@@ -14,3 +14,6 @@ export const REVERIFY_AFTER_DAYS = 30;
  */
 export const STRICT_BRAND_CHECK = true;
 export const BRAND_RECHECK_DAYS = 30;
+
+/** Bir çalıştırmada en fazla kaç ürünün günlük satış ölçümü alınır (ürün başına 2-3 istek, kota harcamaz). */
+export const SNAPSHOT_PER_RUN = 150;

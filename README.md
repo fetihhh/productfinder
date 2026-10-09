@@ -9,8 +9,9 @@ GitHub Actions (her gün 05:00 UTC)  →  npm run ingest
   1) Ürün bloglarının RSS beslemeleri → aday ürünler (marka alan adı + ürün sayfası)
   2) DTC doğrulama: platform, satın alma, fiziksel ürün, ürün + marka düzeyinde pazaryeri araması
   3) Mağaza ülkesi, Türkiye'ye gönderim, fiyat, yorum sayısı/puanı, stok, çıkış tarihi
-  4) Trend skoru
-Next.js (Vercel Hobby)  →  şifreli arayüz: arama, filtreler, kartlar, takip listesi, Türkiye notları
+  4) Site trafiği sırası (Tranco top-1M) ve doğrulanmış ürünlerin günlük fiyat/yorum/stok ölçümü
+  5) Trend skoru ve winner skoru
+Next.js (Vercel Hobby)  →  şifreli arayüz: arama, filtreler, kartlar, grafikli ürün sayfası, siteler/trafik tablosu, takip listesi
 Supabase (Postgres)     →  tüm veriler; yalnızca sunucu tarafından gizli anahtarla erişilir
 ```
 
@@ -23,7 +24,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0003`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0004`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -48,8 +49,8 @@ cp .env.example .env.local   # değerleri doldurun
 | `npm run build` | Üretim derlemesi |
 | `npm test` | Birim testleri (`node --test`) |
 | `npm run typecheck` | TypeScript kontrolü |
-| `npm run ingest` | Toplama + DTC doğrulama + trend skoru (günlük iş) |
-| `npm run ingest -- verify` | Yalnızca doğrulama + skor |
+| `npm run ingest` | Toplama + DTC doğrulama + trafik + satış ölçümü + skorlar (günlük iş) |
+| `npm run ingest -- verify` | Toplama hariç hepsi |
 
 ## Ücretsiz katman limitleri
 
@@ -59,6 +60,7 @@ cp .env.example .env.local   # değerleri doldurun
 | **GitHub Actions** (private repo) | 2.000 dakika/ay (public repoda sınırsız) | ~3–5 dk/gün ≈ 150 dk/ay. Public repolarda 60 gün commit olmazsa zamanlanmış iş durur |
 | **Vercel Hobby** | 100 GB veri aktarımı, 1M fonksiyon çağrısı, 4 CPU-saat/ay; fonksiyon süresi 300 sn. **Yalnızca kişisel, ticari olmayan kullanım** | Tek kullanıcı, çok düşük trafik |
 | **Tavily Free** | 1.000 kredi/ay, kart istemez (basic arama = 1 kredi) | Kod sınırı: günde 30, ayda 950. Kota dolarsa ürün ertesi güne kalır, ücretli kullanıma **asla** geçilmez |
+| **Tranco top-1M listesi** (tranco-list.eu) | Ücretsiz, anahtar gerekmez; günlük ~10 MB zip | Günde 1 indirme. robots.txt `/api` ve `/list/` yollarını yasaklar, yalnızca izinli `/top-1m.csv.zip` kullanılır |
 | **RSS beslemeleri, Shopify `meta.json` / `products.json`, Yotpo yorum özeti** | Herkese açık, ücretsiz | robots.txt'ye uyularak, alan adı başına 1 istek/sn |
 
 > Ürün ticari bir hizmete dönüşürse Vercel Hobby (ticari kullanım yasak), Tavily ve Product Hunt benzeri kaynakların koşulları değişir; bu durumda yeniden değerlendirilmeli.
@@ -130,6 +132,31 @@ Gerçek satış adetleri herkese açık değildir; kartta satışa dair şu işa
 | Satışa çıkış tarihi | Shopify `published_at` |
 | Trend skoru | Bloglardaki bahsedilmeler (aşağıda) |
 
+## Trafik, satış tahmini ve winner skoru (`lib/winner.ts`)
+
+Hiçbir ücretsiz kaynak bir sitenin gerçek ziyaret ya da satış sayısını vermez. Aşağıdakiler kamuya açık işaretlerden türetilmiş **kaba tahminlerdir**; ürünleri birbirleriyle karşılaştırmak ve eğilimi görmek içindir.
+
+| Tahmin | Formül | Kaynak |
+|---|---|---|
+| Aylık ziyaret | `2,4·10¹⁰ × sıra^−0,9`, aralık ×0,5–×2 (10.000. site ≈ 6 Mn, 100.000. ≈ 760 B, 1.000.000. ≈ 96 B) | Tranco sırası (Chrome UX Report, Cloudflare Radar, Umbrella, Majestic, Farsight sıralamalarının 30 günlük ortalaması). İlk 1 milyonda olmayan site < ~100 B |
+| Toplam satış | yorum sayısı × 10–50 | Alıcıların yaklaşık %2–10'unun yorum bıraktığı varsayımı |
+| Aylık satış | son ≤30 günde eklenen yorum (aya ölçeklenmiş) × 10–50 | Günlük ölçümler (`product_snapshots`); en az 7 günlük veri gerekir |
+| Aylık ciro | aylık satış × fiyat | |
+
+Günlük iş doğrulanmış ürünlerin (ve favori/incelenecek listesindekilerin) fiyat, yorum ve stok bilgisini her gün kaydeder; Tranco sırası her marka için günlük tutulur (`traffic_ranks`). Grafikler bu geçmişten çizilir ve her gün dolar.
+
+**Winner skoru (0–100)**, varsayılan sıralamadır:
+
+| Bileşen | Puan | Formül |
+|---|---|---|
+| Talep | 30 | `30 × min(1, log10(1 + yorum) / 3)` × puan katsayısı (★ ≥ 4,5 → 1; 4–4,5 → 0,85; < 4 → 0,6). 1.000 yorum = tam puan |
+| İvme | 25 | `25 × min(1, aylık yeni yorum / 30)` (en az 7 günlük ölçüm) |
+| Trafik | 20 | `16 × sıra puanı` (1 Mn → 0,1, ≤ 30 B → 1, logaritmik) `+ 4 × min(1, (eski sıra / yeni sıra − 1) / 0,2)` (30 günde %20 iyileşme = tam) |
+| Gündem | 15 | `15 × trend skoru / 100` |
+| Fiyat | 10 | 25–150 $ → 10; 15–25 $ veya 150–300 $ → 5; diğer → 0 (yaklaşık sabit kurlarla dolara çevrilir) |
+
+"İvme" ve trafik değişimi ilk hafta 0'dır; ölçümler biriktikçe hızla büyüyen ürünler öne çıkar.
+
 ## Trend skoru (`lib/score.ts`, 0–100)
 
 | Bileşen | Formül | Açıklama |
@@ -143,13 +170,15 @@ Gerçek satış adetleri herkese açık değildir; kartta satışa dair şu işa
 ## Arayüz
 
 - Varsayılan görünüm yalnızca `verified` ürünler.
-- Arama (ürün/marka), durum, **mağaza ülkesi**, **yalnızca Türkiye'ye gönderenler**, kategori, platform, tarih, takip durumu, **minimum yorum**, minimum skor, **fiyat aralığı**; sıralama: skor, **yorum sayısı**, en yeni, fiyat. Filtreler URL'de tutulur.
-- Kart: görsel, ürün/marka linki, durum/platform/skor rozetleri, fiyat, yorum ★, stok, satışa çıkış, mağaza ülkesi, Türkiye gönderimi, doğrulama gerekçesi, kaynak yazılar.
+- Arama (ürün/marka), durum, **mağaza ülkesi**, **yalnızca Türkiye'ye gönderenler**, kategori, platform, tarih, takip durumu, **minimum yorum**, minimum winner skoru, **fiyat aralığı**; sıralama: winner skoru, trend skoru, **yorum sayısı**, en yeni, fiyat. Filtreler URL'de tutulur.
+- Kart: görsel, ürün/marka linki, durum/platform/winner rozetleri, fiyat, yorum ★, stok, satışa çıkış, mağaza ülkesi, Türkiye gönderimi, **tahmini trafik ve satış**, doğrulama gerekçesi, kaynak yazılar.
+- **Ürün sayfası** (`/p/<id>`): winner skoru, tahmini aylık ziyaret, Tranco sırası, toplam/aylık satış ve ciro kutuları; site trafiği, Tranco sırası, yorum sayısı, tahmini satış ve fiyat grafikleri; winner skoru bileşen çubukları.
+- **Siteler ve trafik** (`/siteler`): markaları tahmini aylık ziyarete göre sıralayan tablo, 30 günlük değişim, eğilim çizgisi, doğrulanmış/toplam ürün sayısı. Grafikler bağımlılıksız SVG'dir.
 - "Takip ve Türkiye notu": favori / incelenecek / elendi, not, "Türkiye'de rakip var mı?", tahmini maliyet, Türkiye notu.
 
 ## Pazaryeri ve perakendeci listesi
 
-`config/marketplaces.ts` — ~117 pazaryeri ve çok markalı büyük perakendeci (Amazon, eBay, Etsy, Trendyol, Hepsiburada, n11, Walmart, Target, Best Buy, MediaMarkt, Zalando, Teknosa, Boyner…). Yeni satıcı eklemek için `retailers([...])` listesine `["Ad", "alanadi.com"]` ekleyin. Eşleşme alan adının TLD'siz adına göre yapılır (`amazon` → `amazon.com.tr`, `smile.amazon.de`, `amzn.to`, `link.amazon`). `NOT_OWN_DOMAIN_LABELS` markanın kendi alan adı sayılmayan adresleri (myshopify, sosyal medya, affiliate kısaltıcılar) tutar.
+`config/marketplaces.ts` — ~122 pazaryeri ve büyük perakendeci (Amazon, eBay, Etsy, Trendyol, Hepsiburada, n11, Walmart, Target, Best Buy, MediaMarkt, Zalando, IKEA, Teknosa, Boyner…). Yeni satıcı eklemek için `retailers([...])` listesine `["Ad", "alanadi.com"]` ekleyin. Eşleşme alan adının TLD'siz adına göre yapılır (`amazon` → `amazon.com.tr`, `smile.amazon.de`, `amzn.to`, `link.amazon`). `NOT_OWN_DOMAIN_LABELS` markanın kendi alan adı sayılmayan adresleri (myshopify, sosyal medya, affiliate kısaltıcılar) tutar.
 
 ## Kod kuralı
 

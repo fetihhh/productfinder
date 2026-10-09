@@ -64,7 +64,10 @@ function robotsFor(origin: string): Promise<RobotsRules> {
   return cached;
 }
 
-export async function politeFetch(input: string, accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"): Promise<FetchResult> {
+type Failure = Extract<FetchResult, { ok: false }>;
+
+/** robots.txt ve hız sınırına uyarak isteği yapar, yönlendirmeleri izler; gövdeyi okumaz. */
+async function politeRequest(input: string, accept: string, maxBytes: number): Promise<Failure | { ok: true; url: URL; res: Response }> {
   let url: URL;
   try {
     url = new URL(input);
@@ -99,11 +102,25 @@ export async function politeFetch(input: string, accept = "text/html,application
     }
 
     const length = Number(res.headers.get("content-length") ?? 0);
-    if (length > MAX_BYTES) return { ok: false, url: url.href, reason: "Yanıt çok büyük", retryable: false };
-    const text = await res.text();
-    if (text.length > MAX_BYTES) return { ok: false, url: url.href, reason: "Yanıt çok büyük", retryable: false };
-
-    return { ok: true, status: res.status, url: url.href, contentType: res.headers.get("content-type") ?? "", text };
+    if (length > maxBytes) return { ok: false, url: url.href, reason: "Yanıt çok büyük", retryable: false };
+    return { ok: true, url, res };
   }
   return { ok: false, url: url.href, reason: "Çok fazla yönlendirme", retryable: false };
+}
+
+export async function politeFetch(input: string, accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"): Promise<FetchResult> {
+  const r = await politeRequest(input, accept, MAX_BYTES);
+  if (!r.ok) return r;
+  const text = await r.res.text();
+  if (text.length > MAX_BYTES) return { ok: false, url: r.url.href, reason: "Yanıt çok büyük", retryable: false };
+  return { ok: true, status: r.res.status, url: r.url.href, contentType: r.res.headers.get("content-type") ?? "", text };
+}
+
+/** İkili dosya indirme (ör. Tranco listesinin zip'i); aynı robots/hız kurallarıyla. */
+export async function politeFetchBytes(input: string, maxBytes: number): Promise<Failure | { ok: true; url: string; bytes: Uint8Array }> {
+  const r = await politeRequest(input, "application/zip,application/octet-stream,*/*;q=0.5", maxBytes);
+  if (!r.ok) return r;
+  const bytes = new Uint8Array(await r.res.arrayBuffer());
+  if (bytes.length > maxBytes) return { ok: false, url: r.url.href, reason: "Yanıt çok büyük", retryable: false };
+  return { ok: true, url: r.url.href, bytes };
 }

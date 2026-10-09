@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Filters } from "@/components/Filters";
 import { ProductCard } from "@/components/ProductCard";
 import { facets, listProducts, parseFilters } from "@/lib/products";
@@ -11,9 +12,12 @@ export default async function Home({ searchParams }: PageProps<"/">) {
     <main className="mx-auto w-full max-w-7xl px-4 py-6">
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Product Finder</h1>
-        <form action={logout}>
-          <button className="text-sm text-zinc-500 hover:underline">Çıkış</button>
-        </form>
+        <nav className="flex items-center gap-4 text-sm">
+          <Link href="/siteler" className="text-blue-600 hover:underline dark:text-blue-400">Siteler ve trafik</Link>
+          <form action={logout}>
+            <button className="text-zinc-500 hover:underline">Çıkış</button>
+          </form>
+        </nav>
       </header>
 
       <Filters f={f} categories={categories} platforms={platforms} countries={countries} />

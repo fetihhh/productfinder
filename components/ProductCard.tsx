@@ -1,8 +1,9 @@
-import { saveTracking } from "@/app/actions";
-import { availabilityLabel, countryLabel, formatPrice, launchLabel } from "@/lib/format";
+import Link from "next/link";
+import { TrackingForm } from "@/components/TrackingForm";
+import { availabilityLabel, countryLabel, formatPrice, launchLabel, rangeLabel } from "@/lib/format";
 import type { ProductRow } from "@/lib/products";
 
-const STATUS: Record<ProductRow["dtc_status"], { label: string; cls: string }> = {
+export const STATUS: Record<ProductRow["dtc_status"], { label: string; cls: string }> = {
   verified: { label: "Doğrulandı", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" },
   rejected_marketplace: { label: "Pazaryerinde", cls: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" },
   unverified: { label: "Doğrulanmadı", cls: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" },
@@ -14,7 +15,7 @@ const TRACK: Record<string, { label: string; cls: string }> = {
   rejected: { label: "Elendi", cls: "bg-zinc-200 text-zinc-500 line-through dark:bg-zinc-800" },
 };
 
-const SOURCE_NAMES: Record<string, string> = {
+export const SOURCE_NAMES: Record<string, string> = {
   coolthings: "Cool Things",
   thegadgeteer: "The Gadgeteer",
   theawesomer: "The Awesomer",
@@ -22,7 +23,6 @@ const SOURCE_NAMES: Record<string, string> = {
 
 const dateFmt = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short" });
 const badge = "rounded px-1.5 py-0.5 text-xs font-medium";
-const input = "w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900";
 
 /** Satışa dair işaretler: fiyat, yorum, stok, çıkış tarihi, mağaza ülkesi, Türkiye'ye gönderim. */
 function SalesFacts({ p }: { p: ProductRow }) {
@@ -44,6 +44,11 @@ function SalesFacts({ p }: { p: ProductRow }) {
   if (launch) facts.push(["Satışta", launch, "Mağazada yayınlanma tarihi"]);
   if (country) facts.push(["Mağaza", countryLabel(country)]);
   if (tr !== null && tr !== undefined) facts.push(["Türkiye", tr ? "Gönderim var" : "Gönderim yok", "Mağazanın gönderim ülkeleri listesinden"]);
+  const w = p.winner_breakdown;
+  if (w?.visits) facts.push(["Trafik", `≈ ${rangeLabel(w.visits)} ziyaret/ay`, `Tranco sırası #${w.rank?.toLocaleString("tr-TR")} → kaba tahmin`]);
+  else if (w && p.brands?.tranco_rank === null) facts.push(["Trafik", "< ~100 B ziyaret/ay", "Site Tranco ilk 1 milyonunda değil"]);
+  if (w?.salesPerMonth) facts.push(["Satış/ay", `≈ ${rangeLabel(w.salesPerMonth)} adet`, "Son 30 günde eklenen yorumlardan (yorum × 10–50)"]);
+  else if (w?.sales) facts.push(["Satış", `≈ ${rangeLabel(w.sales)} adet (toplam)`, "Yorum sayısı × 10–50 (alıcıların %2–10'u yorum bırakır)"]);
   if (facts.length === 0) return null;
 
   return (
@@ -61,9 +66,11 @@ function SalesFacts({ p }: { p: ProductRow }) {
 export function ProductCard({ p }: { p: ProductRow }) {
   const href = p.product_url ?? `https://${p.brand_domain}`;
   const b = p.score_breakdown;
-  const scoreTitle = b
-    ? `Kaynak ${b.parts.kaynak} + Artış ${b.parts.artis} + Hacim ${b.parts.hacim}\n${b.sources} kaynak · son 7 gün ${b.m7} · son 30 gün ${b.m30}`
-    : undefined;
+  const w = p.winner_breakdown?.parts;
+  const scoreTitle = [
+    w ? `Winner: talep ${w.talep} + ivme ${w.ivme} + trafik ${w.trafik} + gündem ${w.gundem} + fiyat ${w.fiyat}` : null,
+    b ? `Trend ${Number(p.trend_score).toFixed(0)}: kaynak ${b.parts.kaynak} + artış ${b.parts.artis} + hacim ${b.parts.hacim} (${b.sources} kaynak · 7 gün ${b.m7} · 30 gün ${b.m30})` : null,
+  ].filter(Boolean).join("\n");
   const t = p.tracking;
 
   return (
@@ -81,8 +88,8 @@ export function ProductCard({ p }: { p: ProductRow }) {
             <span className={`${badge} bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300`}>{p.brands.platform}</span>
           )}
           {t?.status && <span className={`${badge} ${TRACK[t.status].cls}`}>{TRACK[t.status].label}</span>}
-          <span title={scoreTitle} className={`${badge} ml-auto cursor-help bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900`}>
-            Skor {Number(p.trend_score).toFixed(0)}
+          <span title={scoreTitle} className={`${badge} ml-auto cursor-help bg-amber-500 text-white dark:bg-amber-400 dark:text-zinc-900`}>
+            Winner {Number(p.winner_score).toFixed(0)}
           </span>
         </div>
 
@@ -94,6 +101,9 @@ export function ProductCard({ p }: { p: ProductRow }) {
         </a>
 
         <SalesFacts p={p} />
+        <Link href={`/p/${p.id}`} className="text-sm font-medium text-amber-700 hover:underline dark:text-amber-400">
+          Grafikler ve detay →
+        </Link>
 
         {p.dtc_reason && (
           <p title={p.dtc_reason} className="line-clamp-3 text-xs text-zinc-500">{p.dtc_reason}</p>
@@ -111,20 +121,7 @@ export function ProductCard({ p }: { p: ProductRow }) {
           <summary className="cursor-pointer text-sm text-zinc-600 dark:text-zinc-400">
             Takip ve Türkiye notu{t?.note || t?.tr_competitor || t?.tr_est_cost || t?.tr_note ? " •" : ""}
           </summary>
-          <form action={saveTracking} className="mt-2 space-y-2">
-            <input type="hidden" name="product_id" value={p.id} />
-            <select name="status" defaultValue={t?.status ?? ""} className={input} aria-label="Takip durumu">
-              <option value="">Takip yok</option>
-              <option value="favorite">Favori</option>
-              <option value="review">İncelenecek</option>
-              <option value="rejected">Elendi</option>
-            </select>
-            <textarea name="note" defaultValue={t?.note ?? ""} rows={2} placeholder="Not" className={input} />
-            <input name="tr_competitor" defaultValue={t?.tr_competitor ?? ""} placeholder="Türkiye'de rakip var mı?" className={input} />
-            <input name="tr_est_cost" defaultValue={t?.tr_est_cost ?? ""} placeholder="Tahmini maliyet" className={input} />
-            <textarea name="tr_note" defaultValue={t?.tr_note ?? ""} rows={2} placeholder="Türkiye notu" className={input} />
-            <button className="rounded bg-zinc-900 px-3 py-1 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900">Kaydet</button>
-          </form>
+          <TrackingForm productId={p.id} t={t} />
         </details>
       </div>
     </article>

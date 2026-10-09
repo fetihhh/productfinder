@@ -97,6 +97,10 @@ gh secret set TAVILY_API_KEY
 2. **Environment Variables:** `APP_PASSWORD`, `AUTH_SECRET`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`.
 3. **Deploy.** Sonraki her `git push` otomatik deploy olur.
 
+Komut satırından aynısı: `npx vercel login` → `npx vercel link` → `npx vercel env add <AD> production` → `npx vercel deploy --prod`.
+
+Canlı adres: https://productfinder-phi.vercel.app (Vercel projesi `fetihh/productfinder`, GitHub reposuna bağlı).
+
 Toplama işi Vercel'de değil GitHub Actions'ta çalışır: alan adı başına 1 istek/sn kuralı nedeniyle iş dakikalar sürebilir.
 
 ## Veri kaynakları

@@ -13,6 +13,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Product Finder</h1>
         <nav className="flex items-center gap-4 text-sm">
+          <Link href="/yeni" className="font-medium text-sky-700 hover:underline dark:text-sky-400">Yeni mağazalar</Link>
           <Link href="/?sort=rising" className="text-rose-600 hover:underline dark:text-rose-400">↗ Yükselenler</Link>
           <Link href="/siteler" className="text-blue-600 hover:underline dark:text-blue-400">Siteler ve trafik</Link>
           <form action={logout}>

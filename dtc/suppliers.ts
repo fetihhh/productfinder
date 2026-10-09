@@ -252,6 +252,8 @@ export async function findSuppliers(
   sites: Site[] = SUPPLIER_SITES,
 ): Promise<SupplierResult> {
   const query = supplierQuery(p.name, p.brandDomain, p.productType);
+  // Tek sözcüklük ya da çok kısa tarif ("out", "plate") rastgele sonuç getirir: aranmaz.
+  if (query.split(" ").filter((w) => w.length >= 3).length < 2) return { query, offers: [], failed: ["tarif çok kısa"] };
   // Sonuç çıkmazsa son iki sözcükle (genelde ürün türü: "hybrid headphone speakers" → "headphone speakers") yeniden denenir.
   const words = query.split(" ");
   const attempts = [...new Set([query, words.length > 2 ? words.slice(-2).join(" ") : query])];

@@ -22,6 +22,8 @@ export type Filters = {
   sort: "winner" | "rising" | "margin" | "score" | "new" | "reviews" | "price";
   /** Yalnızca toptancısı bulunan ürünler */
   supplier: boolean;
+  /** Mağaza yaşı sınırı (gün; 0 = hepsi): ilk ürün ya da alan adı kaydı bu kadar günden yeni */
+  age: 0 | 30 | 90 | 150;
 };
 
 export type ProductRow = {
@@ -51,7 +53,14 @@ export type ProductRow = {
   supplier_min_usd: number | null;
   margin_ratio: number | null;
   supplier_checked_at: string | null;
-  brands: { platform: string | null; country: string | null; ships_to_tr: boolean | null; tranco_rank: number | null } | null;
+  brands: {
+    platform: string | null;
+    country: string | null;
+    ships_to_tr: boolean | null;
+    tranco_rank: number | null;
+    registered_at: string | null;
+    first_product_at: string | null;
+  } | null;
   mentions: { source: string; url: string; title: string | null; posted_at: string }[];
   tracking: {
     status: TrackStatus | null;
@@ -89,6 +98,7 @@ export function parseFilters(sp: Record<string, string | string[] | undefined>):
     country: /^[A-Z]{2}$/.test(country) ? country : "",
     shipsTr: one(sp.tr) === "1",
     supplier: one(sp.sup) === "1",
+    age: ([30, 90, 150] as const).find((a) => a === Number(one(sp.age))) ?? 0,
     minScore: nonNegative(one(sp.min), 100),
     minReviews: nonNegative(one(sp.reviews)),
     priceMin: nonNegative(one(sp.pmin)),
@@ -105,11 +115,11 @@ function safeLike(s: string): string {
 }
 
 export async function listProducts(f: Filters): Promise<{ rows: ProductRow[]; error: string | null }> {
-  const brandFilter = Boolean(f.platform || f.country || f.shipsTr);
+  const brandFilter = Boolean(f.platform || f.country || f.shipsTr || f.age);
   const select = [
     "id, name, brand_domain, product_url, image_url, category, dtc_status, dtc_reason, trend_score, score_breakdown, winner_score, winner_breakdown, momentum_score, first_seen_at",
     "price, currency, review_count, rating, availability, launched_at, variant_count, product_type, supplier_count, supplier_min_usd, margin_ratio, supplier_checked_at",
-    `brands${brandFilter ? "!inner" : ""}(platform, country, ships_to_tr, tranco_rank)`,
+    `brands${brandFilter ? "!inner" : ""}(platform, country, ships_to_tr, tranco_rank, registered_at, first_product_at)`,
     "mentions(source, url, title, posted_at)",
     `tracking${f.track !== "all" ? "!inner" : ""}(status, note, tr_competitor, tr_est_cost, tr_note)`,
   ].join(", ");
@@ -121,6 +131,10 @@ export async function listProducts(f: Filters): Promise<{ rows: ProductRow[]; er
   if (f.country) query = query.eq("brands.country", f.country);
   if (f.shipsTr) query = query.eq("brands.ships_to_tr", true);
   if (f.supplier) query = query.gt("supplier_count", 0);
+  if (f.age) {
+    const since = new Date(Date.now() - f.age * 86_400_000).toISOString();
+    query = query.or(`first_product_at.gte.${since},registered_at.gte.${since.slice(0, 10)}`, { referencedTable: "brands" });
+  }
   if (f.track !== "all") query = query.eq("tracking.status", f.track);
   if (f.minScore > 0) query = query.gte("winner_score", f.minScore);
   if (f.minReviews > 0) query = query.gte("review_count", f.minReviews);

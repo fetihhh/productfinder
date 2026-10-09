@@ -6,6 +6,8 @@
 
 ```
 GitHub Actions (her gün 05:00 UTC)  →  npm run ingest
+  0) Yeni mağaza keşfi: yeni kayıtlı alan adları (WhoisDS) → DNS ile Shopify mağazaları → haftalık kontrol
+     → son 5 ayda açılmış, puanı yüksek mağazaların öne çıkan ürünü aday olur
   1) Ürün bloglarının RSS beslemeleri → aday ürünler (marka alan adı + ürün sayfası)
   1b) Tranco trafik sırası → büyük markalar (sıra ≤ #150.000) ağa çıkmadan elenir
   2) DTC doğrulama: platform, satın alma, fiziksel ürün, kotasız doğrudan pazaryeri araması (Amazon.com, AliExpress, Otto)
@@ -27,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0006`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0009`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -54,6 +56,7 @@ cp .env.example .env.local   # değerleri doldurun
 | `npm run typecheck` | TypeScript kontrolü |
 | `npm run ingest` | Toplama + DTC doğrulama + trafik + satış ölçümü + skorlar (günlük iş) |
 | `npm run ingest -- verify` | Toplama hariç hepsi |
+| `npm run ingest -- no-stores` | Yeni mağaza keşfi ve kontrolleri atlanır |
 | `npm run ingest -- recheck` | Ayrıca tüm `verified` ürünleri tarihe bakmadan yeniden kontrol eder (doğrulama kuralları değişince) |
 
 ## Ücretsiz katman limitleri
@@ -61,9 +64,13 @@ cp .env.example .env.local   # değerleri doldurun
 | Servis | Ücretsiz limit | Bu projedeki kullanım |
 |---|---|---|
 | **Supabase Free** | 500 MB veritabanı, 5 GB çıkış/ay, 2 aktif proje. 7 gün işlem olmazsa proje duraklar | Birkaç MB. Günlük iş projeyi aktif tutar |
-| **GitHub Actions** (private repo) | 2.000 dakika/ay (public repoda sınırsız) | ~3–5 dk/gün ≈ 150 dk/ay. Public repolarda 60 gün commit olmazsa zamanlanmış iş durur |
+| **GitHub Actions** (private repo) | 2.000 dakika/ay (public repoda sınırsız) | İlk ~10 gün (60 günlük geriye dönük tarama) ~35 dk/gün, sonra ~20–25 dk/gün ≈ 700 dk/ay. Public repolarda 60 gün commit olmazsa zamanlanmış iş durur |
 | **Vercel Hobby** | 100 GB veri aktarımı, 1M fonksiyon çağrısı, 4 CPU-saat/ay; fonksiyon süresi 300 sn. **Yalnızca kişisel, ticari olmayan kullanım** | Tek kullanıcı, çok düşük trafik |
 | **Tavily Free** | 1.000 kredi/ay, kart istemez (basic arama = 1 kredi) | Kod sınırı: günde 30, ayda 950. Kota dolarsa ürün ertesi güne kalır, ücretli kullanıma **asla** geçilmez |
+| **WhoisDS yeni kayıtlı alan adları** (ücretsiz günlük liste) | Ücretsiz, kayıt gerekmez; "ticari dahil yeniden kullanılabilir" | Günde 1 zip (~70 bin alan adı) |
+| **cenk/nrd** (WhoisDS listelerinin 60 günlük birikimi, dl.cenk.app) | Ücretsiz, robots.txt izinli | Yalnızca ilk kurulumda, liste bitene kadar günde 1 indirme (~75 MB) |
+| **DNS** (sistem çözümleyicisi) | Ücretsiz | Günde ~35–300 bin sorgu; sitelere istek gönderilmez |
+| **RDAP** (rdap.org → kayıt kuruluşları) | Ücretsiz, resmi WHOIS halefi | Marka başına 1 sorgu (kayıt tarihi) |
 | **Tranco top-1M listesi** (tranco-list.eu) | Ücretsiz, anahtar gerekmez; günlük ~10 MB zip | Günde 1 indirme. robots.txt `/api` ve `/list/` yollarını yasaklar, yalnızca izinli `/top-1m.csv.zip` kullanılır |
 | **Doğrudan pazaryeri araması** (amazon.com, otto.de arama sayfaları) ve **toptancı araması** (aliexpress.com, alibaba.com/showroom, made-in-china.com) | Ücretsiz, anahtar ve kota yok | robots.txt bu arama yollarına izin veriyor; site başına 1 istek/sn. CAPTCHA/503 dönerse atlatılmaz, o site "okunamadı" sayılır |
 | **RSS beslemeleri, Shopify `meta.json` / `products.json`, Yotpo yorum özeti** | Herkese açık, ücretsiz | robots.txt'ye uyularak, alan adı başına 1 istek/sn |
@@ -103,6 +110,20 @@ Fiziksel ürün inceleyen blogların herkese açık RSS beslemeleri (`config/sou
 - Tüm istekler `lib/http.ts` üzerinden: robots.txt'ye uyulur (401/403/429/5xx ihtiyaten "yasak" sayılır), alan adı başına saniyede en fazla 1 istek, User-Agent `ProductFinderBot/0.1`. Giriş gerektiren sayfalara ve CAPTCHA'lara dokunulmaz.
 
 Kullanılmayan kaynaklar ve nedenleri: Gear Patrol ve Cool Material (robots.txt yasak), Uncrate / Bless This Stuff / Dude I Want That (besleme yok), Gadget Flow (haber ağırlıklı, büyük markalar), Design Milk (mimari/iç mekân), Reddit (robots.txt `Disallow: /`, API elle onaya bağlı), Kickstarter/Indiegogo (botlara 403), Product Hunt/HN (yazılım ağırlıklı), Google Custom Search (yeni müşteri almıyor), Brave Search (kart istiyor), Okendo/Loox yorum API'leri (robots yasak), Werd gibi "en iyi X" liste blogları (yazı başına 10–20 marka çıkarır; ücretsiz Tavily kotasını birkaç günde bitirir).
+
+## Yeni mağaza keşfi (`lib/nrd.ts`, `dtc/storeProbe.ts`, `scripts/stores.ts`)
+
+Amaç: **son 5 ayda açılmış küçük dropshipping mağazalarını** yakalamak. Bloglar yeni mağazaları yazmadığı için mağazalar doğrudan alan adı kayıtlarından bulunur:
+
+1. **Yeni kayıtlı alan adları:** WhoisDS'nin ücretsiz günlük listesi (~70 bin/gün). İlk kurulumda cenk/nrd'nin son 60 günlük birikimi parça parça taranır (her çalıştırmada 300 bin alan adı). Spam ağırlıklı uzantılar (.xyz, .top…) atlanır.
+2. **DNS ile Shopify tespiti:** Shopify'a bağlı alan adları 23.227.38.x adresine çözülür (~%3: günde ~1.000 yeni mağaza). DNS sorgusu siteye istek göndermez.
+3. **Kontrol takvimi:** ilk kontrol kayıttan 5 gün sonra. Şifreli/boş mağaza 14 günde bir (90 günde açılmazsa bırakılır), açık mağaza **haftada bir** (ilk ürünü 150 günü geçince bırakılır). Her kontrol `/products.json` (gerekirse `/meta.json` ve ana sayfa) okur; şifre sayfasına girilmez, robots.txt'ye uyulur.
+4. **Mağaza puanı (0–100):** odak 25 (tek ürün mağazası tam), yenilik 15, **dropship işareti 20** (ürün açıklamasında "7-15 business days" gibi uzun teslimat aralığı ya da dünya geneli gönderim), indirim 10 (compare-at fiyat), fiyat 10 (15–150), **hareket 20** (iki kontrol arasında yeni ürün eklendi +10, varyant stoğu tükendi +10). Baskılı giyim/merch mağazaları −20, dijital ağırlıklı mağazalar 0.
+5. **Aday:** puanı ≥ 55, açık ve ilk ürünü son 150 gün içinde olan mağazanın ana sayfasında öne çıkardığı ürün (yoksa en yeni fiziksel ürün) aday olur; sonra normal hattan geçer: pazaryeri kontrolü → toptancı araması → skorlar.
+
+**Yeni mağazalar** sayfası (`/yeni`): açık yeni mağazalar, mağaza yaşı, ürün sayısı, indirim ve dropship işaretleri, Türkiye'ye gönderim, toptan fiyat/marj ve keşif hattının özeti (bulunan / açık / kapalı / kapanmış). Ana listede de **Mağaza yaşı** filtresi (≤ 30 / 90 / 150 gün) vardır; markaların yaşı RDAP kayıt tarihi ve Shopify'daki ilk ürün tarihinden hesaplanır.
+
+**Bilinen sınırlar:** WhoisDS ücretsiz listesi tüm kayıtları değil bir kısmını içerir; 60 günden eski mağazalar ancak izlemeye alındıktan sonra yaşlanarak listede kalır (5 aylık pencere birkaç ay içinde dolar). "Hareket" işaretleri en az iki haftalık kontrol gerektirir.
 
 ## DTC doğrulama (`dtc/verify.ts`)
 

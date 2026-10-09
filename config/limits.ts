@@ -34,3 +34,20 @@ export const BIG_BRAND_MAX_RANK = 150_000;
 /** Toptancı araması: bir çalıştırmada en fazla kaç ürün, sonuçlar kaç günde bir yenilenir. */
 export const SUPPLIER_PER_RUN = 40;
 export const SUPPLIER_REFRESH_DAYS = 7;
+
+/** "Yeni mağaza" sınırı: ilk ürünü (ya da alan adı kaydı) bu kadar günden yeni olan mağazalar. */
+export const NEW_STORE_MAX_AGE_DAYS = 150;
+
+/**
+ * Yeni mağaza keşfi (WhoisDS yeni kayıtlı alan adları → DNS ile Shopify tespiti → mağaza kontrolleri).
+ * NRD_BOOTSTRAP_PER_RUN: ilk kurulumda son 60 günün listesinden her çalıştırmada taranan alan adı sayısı
+ * (liste bitene kadar; ~3 milyon uygun alan adı → yaklaşık 10 gün).
+ * STORE_CHECKS_PER_RUN: bir çalıştırmada kontrol edilen mağaza sayısı (mağaza başına 1–4 istek, alan adı başına 1 istek/sn).
+ * STORE_PROMOTE_PER_RUN: puanı yüksek açık mağazalardan aday ürün olarak eklenecek en fazla mağaza.
+ */
+export const DNS_CONCURRENCY = 300;
+export const NRD_BOOTSTRAP_PER_RUN = Number(process.env.NRD_BOOTSTRAP_PER_RUN) || 300_000;
+export const STORE_CHECKS_PER_RUN = Number(process.env.STORE_CHECKS_PER_RUN) || 3000;
+export const STORE_CHECK_CONCURRENCY = 12;
+export const STORE_PROMOTE_PER_RUN = 40;
+export const STORE_PROMOTE_MIN_SCORE = 55;

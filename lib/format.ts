@@ -78,3 +78,13 @@ const dayFmt = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short"
 export function dayLabel(day: string): string {
   return dayFmt.format(new Date(`${day}T00:00:00Z`));
 }
+
+/** Tarihten bugüne geçen süre: "bugün", "12 gün", "3 ay". */
+export function ageLabel(iso: string | null): string | null {
+  if (!iso) return null;
+  const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
+  if (Number.isNaN(days)) return null;
+  if (days < 1) return "bugün";
+  if (days < 60) return `${days} gün`;
+  return `${Math.floor(days / 30)} ay`;
+}

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { TrackingForm } from "@/components/TrackingForm";
 import { WIDE_PENDING } from "@/dtc/verify";
-import { availabilityLabel, countryLabel, formatPrice, launchLabel, rangeLabel } from "@/lib/format";
+import { ageLabel, availabilityLabel, countryLabel, formatPrice, launchLabel, rangeLabel } from "@/lib/format";
 import type { ProductRow } from "@/lib/products";
 
 export const STATUS: Record<ProductRow["dtc_status"], { label: string; cls: string }> = {
@@ -22,6 +22,7 @@ export const SOURCE_NAMES: Record<string, string> = {
   thegadgeteer: "The Gadgeteer",
   theawesomer: "The Awesomer",
   thisiswhyimbroke: "This Is Why I'm Broke",
+  yenimagaza: "Yeni mağaza keşfi",
 };
 
 const dateFmt = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short" });
@@ -48,6 +49,8 @@ function SalesFacts({ p }: { p: ProductRow }) {
   if (availability) facts.push(["Stok", availability]);
   if (launch) facts.push(["Satışta", launch, "Mağazada yayınlanma tarihi"]);
   if (country) facts.push(["Mağaza", countryLabel(country)]);
+  const opened = [p.brands?.first_product_at, p.brands?.registered_at].filter((d): d is string => Boolean(d)).sort().at(-1) ?? null;
+  if (opened) facts.push(["Yaş", `${ageLabel(opened)} (${launchLabel(opened)})`, "Mağazadaki ilk ürün ya da alan adı kaydı (hangisi daha yeniyse)"]);
   if (tr !== null && tr !== undefined) facts.push(["Türkiye", tr ? "Gönderim var" : "Gönderim yok", "Mağazanın gönderim ülkeleri listesinden"]);
   if (p.supplier_count !== null) {
     facts.push(

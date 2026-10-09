@@ -22,6 +22,12 @@ export function Filters({ f, categories, platforms, countries }: { f: F; categor
         <option value="rejected_big_brand">Büyük marka</option>
         <option value="all">Tüm durumlar</option>
       </select>
+      <select name="age" defaultValue={String(f.age)} className={field} aria-label="Mağaza yaşı">
+        <option value="0">Her yaştaki mağaza</option>
+        <option value="30">Mağaza ≤ 30 gün</option>
+        <option value="90">Mağaza ≤ 90 gün</option>
+        <option value="150">Mağaza ≤ 5 ay</option>
+      </select>
       <select name="country" defaultValue={f.country} className={field} aria-label="Mağaza ülkesi">
         <option value="">Tüm ülkeler</option>
         {countries.map((c) => (

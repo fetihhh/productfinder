@@ -1,7 +1,9 @@
-// Günlük iş: kaynaklar → aday ürünler → DTC doğrulama → trafik sırası → satış ölçümü → trend ve winner skoru.
+// Günlük iş: kaynaklar + yeni mağaza keşfi → aday ürünler → büyük marka elemesi → DTC doğrulama → satış ölçümü
+// → toptancı araması → marka yaşı → trend, winner ve yükseliş skorları.
 // Çalıştırma: npm run ingest            (toplama + doğrulama; GitHub Actions cron'u bunu çağırır)
 //             npm run ingest -- verify  (toplama hariç hepsi)
 //             npm run ingest -- recheck (ayrıca tüm "verified" ürünleri tarihe bakmadan yeniden kontrol eder)
+//             npm run ingest -- no-stores (yeni mağaza keşfi ve kontrolleri atlanır)
 import { BIG_BRAND_MAX_RANK, SNAPSHOT_PER_RUN, STRICT_BRAND_CHECK, SUPPLIER_PER_RUN, TAVILY_DAILY_LIMIT, TAVILY_MONTHLY_LIMIT, VERIFY_PER_RUN } from "../config/limits.ts";
 import { directSearch } from "../dtc/directSearch.ts";
 import { tavilySearch, type SearchFn } from "../dtc/marketplaceSearch.ts";
@@ -32,6 +34,7 @@ import {
 } from "../lib/repo.ts";
 import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranco.ts";
 import { enabledAdapters } from "../sources/index.ts";
+import { brandAges, checkStores, discoverStores, promoteStores } from "./stores.ts";
 
 async function collect(): Promise<boolean> {
   let ok = true;
@@ -198,6 +201,11 @@ async function main() {
   const started = Date.now();
   const onlyVerify = process.argv.includes("verify") || process.argv.includes("recheck");
   const collected = onlyVerify ? true : await collect();
+  // Yeni mağazalar: keşif (yeni kayıtlı alan adları) → kontrol → puanı yüksek olanların öne çıkan ürünü aday olur.
+  const skipStores = process.argv.includes("no-stores");
+  const discovered = onlyVerify || skipStores ? true : await discoverStores();
+  const checked = skipStores ? true : await checkStores();
+  const promoted = skipStores ? true : await promoteStores();
   // Trafik sırası doğrulamadan önce: büyük markalar ağa çıkmadan ve Tavily kredisi harcanmadan elenir.
   const ranked = await traffic();
   const big = await rejectBigBrands();
@@ -209,11 +217,12 @@ async function main() {
   }
   const measured = await snapshots();
   const sourced = await suppliers();
+  const aged = await brandAges();
   const scores = await updateTrendScores();
   console.log(`\n▶ Trend skoru: ${scores.total} ürün, ${scores.updated} değişti`);
   console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
   console.log(`\nBitti: ${((Date.now() - started) / 1000).toFixed(1)} sn`);
-  if (!collected || !verified || !ranked || !measured || !sourced) process.exitCode = 1;
+  if (![collected, discovered, checked, promoted, verified, ranked, measured, sourced, aged].every(Boolean)) process.exitCode = 1;
 }
 
 await main();

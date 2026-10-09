@@ -17,3 +17,10 @@ export const BRAND_RECHECK_DAYS = 30;
 
 /** Bir çalıştırmada en fazla kaç ürünün günlük satış ölçümü alınır (ürün başına 2-3 istek, kota harcamaz). */
 export const SNAPSHOT_PER_RUN = 150;
+
+/**
+ * Tavily kotası dolduğunda, doğrudan pazaryeri araması (Amazon.com zorunlu + AliExpress + Otto) temiz çıkan ürün
+ * "kısmi kontrol" rozetiyle doğrulanmış listelenir ve geniş arama yapılana kadar her gün yeniden denenir.
+ * false → kota dolunca ürün eskisi gibi "doğrulanmadı" kalır.
+ */
+export const VERIFY_WITH_DIRECT_ONLY = true;

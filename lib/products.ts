@@ -19,7 +19,7 @@ export type Filters = {
   priceMax: number;
   days: 0 | 7 | 30 | 90;
   track: TrackStatus | "all";
-  sort: "winner" | "score" | "new" | "reviews" | "price";
+  sort: "winner" | "rising" | "score" | "new" | "reviews" | "price";
 };
 
 export type ProductRow = {
@@ -34,6 +34,7 @@ export type ProductRow = {
   trend_score: number;
   score_breakdown: ScoreBreakdown | null;
   winner_score: number;
+  momentum_score: number;
   winner_breakdown: WinnerBreakdown | null;
   first_seen_at: string;
   price: number | null;
@@ -56,7 +57,7 @@ export type ProductRow = {
 
 const STATUSES = ["verified", "rejected_marketplace", "unverified", "all"] as const;
 const TRACKS = ["favorite", "review", "rejected", "all"] as const;
-const SORTS = ["winner", "score", "new", "reviews", "price"] as const;
+const SORTS = ["winner", "rising", "score", "new", "reviews", "price"] as const;
 
 function one(v: string | string[] | undefined): string {
   return (Array.isArray(v) ? v[0] : v ?? "").trim();
@@ -98,7 +99,7 @@ function safeLike(s: string): string {
 export async function listProducts(f: Filters): Promise<{ rows: ProductRow[]; error: string | null }> {
   const brandFilter = Boolean(f.platform || f.country || f.shipsTr);
   const select = [
-    "id, name, brand_domain, product_url, image_url, category, dtc_status, dtc_reason, trend_score, score_breakdown, winner_score, winner_breakdown, first_seen_at",
+    "id, name, brand_domain, product_url, image_url, category, dtc_status, dtc_reason, trend_score, score_breakdown, winner_score, winner_breakdown, momentum_score, first_seen_at",
     "price, currency, review_count, rating, availability, launched_at, variant_count",
     `brands${brandFilter ? "!inner" : ""}(platform, country, ships_to_tr, tranco_rank)`,
     "mentions(source, url, title, posted_at)",
@@ -123,6 +124,7 @@ export async function listProducts(f: Filters): Promise<{ rows: ProductRow[]; er
   if (f.sort === "new") query = query.order("first_seen_at", { ascending: false });
   else if (f.sort === "reviews") query = query.order("review_count", { ascending: false, nullsFirst: false });
   else if (f.sort === "price") query = query.order("price", { ascending: true, nullsFirst: false });
+  else if (f.sort === "rising") query = query.gt("momentum_score", 0).order("momentum_score", { ascending: false });
   else if (f.sort === "score") query = query.order("trend_score", { ascending: false });
   else query = query.order("winner_score", { ascending: false });
   query = query.order("first_seen_at", { ascending: false });
@@ -159,7 +161,7 @@ export async function getProduct(id: string): Promise<{ p: ProductDetail; histor
     .from("products")
     .select(
       [
-        "id, name, brand_domain, product_url, image_url, category, dtc_status, dtc_reason, trend_score, score_breakdown, winner_score, winner_breakdown, first_seen_at",
+        "id, name, brand_domain, product_url, image_url, category, dtc_status, dtc_reason, trend_score, score_breakdown, winner_score, winner_breakdown, momentum_score, first_seen_at",
         "price, currency, review_count, rating, availability, launched_at, variant_count",
         "brands(platform, country, ships_to_tr, tranco_rank, tranco_day, marketplace_evidence)",
         "mentions(source, url, title, posted_at)",

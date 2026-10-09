@@ -88,7 +88,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
       </header>
 
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <Kpi label="Winner skoru" value={`${Number(p.winner_score).toFixed(0)}/100`} sub={`Trend ${Number(p.trend_score).toFixed(0)}`} />
+        <Kpi label="Winner skoru" value={`${Number(p.winner_score).toFixed(0)}/100`} sub={`Trend ${Number(p.trend_score).toFixed(0)} · Yükseliş ${Number(p.momentum_score).toFixed(0)}`} />
         <Kpi
           label="Site trafiği"
           value={w?.visits ? `≈ ${rangeLabel(w.visits)}` : notRanked ? "< ~100 B" : "—"}
@@ -158,6 +158,18 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
             />
           ) : (
             <p className="text-sm text-zinc-500">Skor bir sonraki çalıştırmada hesaplanacak.</p>
+          )}
+          {w?.momentum && (
+            <>
+              <h3 className="mt-4 mb-1.5 text-sm font-medium">Yükseliş skoru: {w.momentum.score.toFixed(0)}/100</h3>
+              <ScoreBars
+                parts={[
+                  { label: "Yorum hızı", value: w.momentum.parts.yorum, max: 45, hint: "Aylık yorum büyümesi (%30/ay = tam)" },
+                  { label: "Trafik hızı", value: w.momentum.parts.trafik, max: 35, hint: "30 günde Tranco sırası iyileşmesi (%20 = tam)" },
+                  { label: "Gündem", value: w.momentum.parts.gundem, max: 20, hint: "Son 7 günde blog yazısı (2 = tam)" },
+                ]}
+              />
+            </>
           )}
           <p className="mt-3 text-xs text-zinc-500">
             Ölçüm geçmişi: {w?.historyDays ?? 0} gün. Satış tahminleri yorum oranı varsayımına dayanır; kesin satış sayısını yalnızca marka bilir.

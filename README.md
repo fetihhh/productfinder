@@ -7,10 +7,11 @@ Pazaryerlerinde ve büyük perakendecilerde **satılmayan**, yalnızca markanın
 ```
 GitHub Actions (her gün 05:00 UTC)  →  npm run ingest
   1) Ürün bloglarının RSS beslemeleri → aday ürünler (marka alan adı + ürün sayfası)
-  2) DTC doğrulama: platform, satın alma, fiziksel ürün, ürün + marka düzeyinde pazaryeri araması
+  2) DTC doğrulama: platform, satın alma, fiziksel ürün, kotasız doğrudan pazaryeri araması (Amazon.com, AliExpress, Otto)
+     + Tavily ile ~126 pazaryeri/perakendecide geniş arama (ürün + marka)
   3) Mağaza ülkesi, Türkiye'ye gönderim, fiyat, yorum sayısı/puanı, stok, çıkış tarihi
   4) Site trafiği sırası (Tranco top-1M) ve doğrulanmış ürünlerin günlük fiyat/yorum/stok ölçümü
-  5) Trend skoru ve winner skoru
+  5) Trend, winner ve yükseliş skorları
 Next.js (Vercel Hobby)  →  şifreli arayüz: arama, filtreler, kartlar, grafikli ürün sayfası, siteler/trafik tablosu, takip listesi
 Supabase (Postgres)     →  tüm veriler; yalnızca sunucu tarafından gizli anahtarla erişilir
 ```
@@ -24,7 +25,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0004`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0005`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -51,6 +52,7 @@ cp .env.example .env.local   # değerleri doldurun
 | `npm run typecheck` | TypeScript kontrolü |
 | `npm run ingest` | Toplama + DTC doğrulama + trafik + satış ölçümü + skorlar (günlük iş) |
 | `npm run ingest -- verify` | Toplama hariç hepsi |
+| `npm run ingest -- recheck` | Ayrıca tüm `verified` ürünleri tarihe bakmadan yeniden kontrol eder (doğrulama kuralları değişince) |
 
 ## Ücretsiz katman limitleri
 
@@ -61,6 +63,7 @@ cp .env.example .env.local   # değerleri doldurun
 | **Vercel Hobby** | 100 GB veri aktarımı, 1M fonksiyon çağrısı, 4 CPU-saat/ay; fonksiyon süresi 300 sn. **Yalnızca kişisel, ticari olmayan kullanım** | Tek kullanıcı, çok düşük trafik |
 | **Tavily Free** | 1.000 kredi/ay, kart istemez (basic arama = 1 kredi) | Kod sınırı: günde 30, ayda 950. Kota dolarsa ürün ertesi güne kalır, ücretli kullanıma **asla** geçilmez |
 | **Tranco top-1M listesi** (tranco-list.eu) | Ücretsiz, anahtar gerekmez; günlük ~10 MB zip | Günde 1 indirme. robots.txt `/api` ve `/list/` yollarını yasaklar, yalnızca izinli `/top-1m.csv.zip` kullanılır |
+| **Doğrudan pazaryeri araması** (amazon.com, aliexpress.com, otto.de arama sayfaları) | Ücretsiz, anahtar ve kota yok | robots.txt bu arama yollarına izin veriyor; site başına 1 istek/sn. CAPTCHA/503 dönerse atlatılmaz, o site "okunamadı" sayılır |
 | **RSS beslemeleri, Shopify `meta.json` / `products.json`, Yotpo yorum özeti** | Herkese açık, ücretsiz | robots.txt'ye uyularak, alan adı başına 1 istek/sn |
 
 > Ürün ticari bir hizmete dönüşürse Vercel Hobby (ticari kullanım yasak), Tavily ve Product Hunt benzeri kaynakların koşulları değişir; bu durumda yeniden değerlendirilmeli.
@@ -109,8 +112,11 @@ Her ürün sırayla şu adımlardan geçer; ilk başarısız adımda durur ve ge
 4. **Platform** (Shopify, WooCommerce, BigCommerce, Wix, Squarespace, Magento, Salesforce). Shopify'da `/meta.json` (mağaza ülkesi, şehri, gönderim ülkeleri, marka adı) ve ürün JSON'u okunur. Blog ana sayfaya link verdiyse `/products.json` kataloğunda ürün adıyla aranır (en fazla 3 sayfa).
 5. **Satın alma:** `/cart/add` formu, fiyatlı schema.org `Offer` veya "Add to cart / Buy now / Sepete ekle". Yoksa → `unverified`.
 6. **Fiziksel ürün:** Shopify `requires_shipping`, kargo/ağırlık bilgisi veya schema.org `Product`+`Offer`. Dijital/yazılım ya da kanıt yoksa → `unverified`.
-7. **Ürün araması (Tavily, 1 kredi):** ürün adı yalnızca ~126 pazaryeri/perakendeci alan adında aranır. Marka adı ilan **başlığında** geçmeli; modelin ilk kelimesi ve model kelimelerinin ≥%60'ı bulunmalı. Arama sayfaları, Etsy `/market/`, Facebook'un pazaryeri dışı sayfaları, kariyer/yatırımcı alt alanları sayılmaz. Bulunursa → `rejected_marketplace` ve marka da "found" olur.
-8. **Marka araması (katı mod, Tavily, marka başına 30 günde 1 kredi):** marka adı tırnak içinde aranır; marka herhangi bir pazaryerinde/büyük perakendecide satıyorsa ürün elenir. 5 harften kısa marka adlarında (ör. "TDM") ürünün model kelimelerinden biri de geçmelidir. Temizse → `verified`.
+7. **Doğrudan pazaryeri araması (kotasız):** ürün adı ve marka adı Amazon.com, AliExpress ve Otto'nun kendi arama sayfalarında aranır (`dtc/directSearch.ts`). Eşleşme kuralları Tavily ile aynıdır; ayrıca "X için kılıf / Case for X / compatible with X" gibi **üçüncü taraf aksesuar** ilanları sayılmaz. Bulunursa → `rejected_marketplace`, Tavily kredisi harcanmaz. robots.txt'nin izin vermediği (eBay, Etsy, Walmart, Target, Trendyol, Alibaba, Google, Bing), bot doğrulaması gösteren (DuckDuckGo, Amazon.de/.com.tr) ya da sonuçları JavaScript'le yükleyen (Best Buy, Temu) siteler kullanılmaz; bunlar Tavily ile kontrol edilir.
+8. **Ürün araması (Tavily, 1 kredi):** ürün adı yalnızca ~126 pazaryeri/perakendeci alan adında aranır. Marka adı ilan **başlığında** geçmeli; modelin ilk kelimesi ve model kelimelerinin ≥%60'ı bulunmalı. Arama sayfaları, Etsy `/market/`, Facebook'un pazaryeri dışı sayfaları, kariyer/yatırımcı alt alanları sayılmaz. Bulunursa → `rejected_marketplace` ve marka da "found" olur.
+9. **Marka araması (katı mod, Tavily, marka başına 30 günde 1 kredi):** marka adı tırnak içinde aranır; marka herhangi bir pazaryerinde/büyük perakendecide satıyorsa ürün elenir. 5 harften kısa marka adlarında (ör. "TDM") ürünün model kelimelerinden biri de geçmelidir. Temizse → `verified`.
+
+**Tavily kotası dolduğunda:** doğrudan arama tamsa (Amazon.com okunabildiyse) ürün "Kısmi kontrol" rozetiyle `verified` listelenir ve geniş arama yapılana kadar her gün yeniden kontrol edilir (`VERIFY_WITH_DIRECT_ONLY`, `config/limits.ts`). Amazon okunamadıysa ürün `unverified` kalır ve ertesi gün denenir.
 
 Katı mod (`config/limits.ts` içinde `STRICT_BRAND_CHECK`) açıktır: bir markanın tek bir ürünü bile pazaryerinde bulunursa, markanın daha önce doğrulanmış ürünleri de her çalıştırma sonunda elenir.
 
@@ -156,6 +162,16 @@ Günlük iş doğrulanmış ürünlerin (ve favori/incelenecek listesindekilerin
 | Fiyat | 10 | 25–150 $ → 10; 15–25 $ veya 150–300 $ → 5; diğer → 0 (yaklaşık sabit kurlarla dolara çevrilir) |
 
 "İvme" ve trafik değişimi ilk hafta 0'dır; ölçümler biriktikçe hızla büyüyen ürünler öne çıkar.
+
+**Yükseliş skoru (0–100)** — "↗ Yükselenler" görünümü (`/?sort=rising`). Büyüklüğe değil **hıza** bakar; küçük ama hızla büyüyen ürünleri bulmak içindir:
+
+| Bileşen | Puan | Formül |
+|---|---|---|
+| Yorum hızı | 45 | `45 × min(1, büyüme / 0,30)`; büyüme = aylık yeni yorum / max(20, toplam yorum). Ayda 3'ten az yeni yorum sayılmaz |
+| Trafik hızı | 35 | `35 × min(1, (eski sıra / yeni sıra − 1) / 0,2)` (30 günde %20 iyileşme = tam; düşüş eksi puan vermez) |
+| Gündem | 20 | `20 × min(1, son 7 gündeki blog yazısı / 2)` |
+
+40 ve üstü kartta "↗ Yükselişte" rozeti gösterir. Yorum ve trafik hızı en az 7 günlük ölçümden sonra hesaplanır.
 
 ## Trend skoru (`lib/score.ts`, 0–100)
 

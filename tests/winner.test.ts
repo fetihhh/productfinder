@@ -4,7 +4,7 @@ import { crc32, deflateRawSync } from "node:zlib";
 import { readSales } from "../dtc/sales.ts";
 import type { FetchResult } from "../lib/http.ts";
 import { ranksFor, unzipFirst } from "../lib/tranco.ts";
-import { pricePoints, rankChange, rankPoints, reviewsPerMonth, toUsd, visitsFromRank, winnerScore } from "../lib/winner.ts";
+import { momentumScore, pricePoints, rankChange, rankPoints, reviewsPerMonth, toUsd, visitsFromRank, winnerScore } from "../lib/winner.ts";
 
 /** Tek dosyalık, deflate ile sıkıştırılmış en küçük zip. */
 function makeZip(name: string, content: string, dosDate: number): Buffer {
@@ -135,4 +135,13 @@ test("readSales: ürün JSON'u ve Yotpo özetinden günlük ölçüm", async () 
   const r = await readSales(`${BASE}/products/lamp`, async (u) => pages[u] ?? { ok: false, url: u, reason: "404", retryable: false });
   assert.ok(r.ok);
   assert.deepEqual(r.sales, { price: 49, currency: "USD", reviewCount: 88, rating: 4.4, availability: "InStock" });
+});
+
+test("momentumScore: büyüklükten bağımsız hız ölçer", () => {
+  // 50 yorumluk üründe ayda 15 yeni yorum = %30 büyüme → tam yorum puanı
+  assert.deepEqual(momentumScore(50, 15, 1.2, 2), { score: 100, parts: { yorum: 45, trafik: 35, gundem: 20 }, reviewGrowth: 0.3 });
+  // 5000 yorumluk üründe ayda 15 yeni yorum = %0,3 → çok küçük
+  assert.ok(momentumScore(5000, 15, null, 0).score < 1);
+  // ayda 3'ten az yeni yorum gürültü sayılır; trafik kötüleşmesi eksi puan vermez
+  assert.deepEqual(momentumScore(10, 2, 0.8, 1), { score: 10, parts: { yorum: 0, trafik: 0, gundem: 10 }, reviewGrowth: null });
 });

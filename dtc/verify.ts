@@ -2,10 +2,11 @@
 // Yol üstünde mağaza ülkesi, Türkiye'ye satış ve satışa dair işaretleri (fiyat, yorum, stok, çıkış tarihi) de toplar.
 // Ağ erişimi bağımlılık olarak verilir (testlerde sahte fetch/arama kullanılır).
 import { parse } from "tldts";
-import { BRAND_RECHECK_DAYS, STRICT_BRAND_CHECK } from "../config/limits.ts";
+import { BRAND_RECHECK_DAYS, STRICT_BRAND_CHECK, VERIFY_WITH_DIRECT_ONLY } from "../config/limits.ts";
 import { classifyDomain, registrableDomain } from "../lib/domain.ts";
 import type { FetchResult } from "../lib/http.ts";
 import { buildBrandQuery, buildQuery, findBrandListing, findMarketplaceListing, type SearchFn } from "./marketplaceSearch.ts";
+import { directQuery } from "./directSearch.ts";
 import { modelCoverage, modelTokens } from "./match.ts";
 import { readRating } from "./sales.ts";
 import {
@@ -48,10 +49,15 @@ export type VerifyInput = { brandDomain: string; productUrl: string | null; prod
 
 export type VerifyDeps = {
   fetchPage: (url: string, accept?: string) => Promise<FetchResult>;
-  /** null → arama yapılamaz (kota bitti / anahtar yok). */
+  /** Geniş arama (Tavily). null → arama yapılamaz (kota bitti / anahtar yok). */
   searchMarketplaces: SearchFn | null;
+  /** Kotasız doğrudan pazaryeri araması (dtc/directSearch.ts); yoksa atlanır. */
+  directSearch?: SearchFn | null;
   now?: number;
 };
+
+/** Yalnızca doğrudan kontrollerle doğrulanan ürünün gerekçesi (arayüz "kısmi kontrol" rozeti gösterir). */
+export const WIDE_PENDING = "Geniş arama bekliyor (Tavily kotası doldu); ertesi gün yeniden kontrol edilecek";
 
 export type SalesInfo = {
   price: number | null;
@@ -263,13 +269,50 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
   }
   r.physical = true;
 
-  // 9) Ürün düzeyi pazaryeri araması
+  // 9) Doğrudan pazaryeri araması (Amazon.com, AliExpress, Otto; kotasız): ürün ve marka.
+  const brandName = r.store.brandName ?? input.brandDomain.split(".")[0];
+  let directComplete = false;
+  if (deps.directSearch) {
+    const d = await deps.directSearch(directQuery(brandName, input.productName));
+    if (d.ok) {
+      const listing = findMarketplaceListing(d.results, input.brandDomain, input.productName);
+      if (listing) {
+        if (STRICT_BRAND_CHECK) r.brandCheck = { status: "found", evidence: `${listing.why}: ${listing.url}` };
+        return done("rejected_marketplace", `Pazaryerinde bulundu (${listing.why}, doğrudan arama): ${listing.url}`);
+      }
+      let complete = !d.incomplete;
+      const failed = [...(d.failed ?? [])];
+      if (STRICT_BRAND_CHECK) {
+        const b = await deps.directSearch(directQuery(brandName, ""));
+        if (b.ok) {
+          const brandListing = findBrandListing(b.results, brandName, input.brandDomain, input.productName);
+          if (brandListing) {
+            r.brandCheck = { status: "found", evidence: `${brandListing.why}: ${brandListing.url}` };
+            return done("rejected_marketplace", `${brandListing.why} (doğrudan arama): ${brandListing.url}`);
+          }
+          complete &&= !b.incomplete;
+          for (const f of b.failed ?? []) if (!failed.includes(f)) failed.push(f);
+        } else complete = false;
+      }
+      directComplete = complete;
+      evidence.push(`Doğrudan arama: ${(d.checked ?? []).join(", ") || "—"} temiz${failed.length ? ` (okunamadı: ${failed.join(", ")})` : ""}`);
+    }
+  }
+
+  // 10) Geniş arama (Tavily, ~126 pazaryeri/perakendeci): ürün düzeyi
   const search = deps.searchMarketplaces;
-  if (!search) return done("unverified", `${QUOTA_PREFIX} (günlük/aylık arama kotası doldu)`, true);
+  if (!search) {
+    // Kota bitti: doğrudan kontrol tamsa ürün "kısmi doğrulanmış" listelenir ve ertesi gün geniş aramayla yeniden denenir.
+    if (directComplete && VERIFY_WITH_DIRECT_ONLY) return done("verified", WIDE_PENDING, true);
+    return done("unverified", `${QUOTA_PREFIX} (günlük/aylık arama kotası doldu)`, true);
+  }
   // Arama/eşleştirme için blog başlığından gelen kısa ad kullanılır; marka sayfasındaki adlar çoğu zaman
   // pazarlama ekleriyle uzundur ("… with 5 Lights & 10 Configurations") ve eşleşmeyi bozar.
   const outcome = await search(buildQuery(input.brandDomain, input.productName));
-  if (!outcome.ok) return done("unverified", `${QUOTA_PREFIX}: ${outcome.reason}`, true);
+  if (!outcome.ok) {
+    if (outcome.quota && directComplete && VERIFY_WITH_DIRECT_ONLY) return done("verified", WIDE_PENDING, true);
+    return done("unverified", `${QUOTA_PREFIX}: ${outcome.reason}`, true);
+  }
   const listing = findMarketplaceListing(outcome.results, input.brandDomain, input.productName);
   if (listing) {
     // Markanın bir ürünü pazaryerinde → katı modda marka da "found" (aynı markanın diğer ürünleri de elenir).
@@ -278,14 +321,16 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
   }
   evidence.push(`Ürün araması: ${outcome.results.length} sonuç, eşleşme yok`);
 
-  // 10) Marka düzeyi kontrol (katı mod): marka herhangi bir pazaryerinde/büyük perakendecide satıyorsa ele.
+  // 11) Geniş marka düzeyi kontrol (katı mod): marka herhangi bir pazaryerinde/büyük perakendecide satıyorsa ele.
   if (!STRICT_BRAND_CHECK) return done("verified", "");
   if (input.brand?.marketplaceStatus === "clean" && isFresh(input.brand.marketplaceCheckedAt, now)) {
     return done("verified", "Marka araması: temiz (önceki kontrol)");
   }
-  const brandName = r.store.brandName ?? input.brandDomain.split(".")[0];
   const brandOutcome = await search(buildBrandQuery(brandName));
-  if (!brandOutcome.ok) return done("unverified", `${QUOTA_PREFIX} (marka araması): ${brandOutcome.reason}`, true);
+  if (!brandOutcome.ok) {
+    if (brandOutcome.quota && directComplete && VERIFY_WITH_DIRECT_ONLY) return done("verified", WIDE_PENDING, true);
+    return done("unverified", `${QUOTA_PREFIX} (marka araması): ${brandOutcome.reason}`, true);
+  }
   const brandListing = findBrandListing(brandOutcome.results, brandName, input.brandDomain, input.productName);
   if (brandListing) {
     r.brandCheck = { status: "found", evidence: `${brandListing.why}: ${brandListing.url}` };

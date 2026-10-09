@@ -112,9 +112,12 @@ export type ProductToVerify = {
   brands: { marketplace_status: "clean" | "found" | null; marketplace_evidence: string | null; marketplace_checked_at: string | null } | null;
 };
 
-/** Hiç kontrol edilmemiş (veya geçici hatayla kalmış) ürünler + süresi dolan "verified" ürünler. */
-export async function productsToVerify(limit: number): Promise<ProductToVerify[]> {
-  const stale = new Date(Date.now() - REVERIFY_AFTER_DAYS * 86_400_000).toISOString();
+/**
+ * Hiç kontrol edilmemiş (veya geçici hatayla kalmış) ürünler + süresi dolan "verified" ürünler.
+ * recheckAll: doğrulama kuralları değiştiğinde tüm "verified" ürünler tarihe bakılmadan yeniden kontrol edilir.
+ */
+export async function productsToVerify(limit: number, recheckAll = false): Promise<ProductToVerify[]> {
+  const stale = new Date(recheckAll ? Date.now() + 86_400_000 : Date.now() - REVERIFY_AFTER_DAYS * 86_400_000).toISOString();
   const { data, error } = await db()
     .from("products")
     .select("id, name, brand_domain, product_url, dtc_status, brands(marketplace_status, marketplace_evidence, marketplace_checked_at)")
@@ -154,7 +157,7 @@ export async function saveVerification(p: ProductToVerify, r: VerifyResult): Pro
 
   const { error } = await db().from("products").update(update).eq("id", p.id);
   if (error) throw new Error(`products güncellenemedi: ${error.message}`);
-  if (r.status === "verified" && !r.retryable && (r.sales.reviewCount !== null || r.sales.price !== null)) {
+  if (r.status === "verified" && (r.sales.reviewCount !== null || r.sales.price !== null)) {
     await saveSnapshot(p.id, { ...r.sales, price: Number.isNaN(r.sales.price) ? null : r.sales.price });
   }
 
@@ -247,7 +250,7 @@ export async function saveTrafficRanks(day: string, domains: string[], ranks: Ma
 export async function updateWinnerScores(): Promise<number> {
   const since = new Date(Date.now() - 45 * 86_400_000).toISOString().slice(0, 10);
   const [products, snaps, ranks] = await Promise.all([
-    db().from("products").select("id, brand_domain, review_count, rating, price, currency, trend_score"),
+    db().from("products").select("id, brand_domain, review_count, rating, price, currency, trend_score, score_breakdown"),
     db().from("product_snapshots").select("product_id, day, review_count").gte("day", since),
     db().from("traffic_ranks").select("domain, day, rank").gte("day", since),
   ]);
@@ -267,10 +270,11 @@ export async function updateWinnerScores(): Promise<number> {
       price: p.price === null ? null : Number(p.price),
       currency: p.currency,
       trendScore: Number(p.trend_score),
+      mentions7d: (p.score_breakdown as { m7?: number } | null)?.m7 ?? 0,
       ranks: ranksBy.get(p.brand_domain) ?? [],
       snapshots: snapsBy.get(p.id) ?? [],
     });
-    const { error } = await db().from("products").update({ winner_score: score, winner_breakdown: breakdown }).eq("id", p.id);
+    const { error } = await db().from("products").update({ winner_score: score, winner_breakdown: breakdown, momentum_score: breakdown.momentum.score }).eq("id", p.id);
     if (error) throw new Error(`winner skoru yazılamadı: ${error.message}`);
   }
   return products.data!.length;

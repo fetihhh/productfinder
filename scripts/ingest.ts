@@ -1,7 +1,9 @@
 // Günlük iş: kaynaklar → aday ürünler → DTC doğrulama → trafik sırası → satış ölçümü → trend ve winner skoru.
 // Çalıştırma: npm run ingest            (toplama + doğrulama; GitHub Actions cron'u bunu çağırır)
-//             npm run ingest -- verify  (yalnızca doğrulama)
+//             npm run ingest -- verify  (toplama hariç hepsi)
+//             npm run ingest -- recheck (ayrıca tüm "verified" ürünleri tarihe bakmadan yeniden kontrol eder)
 import { SNAPSHOT_PER_RUN, STRICT_BRAND_CHECK, TAVILY_DAILY_LIMIT, TAVILY_MONTHLY_LIMIT, VERIFY_PER_RUN } from "../config/limits.ts";
+import { directSearch } from "../dtc/directSearch.ts";
 import { tavilySearch, type SearchFn } from "../dtc/marketplaceSearch.ts";
 import { readSales } from "../dtc/sales.ts";
 import { verifyProduct, type BrandState } from "../dtc/verify.ts";
@@ -70,9 +72,9 @@ function quotaGuardedSearch(): SearchFn | null {
 }
 
 async function verify(): Promise<boolean> {
-  const products = await productsToVerify(VERIFY_PER_RUN);
+  const products = await productsToVerify(VERIFY_PER_RUN, process.argv.includes("recheck"));
   console.log(`\n▶ DTC doğrulama: ${products.length} ürün`);
-  const deps = { fetchPage: politeFetch, searchMarketplaces: quotaGuardedSearch() };
+  const deps = { fetchPage: politeFetch, searchMarketplaces: quotaGuardedSearch(), directSearch: directSearch(politeFetch) };
   if (!deps.searchMarketplaces) console.log("  ! TAVILY_API_KEY yok: pazaryeri araması atlanacak");
 
   const counts: Record<string, number> = {};
@@ -163,7 +165,7 @@ async function snapshots(): Promise<boolean> {
 
 async function main() {
   const started = Date.now();
-  const onlyVerify = process.argv.includes("verify");
+  const onlyVerify = process.argv.includes("verify") || process.argv.includes("recheck");
   const collected = onlyVerify ? true : await collect();
   const verified = await verify();
   if (STRICT_BRAND_CHECK) {

@@ -59,6 +59,7 @@ export function Filters({ f, categories, platforms, countries }: { f: F; categor
       </div>
       <select name="sort" defaultValue={f.sort} className={field} aria-label="Sıralama">
         <option value="winner">Sırala: winner skoru</option>
+        <option value="rising">Yükselenler</option>
         <option value="score">Sırala: trend skoru</option>
         <option value="reviews">Sırala: yorum sayısı</option>
         <option value="new">Sırala: en yeni</option>

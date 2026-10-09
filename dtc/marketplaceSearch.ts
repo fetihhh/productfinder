@@ -6,8 +6,34 @@ import { brandTokens, modelCoverage, modelTokens } from "./match.ts";
 
 export type SearchResult = { title: string; url: string; content: string };
 export type SearchOutcome =
-  | { ok: true; results: SearchResult[] }
+  | {
+      ok: true;
+      results: SearchResult[];
+      /** Doğrudan aramada okunamayan siteler ve zorunlu bir sitenin eksik olup olmadığı. */
+      failed?: string[];
+      incomplete?: boolean;
+      checked?: string[];
+    }
   | { ok: false; quota: boolean; reason: string };
+
+const CONNECTORS = new Set(["for", "compatible", "fits", "fit", "replacement", "fur", "kompatibel", "passend", "icin", "uyumlu", "pour", "para"]);
+const ACCESSORIES = new Set([
+  "case", "cases", "cover", "covers", "strap", "straps", "band", "bands", "protector", "protectors", "charger", "charging", "cable",
+  "film", "glass", "holder", "mount", "sleeve", "skin", "skins", "bumper", "shell", "replacement", "accessories", "accessory",
+  "kilif", "kilifi", "kayis", "kayisi", "koruyucu", "sarj", "aksesuar", "aksesuarlari", "hulle", "armband", "schutzfolie", "ladekabel", "ersatz",
+]);
+
+/**
+ * Üçüncü taraf aksesuar ilanı mı ("Case for Mibro GS", "Mibro GS için kılıf")? Bunlar markanın kendi ürünü değildir.
+ * Marka adından önce "for/için/compatible…" geçiyorsa ya da marka başlığın başında değilken aksesuar kelimesi varsa → evet.
+ */
+export function isThirdPartyAccessory(title: string, brands: string[]): boolean {
+  const words = normalizeName(title).split(" ");
+  const at = words.findIndex((w, i) => brands.some((b) => w === b || words.slice(i, i + 3).join("") === b));
+  if (at < 0) return false;
+  if (words.slice(0, at).some((w) => CONNECTORS.has(w))) return true;
+  return at > 1 && words.some((w) => ACCESSORIES.has(w));
+}
 
 export type SearchFn = (query: string) => Promise<SearchOutcome>;
 
@@ -80,6 +106,7 @@ export function findMarketplaceListing(results: SearchResult[], brandDomain: str
 
     const title = ` ${normalizeName(r.title)} `;
     if (!brands.some((b) => title.includes(` ${b} `))) continue;
+    if (isThirdPartyAccessory(r.title, brands)) continue;
 
     if (marketplace.storePath?.test(url.pathname)) {
       return { url: r.url, why: `Markanın ${marketplace.name} mağazası var` };
@@ -121,6 +148,7 @@ export function findBrandListing(
     const hasPhrase = phrase.length >= 3 && title.includes(` ${phrase} `);
     const hasLabel = label.length >= 5 && joinsToLabel(title.trim().split(" "), label);
     if (!hasPhrase && !hasLabel) continue;
+    if (isThirdPartyAccessory(r.title, [phrase.replace(/\s+/g, ""), label, ...phrase.split(" ")].filter((b) => b.length >= 3))) continue;
     // Kısa marka adları (TDM, ACE…) başka ürünlerin model kodlarıyla karışır: ek olarak ürünle ilgili bir kelime gerekir.
     const distinctive = hasLabel || phrase.replace(/\s+/g, "").length >= 5;
     if (!distinctive && modelCoverage(model, `${r.title} ${r.content}`) === 0) continue;

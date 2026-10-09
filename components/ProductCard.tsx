@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { TrackingForm } from "@/components/TrackingForm";
+import { WIDE_PENDING } from "@/dtc/verify";
 import { availabilityLabel, countryLabel, formatPrice, launchLabel, rangeLabel } from "@/lib/format";
 import type { ProductRow } from "@/lib/products";
 
@@ -23,6 +24,8 @@ export const SOURCE_NAMES: Record<string, string> = {
 
 const dateFmt = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short" });
 const badge = "rounded px-1.5 py-0.5 text-xs font-medium";
+/** Bu yükseliş skorunun üstündeki ürünlere "Yükselişte" rozeti. */
+export const RISING_BADGE = 40;
 
 /** Satışa dair işaretler: fiyat, yorum, stok, çıkış tarihi, mağaza ülkesi, Türkiye'ye gönderim. */
 function SalesFacts({ p }: { p: ProductRow }) {
@@ -47,6 +50,9 @@ function SalesFacts({ p }: { p: ProductRow }) {
   const w = p.winner_breakdown;
   if (w?.visits) facts.push(["Trafik", `≈ ${rangeLabel(w.visits)} ziyaret/ay`, `Tranco sırası #${w.rank?.toLocaleString("tr-TR")} → kaba tahmin`]);
   else if (w && p.brands?.tranco_rank === null) facts.push(["Trafik", "< ~100 B ziyaret/ay", "Site Tranco ilk 1 milyonunda değil"]);
+  if (w?.momentum?.reviewGrowth) {
+    facts.push(["Büyüme", `+%${Math.round(w.momentum.reviewGrowth * 100)} yorum/ay`, `Ayda ${w.reviewsPerMonth} yeni yorum`]);
+  }
   if (w?.salesPerMonth) facts.push(["Satış/ay", `≈ ${rangeLabel(w.salesPerMonth)} adet`, "Son 30 günde eklenen yorumlardan (yorum × 10–50)"]);
   else if (w?.sales) facts.push(["Satış", `≈ ${rangeLabel(w.sales)} adet (toplam)`, "Yorum sayısı × 10–50 (alıcıların %2–10'u yorum bırakır)"]);
   if (facts.length === 0) return null;
@@ -88,6 +94,14 @@ export function ProductCard({ p }: { p: ProductRow }) {
             <span className={`${badge} bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300`}>{p.brands.platform}</span>
           )}
           {t?.status && <span className={`${badge} ${TRACK[t.status].cls}`}>{TRACK[t.status].label}</span>}
+          {p.dtc_status === "verified" && p.dtc_reason?.startsWith(WIDE_PENDING) && (
+            <span title={WIDE_PENDING} className={`${badge} bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300`}>Kısmi kontrol</span>
+          )}
+          {Number(p.momentum_score) >= RISING_BADGE && (
+            <span title="Yükseliş skoru: yorum artış hızı + trafik sırası iyileşmesi + bu haftaki blog gündemi" className={`${badge} bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300`}>
+              ↗ Yükselişte {Number(p.momentum_score).toFixed(0)}
+            </span>
+          )}
           <span title={scoreTitle} className={`${badge} ml-auto cursor-help bg-amber-500 text-white dark:bg-amber-400 dark:text-zinc-900`}>
             Winner {Number(p.winner_score).toFixed(0)}
           </span>

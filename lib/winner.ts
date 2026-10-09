@@ -11,6 +11,11 @@
 //   trafik  16 × sıra puanı + 4 × sıra iyileşmesi                   (1 M → 0,1; ≤30 B → 1; 30 günde %20 iyileşme = 4)
 //   gündem  15 × trend skoru / 100                                  (bloglarda anılma)
 //   fiyat   10 → 25–150 $, 5 → 15–25 $ veya 150–300 $, 0 → diğer   (yeniden satış için uygun fiyat bandı)
+//
+// Yükseliş skoru ("Yükselenler" görünümü, 0–100): büyüklükten bağımsız, HIZ ölçer.
+//   yorum   45 × min(1, aylık büyüme / %30)     aylık büyüme = aylık yeni yorum / max(20, toplam yorum); en az 3 yeni yorum/ay
+//   trafik  35 × min(1, (eski sıra / yeni sıra − 1) / 0,2)   (30 günde %20 sıra iyileşmesi = tam)
+//   gündem  20 × min(1, son 7 gündeki blog yazısı / 2)
 
 export type RankPoint = { day: string; rank: number | null };
 export type SnapshotPoint = { day: string; review_count: number | null };
@@ -22,8 +27,17 @@ export type WinnerInput = {
   price: number | null;
   currency: string | null;
   trendScore: number;
+  /** Son 7 gündeki blog yazısı sayısı (trend skoru dökümündeki m7). */
+  mentions7d?: number;
   ranks: RankPoint[];
   snapshots: SnapshotPoint[];
+};
+
+export type Momentum = {
+  score: number;
+  parts: { yorum: number; trafik: number; gundem: number };
+  /** Aylık yorum büyümesi (0,25 = %25). */
+  reviewGrowth: number | null;
 };
 
 export type WinnerBreakdown = {
@@ -37,7 +51,22 @@ export type WinnerBreakdown = {
   revenuePerMonth: Range | null;
   priceUsd: number | null;
   historyDays: number;
+  momentum: Momentum;
 };
+
+export function momentumScore(reviews: number | null, rpm: number | null, change: number | null, mentions7d: number): Momentum {
+  const reviewGrowth = rpm !== null && rpm >= 3 ? rpm / Math.max(20, reviews ?? 0) : null;
+  const parts = {
+    yorum: round1(reviewGrowth === null ? 0 : 45 * clamp01(reviewGrowth / 0.3)),
+    trafik: round1(change === null ? 0 : 35 * clamp01((change - 1) / 0.2)),
+    gundem: round1(20 * clamp01(mentions7d / 2)),
+  };
+  return {
+    score: round1(parts.yorum + parts.trafik + parts.gundem),
+    parts,
+    reviewGrowth: reviewGrowth === null ? null : Math.round(reviewGrowth * 1000) / 1000,
+  };
+}
 
 const DAY = 86_400_000;
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -135,6 +164,7 @@ export function winnerScore(input: WinnerInput): { score: number; breakdown: Win
       revenuePerMonth: salesPerMonth && input.price !== null ? scale(Number(input.price), salesPerMonth) : null,
       priceUsd: priceUsd === null ? null : round1(priceUsd),
       historyDays: days.size,
+      momentum: momentumScore(reviews, rpm, change, input.mentions7d ?? 0),
     },
   };
 }

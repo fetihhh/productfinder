@@ -176,7 +176,7 @@ test("Shopify ürün JSON adresi ve ayrıştırma", () => {
   assert.equal(shopifyProductJsonUrl("https://x.com/collections/all/products/a"), "https://x.com/collections/all/products/a.json");
   assert.equal(shopifyProductJsonUrl("https://x.com/pages/about"), null);
   assert.deepEqual(parseShopifyProduct(shopifyJson(true, "T")), {
-    id: null, title: "T", image: "https://cdn.shopify.com/p.jpg", requiresShipping: true, variantCount: 1, price: null, publishedAt: null,
+    id: null, title: "T", image: "https://cdn.shopify.com/p.jpg", requiresShipping: true, variantCount: 1, price: null, publishedAt: null, productType: null,
   });
   assert.equal(parseShopifyProduct("<html>"), null);
 });

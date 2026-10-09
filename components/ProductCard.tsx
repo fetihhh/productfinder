@@ -7,6 +7,7 @@ import type { ProductRow } from "@/lib/products";
 export const STATUS: Record<ProductRow["dtc_status"], { label: string; cls: string }> = {
   verified: { label: "Doğrulandı", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" },
   rejected_marketplace: { label: "Pazaryerinde", cls: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" },
+  rejected_big_brand: { label: "Büyük marka", cls: "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300" },
   unverified: { label: "Doğrulanmadı", cls: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" },
 };
 
@@ -20,6 +21,7 @@ export const SOURCE_NAMES: Record<string, string> = {
   coolthings: "Cool Things",
   thegadgeteer: "The Gadgeteer",
   theawesomer: "The Awesomer",
+  thisiswhyimbroke: "This Is Why I'm Broke",
 };
 
 const dateFmt = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short" });
@@ -47,6 +49,14 @@ function SalesFacts({ p }: { p: ProductRow }) {
   if (launch) facts.push(["Satışta", launch, "Mağazada yayınlanma tarihi"]);
   if (country) facts.push(["Mağaza", countryLabel(country)]);
   if (tr !== null && tr !== undefined) facts.push(["Türkiye", tr ? "Gönderim var" : "Gönderim yok", "Mağazanın gönderim ülkeleri listesinden"]);
+  if (p.supplier_count !== null) {
+    facts.push(
+      p.supplier_min_usd !== null
+        ? ["Toptan", `${formatPrice(p.supplier_min_usd, "USD")}'den · ${p.supplier_count} ilan`, "AliExpress / Alibaba / Made-in-China'da benzer ürünlerin en düşük birim fiyatı"]
+        : ["Toptan", p.supplier_count ? `${p.supplier_count} benzer ilan (fiyat yok)` : "benzeri bulunamadı", "Toptancı araması"],
+    );
+  }
+  if (p.margin_ratio !== null) facts.push(["Marj", `≈ ${Number(p.margin_ratio).toLocaleString("tr-TR")}×`, "Perakende fiyat / en düşük toptan fiyat (kargo, gümrük ve vergi hariç)"]);
   const w = p.winner_breakdown;
   if (w?.visits) facts.push(["Trafik", `≈ ${rangeLabel(w.visits)} ziyaret/ay`, `Tranco sırası #${w.rank?.toLocaleString("tr-TR")} → kaba tahmin`]);
   else if (w && p.brands?.tranco_rank === null) facts.push(["Trafik", "< ~100 B ziyaret/ay", "Site Tranco ilk 1 milyonunda değil"]);
@@ -62,7 +72,15 @@ function SalesFacts({ p }: { p: ProductRow }) {
       {facts.map(([k, v, title]) => (
         <div key={k} className="contents" title={title}>
           <dt className="text-zinc-500">{k}</dt>
-          <dd className={k === "Türkiye" && tr ? "font-medium text-emerald-700 dark:text-emerald-400" : ""}>{v}</dd>
+          <dd
+            className={
+              (k === "Türkiye" && tr) || (k === "Marj" && Number(p.margin_ratio) >= 3)
+                ? "font-medium text-emerald-700 dark:text-emerald-400"
+                : ""
+            }
+          >
+            {v}
+          </dd>
         </div>
       ))}
     </dl>

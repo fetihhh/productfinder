@@ -12,6 +12,11 @@ export type Marketplace = {
   listingPath?: RegExp;
   /** Markanın bu pazaryerindeki resmi mağaza sayfası (ör. amazon.com/stores/Marka) → marka burada satıyor demektir. */
   storePath?: RegExp;
+  /**
+   * Toptan/tedarik platformu (AliExpress, Alibaba, DHgate, Made-in-China, 1688). Marka alan adı olarak kabul edilmez,
+   * ama ürünün burada bulunması eleme sebebi DEĞİLDİR: buradaki ilanlar ürünü satın alıp satabileceğiniz tedarikçilerdir.
+   */
+  wholesale?: true;
 };
 
 export const MARKETPLACES: Marketplace[] = [
@@ -19,8 +24,10 @@ export const MARKETPLACES: Marketplace[] = [
   { name: "Amazon", labels: ["amazon", "amzn", "aboutamazon"], searchDomains: ["amazon.com", "amazon.com.tr", "amazon.de", "amazon.co.uk"], storePath: /^\/stores\// },
   { name: "eBay", labels: ["ebay"], searchDomains: ["ebay.com", "ebay.de", "ebay.co.uk"], storePath: /^\/str\// },
   { name: "Etsy", labels: ["etsy"], searchDomains: ["etsy.com"], storePath: /^\/shop\// },
-  { name: "AliExpress", labels: ["aliexpress"], searchDomains: ["aliexpress.com"], storePath: /^\/store\// },
-  { name: "Alibaba", labels: ["alibaba"], searchDomains: ["alibaba.com"] },
+  { name: "AliExpress", labels: ["aliexpress"], searchDomains: ["aliexpress.com"], storePath: /^\/store\//, wholesale: true },
+  { name: "Alibaba", labels: ["alibaba", "1688"], searchDomains: ["alibaba.com"], wholesale: true },
+  { name: "DHgate", labels: ["dhgate"], searchDomains: ["dhgate.com"], wholesale: true },
+  { name: "Made-in-China", labels: ["made-in-china", "madeinchina"], searchDomains: ["made-in-china.com"], wholesale: true },
   { name: "Temu", labels: ["temu"], searchDomains: ["temu.com"] },
   { name: "Shein", labels: ["shein"], searchDomains: ["shein.com"] },
   { name: "Walmart", labels: ["walmart"], searchDomains: ["walmart.com"] },
@@ -81,7 +88,7 @@ export const MARKETPLACES: Marketplace[] = [
     ["Flipkart", "flipkart.com"], ["Noon", "noon.com"], ["Jumia", "jumia.com"], ["Coupang", "coupang.com"],
     ["JD.com", "jd.com"], ["Tmall", "tmall.com"], ["Taobao", "taobao.com"], ["Ozon", "ozon.ru"],
     ["Wildberries", "wildberries.ru"], ["Tokopedia", "tokopedia.com"], ["Kogan", "kogan.com"],
-    ["Catch", "catch.com.au"], ["Takealot", "takealot.com"], ["DHgate", "dhgate.com"], ["Banggood", "banggood.com"],
+    ["Catch", "catch.com.au"], ["Takealot", "takealot.com"], ["Banggood", "banggood.com"],
     ["Joom", "joom.com"], ["LightInTheBox", "lightinthebox.com"], ["Poshmark", "poshmark.com"],
     ["Mercari", "mercari.com"], ["Depop", "depop.com"], ["Vinted", "vinted.com"],
   ]),

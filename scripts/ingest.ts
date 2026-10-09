@@ -2,14 +2,19 @@
 // Çalıştırma: npm run ingest            (toplama + doğrulama; GitHub Actions cron'u bunu çağırır)
 //             npm run ingest -- verify  (toplama hariç hepsi)
 //             npm run ingest -- recheck (ayrıca tüm "verified" ürünleri tarihe bakmadan yeniden kontrol eder)
-import { SNAPSHOT_PER_RUN, STRICT_BRAND_CHECK, TAVILY_DAILY_LIMIT, TAVILY_MONTHLY_LIMIT, VERIFY_PER_RUN } from "../config/limits.ts";
+import { BIG_BRAND_MAX_RANK, SNAPSHOT_PER_RUN, STRICT_BRAND_CHECK, SUPPLIER_PER_RUN, TAVILY_DAILY_LIMIT, TAVILY_MONTHLY_LIMIT, VERIFY_PER_RUN } from "../config/limits.ts";
 import { directSearch } from "../dtc/directSearch.ts";
 import { tavilySearch, type SearchFn } from "../dtc/marketplaceSearch.ts";
 import { readSales } from "../dtc/sales.ts";
+import { findSuppliers } from "../dtc/suppliers.ts";
 import { verifyProduct, type BrandState } from "../dtc/verify.ts";
 import { politeFetch, politeFetchBytes } from "../lib/http.ts";
 import {
   brandDomains,
+  brandsWithoutRank,
+  productsToSource,
+  rejectBigBrands,
+  saveSuppliers,
   filterNewItemIds,
   latestTrafficDay,
   markSeen,
@@ -90,6 +95,7 @@ async function verify(): Promise<boolean> {
               marketplaceStatus: p.brands.marketplace_status,
               marketplaceEvidence: p.brands.marketplace_evidence,
               marketplaceCheckedAt: p.brands.marketplace_checked_at,
+              trancoRank: p.brands.tranco_rank,
             }
           : null);
       const r = await verifyProduct({ brandDomain: p.brand_domain, productUrl: p.product_url, productName: p.name, brand }, deps);
@@ -99,6 +105,7 @@ async function verify(): Promise<boolean> {
           marketplaceStatus: r.brandCheck.status,
           marketplaceEvidence: r.brandCheck.evidence,
           marketplaceCheckedAt: new Date().toISOString(),
+          trancoRank: p.brands?.tranco_rank ?? null,
         });
       }
       const key = r.retryable ? `${r.status} (tekrar denenecek)` : r.status;
@@ -118,7 +125,8 @@ async function traffic(): Promise<boolean> {
   console.log("\n▶ Trafik sırası (Tranco)");
   const latest = await latestTrafficDay();
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-  if (latest && latest >= yesterday) {
+  // Liste tazeyse yalnızca o listede sırası kaydedilmemiş (yeni) markalar için yeniden indirilir.
+  if (latest && latest >= yesterday && (await brandsWithoutRank(latest)).length === 0) {
     console.log(`  son liste zaten kayıtlı (${latest})`);
     return true;
   }
@@ -163,22 +171,49 @@ async function snapshots(): Promise<boolean> {
   return ok;
 }
 
+/** Doğrulanmış/takip edilen ürünler için toptancı adayları (AliExpress, Alibaba, Made-in-China). */
+async function suppliers(): Promise<boolean> {
+  const products = await productsToSource(SUPPLIER_PER_RUN);
+  console.log(`\n▶ Toptancı araması: ${products.length} ürün`);
+  let ok = true;
+  for (const p of products) {
+    try {
+      const r = await findSuppliers({ name: p.name, brandDomain: p.brand_domain, productType: p.product_type }, politeFetch);
+      await saveSuppliers(p, r);
+      const best = r.offers[0];
+      console.log(
+        `  • ${p.name} — "${r.query}": ${r.offers.length} eşleşme` +
+          (best ? `, en iyi ${best.source} ${best.priceMin ?? "?"} ${best.currency ?? ""} (%${Math.round(best.similarity * 100)})` : "") +
+          (r.failed.length ? ` · okunamadı: ${r.failed.join(", ")}` : ""),
+      );
+    } catch (err) {
+      ok = false;
+      console.error(`  ! ${p.name}: ${(err as Error).message}`);
+    }
+  }
+  return ok;
+}
+
 async function main() {
   const started = Date.now();
   const onlyVerify = process.argv.includes("verify") || process.argv.includes("recheck");
   const collected = onlyVerify ? true : await collect();
+  // Trafik sırası doğrulamadan önce: büyük markalar ağa çıkmadan ve Tavily kredisi harcanmadan elenir.
+  const ranked = await traffic();
+  const big = await rejectBigBrands();
+  if (big) console.log(`\n▶ Büyük marka: ${big} ürün elendi (sıra ≤ #${BIG_BRAND_MAX_RANK.toLocaleString("tr-TR")})`);
   const verified = await verify();
   if (STRICT_BRAND_CHECK) {
     const n = await propagateBrandRejections();
     if (n) console.log(`\n▶ Katı mod: pazaryerinde satan markaların ${n} ürünü daha elendi`);
   }
-  const ranked = await traffic();
   const measured = await snapshots();
+  const sourced = await suppliers();
   const scores = await updateTrendScores();
   console.log(`\n▶ Trend skoru: ${scores.total} ürün, ${scores.updated} değişti`);
   console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
   console.log(`\nBitti: ${((Date.now() - started) / 1000).toFixed(1)} sn`);
-  if (!collected || !verified || !ranked || !measured) process.exitCode = 1;
+  if (!collected || !verified || !ranked || !measured || !sourced) process.exitCode = 1;
 }
 
 await main();

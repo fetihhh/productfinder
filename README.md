@@ -1,16 +1,18 @@
 # Product Finder
 
-Pazaryerlerinde ve büyük perakendecilerde **satılmayan**, yalnızca markanın kendi alan adında satılan (DTC) fiziksel trend ürünleri bulan tek kullanıcılı araç. Aylık maliyet: **0 $**.
+**Küçük markaların** yalnızca kendi sitelerinde satılan (pazaryerlerinde ve büyük perakendecilerde olmayan) fiziksel trend ürünlerini bulan, ardından aynısının/muadilinin **toptancısını** (AliExpress, Alibaba, Made-in-China) ve kâr marjını gösteren tek kullanıcılı araç. Amaç: toptan alıp Türkiye'de satılabilecek ürünler. Aylık maliyet: **0 $**.
 
 ## Nasıl çalışır
 
 ```
 GitHub Actions (her gün 05:00 UTC)  →  npm run ingest
   1) Ürün bloglarının RSS beslemeleri → aday ürünler (marka alan adı + ürün sayfası)
+  1b) Tranco trafik sırası → büyük markalar (sıra ≤ #150.000) ağa çıkmadan elenir
   2) DTC doğrulama: platform, satın alma, fiziksel ürün, kotasız doğrudan pazaryeri araması (Amazon.com, AliExpress, Otto)
      + Tavily ile ~126 pazaryeri/perakendecide geniş arama (ürün + marka)
   3) Mağaza ülkesi, Türkiye'ye gönderim, fiyat, yorum sayısı/puanı, stok, çıkış tarihi
-  4) Site trafiği sırası (Tranco top-1M) ve doğrulanmış ürünlerin günlük fiyat/yorum/stok ölçümü
+  4) Doğrulanmış ürünlerin günlük fiyat/yorum/stok ölçümü
+  4b) Toptancı araması: AliExpress, Alibaba, Made-in-China → benzer ilanlar, toptan fiyat, MOQ, kâr marjı
   5) Trend, winner ve yükseliş skorları
 Next.js (Vercel Hobby)  →  şifreli arayüz: arama, filtreler, kartlar, grafikli ürün sayfası, siteler/trafik tablosu, takip listesi
 Supabase (Postgres)     →  tüm veriler; yalnızca sunucu tarafından gizli anahtarla erişilir
@@ -25,7 +27,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0005`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0006`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -63,7 +65,7 @@ cp .env.example .env.local   # değerleri doldurun
 | **Vercel Hobby** | 100 GB veri aktarımı, 1M fonksiyon çağrısı, 4 CPU-saat/ay; fonksiyon süresi 300 sn. **Yalnızca kişisel, ticari olmayan kullanım** | Tek kullanıcı, çok düşük trafik |
 | **Tavily Free** | 1.000 kredi/ay, kart istemez (basic arama = 1 kredi) | Kod sınırı: günde 30, ayda 950. Kota dolarsa ürün ertesi güne kalır, ücretli kullanıma **asla** geçilmez |
 | **Tranco top-1M listesi** (tranco-list.eu) | Ücretsiz, anahtar gerekmez; günlük ~10 MB zip | Günde 1 indirme. robots.txt `/api` ve `/list/` yollarını yasaklar, yalnızca izinli `/top-1m.csv.zip` kullanılır |
-| **Doğrudan pazaryeri araması** (amazon.com, aliexpress.com, otto.de arama sayfaları) | Ücretsiz, anahtar ve kota yok | robots.txt bu arama yollarına izin veriyor; site başına 1 istek/sn. CAPTCHA/503 dönerse atlatılmaz, o site "okunamadı" sayılır |
+| **Doğrudan pazaryeri araması** (amazon.com, otto.de arama sayfaları) ve **toptancı araması** (aliexpress.com, alibaba.com/showroom, made-in-china.com) | Ücretsiz, anahtar ve kota yok | robots.txt bu arama yollarına izin veriyor; site başına 1 istek/sn. CAPTCHA/503 dönerse atlatılmaz, o site "okunamadı" sayılır |
 | **RSS beslemeleri, Shopify `meta.json` / `products.json`, Yotpo yorum özeti** | Herkese açık, ücretsiz | robots.txt'ye uyularak, alan adı başına 1 istek/sn |
 
 > Ürün ticari bir hizmete dönüşürse Vercel Hobby (ticari kullanım yasak), Tavily ve Product Hunt benzeri kaynakların koşulları değişir; bu durumda yeniden değerlendirilmeli.
@@ -92,7 +94,7 @@ Toplama işi Vercel'de değil GitHub Actions'ta çalışır: alan adı başına 
 
 ## Veri kaynakları
 
-Fiziksel ürün inceleyen blogların herkese açık RSS beslemeleri (`config/sources.ts`): Cool Things, The Gadgeteer, The Awesomer.
+Fiziksel ürün inceleyen blogların herkese açık RSS beslemeleri (`config/sources.ts`): Cool Things, The Gadgeteer, The Awesomer, This Is Why I'm Broke (küçük markalar ağırlıklı).
 
 - Yazıdaki dış linklerden markanın kendi alan adı bulunur. Affiliate linklerinde hedef adres URL parametresinden okunur; yönlendirmeye istek atılmaz.
 - Aynı blogun yazılarının en az %30'unda (en az 3 yazı) geçen alan adları site geneli (menü/sponsor) sayılıp atlanır.
@@ -100,13 +102,14 @@ Fiziksel ürün inceleyen blogların herkese açık RSS beslemeleri (`config/sou
 - İşlenen yazılar `seen_items` tablosunda tutulur, tekrar açılmaz.
 - Tüm istekler `lib/http.ts` üzerinden: robots.txt'ye uyulur (401/403/429/5xx ihtiyaten "yasak" sayılır), alan adı başına saniyede en fazla 1 istek, User-Agent `ProductFinderBot/0.1`. Giriş gerektiren sayfalara ve CAPTCHA'lara dokunulmaz.
 
-Kullanılmayan kaynaklar ve nedenleri: Reddit (robots.txt `Disallow: /`, API elle onaya bağlı), Kickstarter/Indiegogo (botlara 403), Product Hunt/HN (yazılım ağırlıklı), Google Custom Search (yeni müşteri almıyor), Brave Search (kart istiyor), Okendo/Loox yorum API'leri (robots yasak), Werd gibi "en iyi X" liste blogları (yazı başına 10–20 marka çıkarır; ücretsiz Tavily kotasını birkaç günde bitirir).
+Kullanılmayan kaynaklar ve nedenleri: Gear Patrol ve Cool Material (robots.txt yasak), Uncrate / Bless This Stuff / Dude I Want That (besleme yok), Gadget Flow (haber ağırlıklı, büyük markalar), Design Milk (mimari/iç mekân), Reddit (robots.txt `Disallow: /`, API elle onaya bağlı), Kickstarter/Indiegogo (botlara 403), Product Hunt/HN (yazılım ağırlıklı), Google Custom Search (yeni müşteri almıyor), Brave Search (kart istiyor), Okendo/Loox yorum API'leri (robots yasak), Werd gibi "en iyi X" liste blogları (yazı başına 10–20 marka çıkarır; ücretsiz Tavily kotasını birkaç günde bitirir).
 
 ## DTC doğrulama (`dtc/verify.ts`)
 
 Her ürün sırayla şu adımlardan geçer; ilk başarısız adımda durur ve gerekçe `products.dtc_reason`'a yazılır:
 
 1. **Alan adı** engel listesindeyse → `rejected_marketplace`.
+1. **Büyük marka:** markanın sitesi Tranco dünya sıralamasında #150.000'den üstteyse (≈ 500 binden fazla ziyaret/ay) → ağa çıkmadan `rejected_big_brand` (`BIG_BRAND_MAX_RANK`, `config/limits.ts`). Örnek: microsoft.com #8, oneplus.com #13.605, timex.com #63.217 elenir; mibrofit.com #575.487 küçük marka sayılır.
 2. **Marka önbelleği:** marka son 30 günde bir pazaryerinde/büyük perakendecide bulunduysa → ağa çıkmadan `rejected_marketplace`.
 3. **Marka sayfası** açılamazsa → `unverified` (ağ/5xx ise ertesi gün yeniden denenir; 403/robots yasağı kalıcı). Link pazaryerine yönleniyorsa → `rejected_marketplace`.
 4. **Platform** (Shopify, WooCommerce, BigCommerce, Wix, Squarespace, Magento, Salesforce). Shopify'da `/meta.json` (mağaza ülkesi, şehri, gönderim ülkeleri, marka adı) ve ürün JSON'u okunur. Blog ana sayfaya link verdiyse `/products.json` kataloğunda ürün adıyla aranır (en fazla 3 sayfa).
@@ -123,6 +126,19 @@ Katı mod (`config/limits.ts` içinde `STRICT_BRAND_CHECK`) açıktır: bir mark
 Önceden doğrulanmış bir ürün yalnızca geçici bir hata (kota, ağ) yüzünden listeden düşmez; durumu korunur ve ertesi gün yeniden kontrol edilir. `verified` ürünler 30 günde bir yeniden kontrol edilir.
 
 **Bilinen sınır:** arama tabanlı kontrol olasılıksaldır. `verified`, "ürün ve marka aramasında hiçbir pazaryeri/büyük perakendeci ilanı bulunamadı" demektir; kesin garanti değildir.
+
+## Toptancı araması ve kâr marjı (`dtc/suppliers.ts`)
+
+Doğrulanmış ürünler ile favori/incelenecek listesindeki ürünler için 7 günde bir:
+
+1. **Genel ürün tarifi** çıkarılır: ürün adından marka sözcükleri, model kodları (rakam içerenler) ve pazarlama ekleri (pro, max, ultra…) atılır, Shopify ürün türü eklenir. ör. "TDM. Neo Hybrid Headphone - Speakers" → `neo hybrid headphone speakers`.
+2. Üç toptancının arama sayfası aranır (robots.txt izinli yollar, site başına 1 istek/sn): **AliExpress** (adet fiyatı, satış adedi; İngilizce/USD tercihiyle), **Alibaba showroom** (toptan fiyat aralığı, MOQ, tedarikçi), **Made-in-China** (fiyat aralığı, MOQ, üretici). Sonuç çıkmazsa son iki sözcükle yeniden denenir. Bot doğrulama sayfası gelirse atlatılmaz, site "okunamadı" sayılır (Alibaba sık sık bunu yapıyor). DHgate (403), CJdropshipping (robots yasak), 1688 (giriş/JS) kullanılamıyor.
+3. **Benzerlik:** tarif sözcüklerinin ilan başlığında geçme oranı; sözcükler aynı sonuç sayfasındaki sıklıklarına göre ağırlıklanır (ayırt edici "cork" ağır, her başlıkta geçen "wallet" hafif). ≥ %70 olanlar listelenir. "Case for X / X için kılıf" gibi aksesuarlar, büyük marka ürünleri (DJI, GoPro, Samsung…) ve ikinci el ilanlar atlanır.
+4. **Marj** = perakende fiyat / benzerliği ≥ %70 ilanlardaki en düşük birim fiyat (yaklaşık kurlarla USD). Kargo, gümrük ve vergi **hariç**tir.
+
+Toptan platformları (AliExpress, Alibaba, DHgate, Made-in-China) **eleme sebebi değildir**: ürünün buralarda bulunması tedarik edilebildiğini gösterir. Amazon, eBay, Walmart, Trendyol, Hepsiburada gibi perakende pazaryerleri ise eleme sebebidir.
+
+**Bilinen sınır:** eşleşme metinle yapılır, görselle değil. Aynı ürün olup olmadığını ürün sayfasındaki toptancı görsellerinden kontrol edin.
 
 ## Ülke ve satışa dair işaretler
 
@@ -155,11 +171,12 @@ Günlük iş doğrulanmış ürünlerin (ve favori/incelenecek listesindekilerin
 
 | Bileşen | Puan | Formül |
 |---|---|---|
-| Talep | 30 | `30 × min(1, log10(1 + yorum) / 3)` × puan katsayısı (★ ≥ 4,5 → 1; 4–4,5 → 0,85; < 4 → 0,6). 1.000 yorum = tam puan |
-| İvme | 25 | `25 × min(1, aylık yeni yorum / 30)` (en az 7 günlük ölçüm) |
-| Trafik | 20 | `16 × sıra puanı` (1 Mn → 0,1, ≤ 30 B → 1, logaritmik) `+ 4 × min(1, (eski sıra / yeni sıra − 1) / 0,2)` (30 günde %20 iyileşme = tam) |
-| Gündem | 15 | `15 × trend skoru / 100` |
+| Talep | 25 | `25 × min(1, log10(1 + yorum) / 3)` × puan katsayısı (★ ≥ 4,5 → 1; 4–4,5 → 0,85; < 4 → 0,6). 1.000 yorum = tam puan |
+| İvme | 20 | `20 × min(1, aylık yeni yorum / 30)` (en az 7 günlük ölçüm) |
+| Trafik | 15 | `12 × sıra puanı` (1 Mn → 0,1, ≤ 150 B → 1, logaritmik) `+ 3 × min(1, (eski sıra / yeni sıra − 1) / 0,2)` (30 günde %20 iyileşme = tam) |
+| Gündem | 10 | `10 × trend skoru / 100` |
 | Fiyat | 10 | 25–150 $ → 10; 15–25 $ veya 150–300 $ → 5; diğer → 0 (yaklaşık sabit kurlarla dolara çevrilir) |
+| Tedarik | 20 | Toptancıda benzer ürün (≥ %70) → 8; kâr marjı ≥ 4× → +12, ≥ 3× → +9, ≥ 2× → +5 |
 
 "İvme" ve trafik değişimi ilk hafta 0'dır; ölçümler biriktikçe hızla büyüyen ürünler öne çıkar.
 

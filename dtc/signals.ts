@@ -233,6 +233,7 @@ export type ShopifyProduct = {
   variantCount: number;
   price: number | null;
   publishedAt: string | null;
+  productType: string | null;
 };
 
 export type ShopifyListing = {
@@ -245,6 +246,7 @@ export type ShopifyListing = {
   variantCount: number;
   price: number | null;
   publishedAt: string | null;
+  productType: string | null;
 };
 
 function minPrice(variants: Json[]): number | null {
@@ -254,6 +256,10 @@ function minPrice(variants: Json[]): number | null {
 
 function idOf(p: Json): string | null {
   return typeof p.id === "number" || typeof p.id === "string" ? String(p.id) : null;
+}
+
+function productTypeOf(p: Json): string | null {
+  return typeof p.product_type === "string" && p.product_type.trim() ? p.product_type.trim().slice(0, 80) : null;
 }
 
 function publishedOf(p: Json): string | null {
@@ -281,6 +287,7 @@ export function parseShopifyCatalog(text: string): ShopifyListing[] {
         variantCount: variants.length,
         price: minPrice(variants),
         publishedAt: publishedOf(p),
+        productType: productTypeOf(p),
       }];
     });
   } catch {
@@ -304,6 +311,7 @@ export function parseShopifyProduct(text: string): ShopifyProduct | null {
       variantCount: variants.length,
       price: minPrice(variants),
       publishedAt: publishedOf(p),
+      productType: productTypeOf(p),
     };
   } catch {
     return null;

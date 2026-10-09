@@ -13,4 +13,6 @@ export const RSS_FEEDS: RssFeed[] = [
   { id: "coolthings", name: "Cool Things", feedUrl: "https://www.coolthings.com/feed/", kind: "single", enabled: true },
   { id: "thegadgeteer", name: "The Gadgeteer", feedUrl: "https://the-gadgeteer.com/feed/", kind: "single", enabled: true },
   { id: "theawesomer", name: "The Awesomer", feedUrl: "https://theawesomer.com/feed/", kind: "single", enabled: true },
+  // Küçük markaların ilginç ürünleri; çoğu yazı markanın kendi mağazasına link verir.
+  { id: "thisiswhyimbroke", name: "This Is Why I'm Broke", feedUrl: "https://www.thisiswhyimbroke.com/feed/", kind: "single", enabled: true },
 ];

@@ -97,9 +97,11 @@ test("winnerScore: bileşenler ve satış tahminleri", () => {
     trendScore: 40,
     ranks: [{ day: "2026-09-29", rank: 36_000 }, { day: "2026-10-09", rank: 30_000 }],
     snapshots: [{ day: "2026-09-29", review_count: 969 }, { day: "2026-10-09", review_count: 999 }],
+    supplierMinUsd: 20,
+    marginRatio: 5,
   });
-  assert.deepEqual(breakdown.parts, { talep: 30, ivme: 25, trafik: 20, gundem: 6, fiyat: 10 });
-  assert.equal(score, 91);
+  assert.deepEqual(breakdown.parts, { talep: 25, ivme: 20, trafik: 15, gundem: 4, fiyat: 10, tedarik: 20 });
+  assert.equal(score, 94);
   assert.deepEqual(breakdown.sales, { low: 9990, high: 49950 });
   assert.equal(breakdown.reviewsPerMonth, 90);
   assert.deepEqual(breakdown.salesPerMonth, { low: 900, high: 4500 });
@@ -111,7 +113,7 @@ test("winnerScore: veri yoksa yalnızca gündem puanı", () => {
   const { score, breakdown } = winnerScore({
     reviewCount: null, rating: null, price: null, currency: null, trendScore: 20, ranks: [], snapshots: [],
   });
-  assert.equal(score, 3);
+  assert.equal(score, 2);
   assert.equal(breakdown.visits, null);
   assert.equal(breakdown.sales, null);
   assert.equal(breakdown.salesPerMonth, null);

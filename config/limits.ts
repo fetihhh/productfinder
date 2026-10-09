@@ -24,3 +24,13 @@ export const SNAPSHOT_PER_RUN = 150;
  * false → kota dolunca ürün eskisi gibi "doğrulanmadı" kalır.
  */
 export const VERIFY_WITH_DIRECT_ONLY = true;
+
+/**
+ * Büyük marka sınırı: markanın sitesi Tranco dünya sıralamasında bu sıradan daha üstteyse (≈ 500 binden fazla
+ * ziyaret/ay) ürün "Büyük marka" olarak elenir. Amaç toptancısı bulunup satılabilecek küçük markaların ürünleri.
+ */
+export const BIG_BRAND_MAX_RANK = 150_000;
+
+/** Toptancı araması: bir çalıştırmada en fazla kaç ürün, sonuçlar kaç günde bir yenilenir. */
+export const SUPPLIER_PER_RUN = 40;
+export const SUPPLIER_REFRESH_DAYS = 7;

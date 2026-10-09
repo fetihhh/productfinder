@@ -16,8 +16,8 @@ export type SearchOutcome =
     }
   | { ok: false; quota: boolean; reason: string };
 
-const CONNECTORS = new Set(["for", "compatible", "fits", "fit", "replacement", "fur", "kompatibel", "passend", "icin", "uyumlu", "pour", "para"]);
-const ACCESSORIES = new Set([
+export const CONNECTORS = new Set(["for", "compatible", "fits", "fit", "replacement", "fur", "kompatibel", "passend", "icin", "uyumlu", "pour", "para"]);
+export const ACCESSORIES = new Set([
   "case", "cases", "cover", "covers", "strap", "straps", "band", "bands", "protector", "protectors", "charger", "charging", "cable",
   "film", "glass", "holder", "mount", "sleeve", "skin", "skins", "bumper", "shell", "replacement", "accessories", "accessory",
   "kilif", "kilifi", "kayis", "kayisi", "koruyucu", "sarj", "aksesuar", "aksesuarlari", "hulle", "armband", "schutzfolie", "ladekabel", "ersatz",
@@ -94,7 +94,8 @@ export function findMarketplaceListing(results: SearchResult[], brandDomain: str
   const model = modelTokens(brandDomain, productName);
   for (const r of results) {
     const marketplace = marketplaceFor(r.url);
-    if (!marketplace) continue;
+    // Toptan/tedarik platformundaki ilan eleme sebebi değildir (tedarikçi adayıdır).
+    if (!marketplace || marketplace.wholesale) continue;
     let url: URL;
     try {
       url = new URL(r.url);
@@ -135,7 +136,8 @@ export function findBrandListing(
   const model = productName ? modelTokens(brandDomain, productName) : [];
   for (const r of results) {
     const marketplace = marketplaceFor(r.url);
-    if (!marketplace) continue;
+    // Toptan/tedarik platformundaki ilan eleme sebebi değildir (tedarikçi adayıdır).
+    if (!marketplace || marketplace.wholesale) continue;
     let url: URL;
     try {
       url = new URL(r.url);

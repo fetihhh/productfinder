@@ -51,6 +51,7 @@ export function marketplaceFor(input: string): Marketplace | null {
 }
 
 /** Pazaryeri aramasında kullanılacak alan adı listesi. */
+/** Pazaryeri araması yapılacak alan adları (toptan/tedarik platformları hariç). */
 export function marketplaceSearchDomains(): string[] {
-  return MARKETPLACES.flatMap((m) => m.searchDomains);
+  return MARKETPLACES.filter((m) => !m.wholesale).flatMap((m) => m.searchDomains);
 }

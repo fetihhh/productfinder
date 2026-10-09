@@ -5,6 +5,7 @@ import { SOURCE_NAMES, STATUS } from "@/components/ProductCard";
 import { TrackingForm } from "@/components/TrackingForm";
 import { availabilityLabel, compact, countryLabel, dayLabel, formatPrice, launchLabel, moneyRange, rangeLabel } from "@/lib/format";
 import { getProduct } from "@/lib/products";
+import { SOURCE_NAMES as SUPPLIER_SOURCES } from "@/dtc/suppliers";
 import { REVIEW_TO_SALES, visitsFromRank } from "@/lib/winner";
 
 function Kpi({ label, value, sub, hint }: { label: string; value: string; sub?: string; hint?: string }) {
@@ -31,7 +32,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
   const { id } = await params;
   const data = await getProduct(id);
   if (!data) notFound();
-  const { p, history, ranks } = data;
+  const { p, history, ranks, suppliers } = data;
   const w = p.winner_breakdown;
   const brand = p.brands;
   const href = p.product_url ?? `https://${p.brand_domain}`;
@@ -119,6 +120,62 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
         />
       </div>
 
+      <section className="mt-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-medium">Toptancı adayları</h2>
+          <p className="text-sm">
+            {p.supplier_min_usd !== null && (
+              <>
+                En düşük toptan fiyat <strong>{formatPrice(p.supplier_min_usd, "USD")}</strong>
+                {p.margin_ratio !== null && (
+                  <>
+                    {" "}· perakende/toptan <strong className={Number(p.margin_ratio) >= 3 ? "text-emerald-700 dark:text-emerald-400" : ""}>≈ {Number(p.margin_ratio).toLocaleString("tr-TR")}×</strong>
+                  </>
+                )}
+              </>
+            )}
+          </p>
+        </div>
+        <p className="mb-3 text-xs text-zinc-500">
+          AliExpress, Alibaba ve Made-in-China&apos;da ürün tarifiyle bulunan benzer ilanlar. Eşleşme metin benzerliğiyle yapılır: aynı ürün olup olmadığını görselden kontrol edin.
+          Marj kargo, gümrük ve vergi hariçtir.
+        </p>
+        {p.supplier_checked_at === null ? (
+          <p className="text-sm text-zinc-500">Toptancı araması bir sonraki günlük çalıştırmada yapılacak.</p>
+        ) : suppliers.length === 0 ? (
+          <p className="text-sm text-zinc-500">Benzer toptan ilanı bulunamadı.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {suppliers.map((s) => (
+              <a
+                key={s.url}
+                href={s.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col overflow-hidden rounded border border-zinc-200 hover:border-amber-500 dark:border-zinc-800"
+              >
+                <span className="block aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-900">
+                  {s.image_url && <img src={s.image_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />}
+                </span>
+                <span className="flex flex-1 flex-col gap-0.5 p-2 text-xs">
+                  <span className="font-medium text-amber-700 dark:text-amber-400">{SUPPLIER_SOURCES[s.source]} · %{Math.round(s.similarity * 100)} benzer</span>
+                  <span className="line-clamp-2" title={s.title}>{s.title}</span>
+                  {s.price_min !== null && (
+                    <span className="font-semibold">
+                      {formatPrice(s.price_min, s.currency ?? "USD")}
+                      {s.price_max !== null && s.price_max !== s.price_min ? `–${formatPrice(s.price_max, s.currency ?? "USD")}` : ""}
+                    </span>
+                  )}
+                  {s.moq && <span className="text-zinc-500">MOQ {s.moq}</span>}
+                  {s.sold !== null && <span className="text-zinc-500">{s.sold.toLocaleString("tr-TR")} satıldı</span>}
+                  {s.supplier_name && <span className="truncate text-zinc-500" title={s.supplier_name}>{s.supplier_name}</span>}
+                </span>
+              </a>
+            ))}
+          </div>
+        )}
+      </section>
+
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Panel
           title="Site trafiği — tahmini aylık ziyaret"
@@ -149,11 +206,12 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
           {w ? (
             <ScoreBars
               parts={[
-                { label: "Talep", value: w.parts.talep, max: 30, hint: "Toplam yorum (1000 yorum = tam), düşük puanda azalır" },
-                { label: "İvme", value: w.parts.ivme, max: 25, hint: "Aylık yeni yorum (30/ay = tam); 7 günlük ölçüm gerekir" },
-                { label: "Trafik", value: w.parts.trafik, max: 20, hint: "Tranco sırası + 30 günlük iyileşme" },
-                { label: "Gündem", value: w.parts.gundem, max: 15, hint: "Bloglarda anılma (trend skoru)" },
+                { label: "Talep", value: w.parts.talep, max: 25, hint: "Toplam yorum (1000 yorum = tam), düşük puanda azalır" },
+                { label: "İvme", value: w.parts.ivme, max: 20, hint: "Aylık yeni yorum (30/ay = tam); 7 günlük ölçüm gerekir" },
+                { label: "Trafik", value: w.parts.trafik, max: 15, hint: "Tranco sırası + 30 günlük iyileşme" },
+                { label: "Gündem", value: w.parts.gundem, max: 10, hint: "Bloglarda anılma (trend skoru)" },
                 { label: "Fiyat", value: w.parts.fiyat, max: 10, hint: "25–150 $ bandı tam puan" },
+                { label: "Tedarik", value: w.parts.tedarik ?? 0, max: 20, hint: "Toptancıda benzer ürün 8 + kâr marjı (≥4× = 12)" },
               ]}
             />
           ) : (

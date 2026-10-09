@@ -25,12 +25,12 @@ async function throttle(host: string): Promise<void> {
   if (slot > now) await sleep(slot - now);
 }
 
-async function rawGet(url: URL, accept: string): Promise<Response> {
+async function rawGet(url: URL, accept: string, extra: Record<string, string> = {}): Promise<Response> {
   await throttle(url.host);
   return fetch(url, {
     redirect: "manual",
     signal: AbortSignal.timeout(TIMEOUT_MS),
-    headers: { "User-Agent": USER_AGENT, Accept: accept },
+    headers: { ...extra, "User-Agent": USER_AGENT, Accept: accept },
   });
 }
 
@@ -67,7 +67,12 @@ function robotsFor(origin: string): Promise<RobotsRules> {
 type Failure = Extract<FetchResult, { ok: false }>;
 
 /** robots.txt ve hız sınırına uyarak isteği yapar, yönlendirmeleri izler; gövdeyi okumaz. */
-async function politeRequest(input: string, accept: string, maxBytes: number): Promise<Failure | { ok: true; url: URL; res: Response }> {
+async function politeRequest(
+  input: string,
+  accept: string,
+  maxBytes: number,
+  extra: Record<string, string> = {},
+): Promise<Failure | { ok: true; url: URL; res: Response }> {
   let url: URL;
   try {
     url = new URL(input);
@@ -86,7 +91,7 @@ async function politeRequest(input: string, accept: string, maxBytes: number): P
 
     let res: Response;
     try {
-      res = await rawGet(url, accept);
+      res = await rawGet(url, accept, extra);
     } catch (err) {
       return { ok: false, url: url.href, reason: `Ağ hatası: ${(err as Error).message}`, retryable: true };
     }
@@ -108,8 +113,13 @@ async function politeRequest(input: string, accept: string, maxBytes: number): P
   return { ok: false, url: url.href, reason: "Çok fazla yönlendirme", retryable: false };
 }
 
-export async function politeFetch(input: string, accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"): Promise<FetchResult> {
-  const r = await politeRequest(input, accept, MAX_BYTES);
+/** extra: dil/para birimi tercihi gibi ek başlıklar (User-Agent değiştirilemez). */
+export async function politeFetch(
+  input: string,
+  accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  extra: Record<string, string> = {},
+): Promise<FetchResult> {
+  const r = await politeRequest(input, accept, MAX_BYTES, extra);
   if (!r.ok) return r;
   const text = await r.res.text();
   if (text.length > MAX_BYTES) return { ok: false, url: r.url.href, reason: "Yanıt çok büyük", retryable: false };

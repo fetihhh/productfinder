@@ -19,6 +19,7 @@ export function Filters({ f, categories, platforms, countries }: { f: F; categor
         <option value="verified">Doğrulanmış</option>
         <option value="unverified">Doğrulanmamış</option>
         <option value="rejected_marketplace">Pazaryerinde</option>
+        <option value="rejected_big_brand">Büyük marka</option>
         <option value="all">Tüm durumlar</option>
       </select>
       <select name="country" defaultValue={f.country} className={field} aria-label="Mağaza ülkesi">
@@ -60,6 +61,7 @@ export function Filters({ f, categories, platforms, countries }: { f: F; categor
       <select name="sort" defaultValue={f.sort} className={field} aria-label="Sıralama">
         <option value="winner">Sırala: winner skoru</option>
         <option value="rising">Yükselenler</option>
+        <option value="margin">Sırala: kâr marjı</option>
         <option value="score">Sırala: trend skoru</option>
         <option value="reviews">Sırala: yorum sayısı</option>
         <option value="new">Sırala: en yeni</option>
@@ -69,7 +71,11 @@ export function Filters({ f, categories, platforms, countries }: { f: F; categor
         <input type="checkbox" name="tr" value="1" defaultChecked={f.shipsTr} className="h-4 w-4" />
         Yalnızca Türkiye&apos;ye gönderenler
       </label>
-      <div className="col-span-2 flex gap-2 sm:col-span-2 lg:col-span-4 lg:justify-end">
+      <label className="col-span-2 flex items-center gap-2 text-sm sm:col-span-2">
+        <input type="checkbox" name="sup" value="1" defaultChecked={f.supplier} className="h-4 w-4" />
+        Yalnızca toptancısı bulunanlar
+      </label>
+      <div className="col-span-2 flex gap-2 sm:col-span-4 lg:col-span-2 lg:justify-end">
         <a href="/" className="px-2 py-1.5 text-sm text-zinc-500 hover:underline">Sıfırla</a>
         <button className="rounded bg-zinc-900 px-4 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900">Filtrele</button>
       </div>

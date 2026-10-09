@@ -1,12 +1,13 @@
 // Toplama işinin veritabanı yazma katmanı (yalnızca sunucu/cron).
-import { REVERIFY_AFTER_DAYS } from "../config/limits.ts";
+import { BIG_BRAND_MAX_RANK, REVERIFY_AFTER_DAYS, SUPPLIER_REFRESH_DAYS } from "../config/limits.ts";
 import type { SalesSnapshot } from "../dtc/sales.ts";
-import type { VerifyResult } from "../dtc/verify.ts";
+import type { SupplierResult } from "../dtc/suppliers.ts";
+import { bigBrandReason, type VerifyResult } from "../dtc/verify.ts";
 import type { Candidate, SeenItem } from "../sources/types.ts";
 import { db } from "./db.ts";
 import { normalizeName } from "./productName.ts";
 import { trendScore, type MentionLite } from "./score.ts";
-import { winnerScore } from "./winner.ts";
+import { supplierEconomics, winnerScore } from "./winner.ts";
 
 export async function filterNewItemIds(source: string, ids: string[]): Promise<Set<string>> {
   const fresh = new Set(ids);
@@ -108,8 +109,13 @@ export type ProductToVerify = {
   name: string;
   brand_domain: string;
   product_url: string | null;
-  dtc_status: "verified" | "rejected_marketplace" | "unverified";
-  brands: { marketplace_status: "clean" | "found" | null; marketplace_evidence: string | null; marketplace_checked_at: string | null } | null;
+  dtc_status: "verified" | "rejected_marketplace" | "rejected_big_brand" | "unverified";
+  brands: {
+    marketplace_status: "clean" | "found" | null;
+    marketplace_evidence: string | null;
+    marketplace_checked_at: string | null;
+    tranco_rank: number | null;
+  } | null;
 };
 
 /**
@@ -120,7 +126,7 @@ export async function productsToVerify(limit: number, recheckAll = false): Promi
   const stale = new Date(recheckAll ? Date.now() + 86_400_000 : Date.now() - REVERIFY_AFTER_DAYS * 86_400_000).toISOString();
   const { data, error } = await db()
     .from("products")
-    .select("id, name, brand_domain, product_url, dtc_status, brands(marketplace_status, marketplace_evidence, marketplace_checked_at)")
+    .select("id, name, brand_domain, product_url, dtc_status, brands(marketplace_status, marketplace_evidence, marketplace_checked_at, tranco_rank)")
     .or(`dtc_checked_at.is.null,and(dtc_status.eq.verified,dtc_checked_at.lt.${stale})`)
     .order("dtc_checked_at", { ascending: true, nullsFirst: true })
     .order("first_seen_at", { ascending: false })
@@ -139,6 +145,7 @@ export async function saveVerification(p: ProductToVerify, r: VerifyResult): Pro
     : { dtc_status: r.status, dtc_reason: r.reason, dtc_checked_at: r.retryable ? null : now };
   if (r.name && r.name.length >= 3 && r.name.length <= 150) update.name = r.name;
   if (r.productUrl) update.product_url = r.productUrl;
+  if (r.productType) update.product_type = r.productType;
   if (r.imageUrl && /^https?:\/\//.test(r.imageUrl)) update.image_url = r.imageUrl;
   else if (r.imageUrl?.startsWith("//")) update.image_url = `https:${r.imageUrl}`;
   // Satışa dair işaretler yalnızca okunabildiyse yazılır (eski değer silinmez).
@@ -250,7 +257,7 @@ export async function saveTrafficRanks(day: string, domains: string[], ranks: Ma
 export async function updateWinnerScores(): Promise<number> {
   const since = new Date(Date.now() - 45 * 86_400_000).toISOString().slice(0, 10);
   const [products, snaps, ranks] = await Promise.all([
-    db().from("products").select("id, brand_domain, review_count, rating, price, currency, trend_score, score_breakdown"),
+    db().from("products").select("id, brand_domain, review_count, rating, price, currency, trend_score, score_breakdown, supplier_min_usd, margin_ratio"),
     db().from("product_snapshots").select("product_id, day, review_count").gte("day", since),
     db().from("traffic_ranks").select("domain, day, rank").gte("day", since),
   ]);
@@ -273,11 +280,93 @@ export async function updateWinnerScores(): Promise<number> {
       mentions7d: (p.score_breakdown as { m7?: number } | null)?.m7 ?? 0,
       ranks: ranksBy.get(p.brand_domain) ?? [],
       snapshots: snapsBy.get(p.id) ?? [],
+      supplierMinUsd: p.supplier_min_usd === null ? null : Number(p.supplier_min_usd),
+      marginRatio: p.margin_ratio === null ? null : Number(p.margin_ratio),
     });
     const { error } = await db().from("products").update({ winner_score: score, winner_breakdown: breakdown, momentum_score: breakdown.momentum.score }).eq("id", p.id);
     if (error) throw new Error(`winner skoru yazılamadı: ${error.message}`);
   }
   return products.data!.length;
+}
+
+/** Verilen gün listesinde sırası kaydedilmemiş markalar (yeni eklenenler). */
+export async function brandsWithoutRank(day: string): Promise<string[]> {
+  const [all, ranked] = await Promise.all([brandDomains(), db().from("traffic_ranks").select("domain").eq("day", day)]);
+  if (ranked.error) throw new Error(`traffic_ranks okunamadı: ${ranked.error.message}`);
+  const have = new Set(ranked.data.map((r) => r.domain as string));
+  return all.filter((d) => !have.has(d));
+}
+
+/** Sitesi dünya sıralamasında üst sıralarda olan markaların ürünlerini "Büyük marka" olarak eler (ağ isteği yok). */
+export async function rejectBigBrands(): Promise<number> {
+  const { data: brands, error } = await db()
+    .from("brands")
+    .select("domain, tranco_rank")
+    .not("tranco_rank", "is", null)
+    .lte("tranco_rank", BIG_BRAND_MAX_RANK);
+  if (error) throw new Error(`brands okunamadı: ${error.message}`);
+  let total = 0;
+  for (const b of brands) {
+    const { error: upErr, count } = await db()
+      .from("products")
+      .update({ dtc_status: "rejected_big_brand", dtc_reason: bigBrandReason(b.tranco_rank), dtc_checked_at: new Date().toISOString() }, { count: "exact" })
+      .eq("brand_domain", b.domain)
+      .neq("dtc_status", "rejected_big_brand");
+    if (upErr) throw new Error(`products güncellenemedi: ${upErr.message}`);
+    total += count ?? 0;
+  }
+  return total;
+}
+
+export type ProductToSource = { id: string; name: string; brand_domain: string; product_type: string | null; price: number | null; currency: string | null };
+
+/** Toptancı araması: doğrulanmış ve favori/incelenecek ürünlerden hiç aranmamış ya da süresi dolanlar. */
+export async function productsToSource(limit: number): Promise<ProductToSource[]> {
+  const stale = new Date(Date.now() - SUPPLIER_REFRESH_DAYS * 86_400_000).toISOString();
+  const cols = "id, name, brand_domain, product_type, price, currency";
+  const due = `supplier_checked_at.is.null,supplier_checked_at.lt.${stale}`;
+  const [verified, tracked] = await Promise.all([
+    db().from("products").select(cols).eq("dtc_status", "verified").or(due).limit(limit),
+    db().from("products").select(`${cols}, tracking!inner(status)`).in("tracking.status", ["favorite", "review"]).or(due).limit(limit),
+  ]);
+  for (const r of [verified, tracked]) if (r.error) throw new Error(`toptancı listesi okunamadı: ${r.error.message}`);
+  const byId = new Map<string, ProductToSource>();
+  for (const p of [...verified.data!, ...tracked.data!] as ProductToSource[]) {
+    byId.set(p.id, { id: p.id, name: p.name, brand_domain: p.brand_domain, product_type: p.product_type, price: p.price, currency: p.currency });
+  }
+  return [...byId.values()].slice(0, limit);
+}
+
+/** Toptancı adaylarını yeniler; en iyi eşleşmelerden (benzerlik ≥ %60) en düşük fiyatı ve kâr marjını yazar. */
+export async function saveSuppliers(p: ProductToSource, r: SupplierResult): Promise<void> {
+  const { error: delErr } = await db().from("suppliers").delete().eq("product_id", p.id);
+  if (delErr) throw new Error(`suppliers silinemedi: ${delErr.message}`);
+  if (r.offers.length) {
+    const { error } = await db().from("suppliers").upsert(
+      r.offers.map((o) => ({
+        product_id: p.id,
+        url: o.url,
+        source: o.source,
+        title: o.title.slice(0, 300),
+        image_url: o.imageUrl,
+        price_min: o.priceMin,
+        price_max: o.priceMax,
+        currency: o.currency,
+        moq: o.moq,
+        sold: o.sold,
+        supplier_name: o.supplierName,
+        similarity: o.similarity,
+      })),
+      { onConflict: "product_id,url" },
+    );
+    if (error) throw new Error(`suppliers yazılamadı: ${error.message}`);
+  }
+  const { minUsd, margin } = supplierEconomics(r.offers, p.price === null ? null : Number(p.price), p.currency);
+  const { error } = await db()
+    .from("products")
+    .update({ supplier_checked_at: new Date().toISOString(), supplier_count: r.offers.length, supplier_min_usd: minUsd, margin_ratio: margin })
+    .eq("id", p.id);
+  if (error) throw new Error(`products güncellenemedi: ${error.message}`);
 }
 
 /** Atomik kota sayacı: limit aşılacaksa false döner ve sayaç artmaz. */

@@ -2,9 +2,10 @@
 // Yol üstünde mağaza ülkesi, Türkiye'ye satış ve satışa dair işaretleri (fiyat, yorum, stok, çıkış tarihi) de toplar.
 // Ağ erişimi bağımlılık olarak verilir (testlerde sahte fetch/arama kullanılır).
 import { parse } from "tldts";
-import { BRAND_RECHECK_DAYS, STRICT_BRAND_CHECK, VERIFY_WITH_DIRECT_ONLY } from "../config/limits.ts";
+import { BIG_BRAND_MAX_RANK, BRAND_RECHECK_DAYS, STRICT_BRAND_CHECK, VERIFY_WITH_DIRECT_ONLY } from "../config/limits.ts";
 import { classifyDomain, registrableDomain } from "../lib/domain.ts";
 import type { FetchResult } from "../lib/http.ts";
+import { visitsFromRank } from "../lib/winner.ts";
 import { buildBrandQuery, buildQuery, findBrandListing, findMarketplaceListing, type SearchFn } from "./marketplaceSearch.ts";
 import { directQuery } from "./directSearch.ts";
 import { modelCoverage, modelTokens } from "./match.ts";
@@ -36,14 +37,27 @@ export function bestCatalogMatch(catalog: ShopifyListing[], brandDomain: string,
   return best && best.score >= 0.6 ? best.item : null;
 }
 
-export type DtcStatus = "verified" | "rejected_marketplace" | "unverified";
+export type DtcStatus = "verified" | "rejected_marketplace" | "rejected_big_brand" | "unverified";
 
 /** Marka düzeyi pazaryeri kontrolünün önbelleği (brands tablosu). */
 export type BrandState = {
   marketplaceStatus: "clean" | "found" | null;
   marketplaceEvidence: string | null;
   marketplaceCheckedAt: string | null;
+  /** Tranco dünya sıralaması (null: ilk 1 milyonda değil ya da henüz bakılmadı). */
+  trancoRank?: number | null;
 };
+
+/** Sitesi dünya sıralamasında üst sıralarda olan marka büyük markadır (küçük markaların ürünleri aranıyor). */
+export function isBigBrand(rank: number | null | undefined): rank is number {
+  return typeof rank === "number" && rank > 0 && rank <= BIG_BRAND_MAX_RANK;
+}
+
+export function bigBrandReason(rank: number): string {
+  const v = visitsFromRank(rank);
+  const fmt = new Intl.NumberFormat("tr-TR", { notation: "compact", maximumFractionDigits: 1 });
+  return `Büyük marka: site dünya sıralamasında #${rank.toLocaleString("tr-TR")} (≈ ${fmt.format(v.mid)} ziyaret/ay; sınır #${BIG_BRAND_MAX_RANK.toLocaleString("tr-TR")})`;
+}
 
 export type VerifyInput = { brandDomain: string; productUrl: string | null; productName: string; brand?: BrandState | null };
 
@@ -90,6 +104,8 @@ export type VerifyResult = {
   imageUrl: string | null;
   /** Blog ana sayfaya link verdiyse katalogda bulunan ürün sayfası. */
   productUrl: string | null;
+  /** Shopify ürün türü (toptancı aramasında kullanılır). */
+  productType: string | null;
   sales: SalesInfo;
   store: StoreInfo;
   /** Bu çalıştırmada yapılan marka düzeyi kontrolün sonucu (önbelleğe yazılır). */
@@ -113,7 +129,7 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
   const now = deps.now ?? Date.now();
   const evidence: string[] = [];
   const r: Omit<VerifyResult, "status" | "reason" | "retryable"> = {
-    platform: null, hasCheckout: null, physical: null, name: null, imageUrl: null, productUrl: null,
+    platform: null, hasCheckout: null, physical: null, name: null, imageUrl: null, productUrl: null, productType: null,
     sales: emptySales(), store: emptyStore(), brandCheck: null,
   };
   const done = (status: DtcStatus, why: string, retryable = false): VerifyResult => ({
@@ -128,6 +144,9 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
   if (!domainVerdict.ok) {
     return done(domainVerdict.kind === "marketplace" ? "rejected_marketplace" : "unverified", domainVerdict.reason);
   }
+
+  // 1b) Büyük marka (Tranco sırası) → ağa çıkmadan ele.
+  if (isBigBrand(input.brand?.trancoRank)) return done("rejected_big_brand", bigBrandReason(input.brand.trancoRank));
 
   // 2) Marka daha önce bir pazaryerinde/perakendecide bulunduysa (ve kayıt tazeyse) hiç ağa çıkmadan ele.
   if (STRICT_BRAND_CHECK && input.brand?.marketplaceStatus === "found" && isFresh(input.brand.marketplaceCheckedAt, now)) {
@@ -176,6 +195,7 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
         r.sales.price = product.price;
         r.sales.launchedAt = product.publishedAt;
         r.sales.variantCount = product.variantCount;
+        r.productType = product.productType;
       }
     } else {
       const catalog: ShopifyListing[] = [];
@@ -197,6 +217,7 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
         r.sales.price = match.price;
         r.sales.launchedAt = match.publishedAt;
         r.sales.variantCount = match.variantCount;
+        r.productType = match.productType;
         r.sales.availability = match.available === null ? null : match.available ? "InStock" : "OutOfStock";
         fromCatalog = true;
         catalogAvailable = match.available;

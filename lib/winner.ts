@@ -6,11 +6,12 @@
 // Tahmini aylık satış    = son ≤30 günde eklenen yorum (aylığa ölçeklenmiş, en az 7 günlük veri) × 10 – 50
 //
 // Winner skoru:
-//   talep   30 × min(1, log10(1 + yorum) / 3) × puan katsayısı   (1000 yorum = tam; ★<4 → ×0,6, ★4–4,5 → ×0,85)
-//   ivme    25 × min(1, aylık yeni yorum / 30)                      (en az 7 günlük ölçüm gerekir)
-//   trafik  16 × sıra puanı + 4 × sıra iyileşmesi                   (1 M → 0,1; ≤30 B → 1; 30 günde %20 iyileşme = 4)
-//   gündem  15 × trend skoru / 100                                  (bloglarda anılma)
+//   talep   25 × min(1, log10(1 + yorum) / 3) × puan katsayısı   (1000 yorum = tam; ★<4 → ×0,6, ★4–4,5 → ×0,85)
+//   ivme    20 × min(1, aylık yeni yorum / 30)                      (en az 7 günlük ölçüm gerekir)
+//   trafik  12 × sıra puanı + 3 × sıra iyileşmesi                   (1 M → 0,1; ≤150 B → 1; 30 günde %20 iyileşme = 3)
+//   gündem  10 × trend skoru / 100                                  (bloglarda anılma)
 //   fiyat   10 → 25–150 $, 5 → 15–25 $ veya 150–300 $, 0 → diğer   (yeniden satış için uygun fiyat bandı)
+//   tedarik 20 → toptancıda benzer ürün (benzerlik ≥ %70) 8 + marj puanı (perakende / toptan ≥ 4 → 12, ≥ 3 → 9, ≥ 2 → 5)
 //
 // Yükseliş skoru ("Yükselenler" görünümü, 0–100): büyüklükten bağımsız, HIZ ölçer.
 //   yorum   45 × min(1, aylık büyüme / %30)     aylık büyüme = aylık yeni yorum / max(20, toplam yorum); en az 3 yeni yorum/ay
@@ -31,6 +32,9 @@ export type WinnerInput = {
   mentions7d?: number;
   ranks: RankPoint[];
   snapshots: SnapshotPoint[];
+  /** Toptancı araması: en iyi eşleşmelerin en düşük birim fiyatı (USD) ve kâr marjı (perakende / toptan). */
+  supplierMinUsd?: number | null;
+  marginRatio?: number | null;
 };
 
 export type Momentum = {
@@ -41,7 +45,7 @@ export type Momentum = {
 };
 
 export type WinnerBreakdown = {
-  parts: { talep: number; ivme: number; trafik: number; gundem: number; fiyat: number };
+  parts: { talep: number; ivme: number; trafik: number; gundem: number; fiyat: number; tedarik: number };
   rank: number | null;
   rankChange: number | null;
   visits: Range | null;
@@ -117,7 +121,30 @@ export function rankChange(ranks: RankPoint[]): number | null {
 
 export function rankPoints(rank: number | null): number {
   if (!rank) return 0;
-  return clamp01(0.1 + (0.9 * (6 - Math.log10(rank))) / (6 - Math.log10(30_000)));
+  return clamp01(0.1 + (0.9 * (6 - Math.log10(rank))) / (6 - Math.log10(150_000)));
+}
+
+/** Tedarik puanı: toptancıda benzer ürün bulunduysa 8, üstüne kâr marjına göre en fazla 12. */
+export function supplyPoints(supplierMinUsd: number | null, margin: number | null): number {
+  if (supplierMinUsd === null) return 0;
+  const m = margin ?? 0;
+  return 8 + (m >= 4 ? 12 : m >= 3 ? 9 : m >= 2 ? 5 : 0);
+}
+
+/** Benzerliği ≥ %70 olan toptancı ilanlarındaki en düşük birim fiyat (USD) ve perakende fiyata oranı. */
+export function supplierEconomics(
+  offers: { similarity: number; priceMin: number | null; currency: string | null }[],
+  retailPrice: number | null,
+  retailCurrency: string | null,
+): { minUsd: number | null; margin: number | null } {
+  const prices = offers
+    .filter((o) => o.similarity >= 0.7 && o.priceMin !== null && o.priceMin > 0)
+    .map((o) => toUsd(o.priceMin, o.currency))
+    .filter((n): n is number => n !== null && n > 0);
+  if (prices.length === 0) return { minUsd: null, margin: null };
+  const minUsd = Math.round(Math.min(...prices) * 100) / 100;
+  const retailUsd = toUsd(retailPrice, retailCurrency);
+  return { minUsd, margin: retailUsd === null ? null : Math.round((retailUsd / minUsd) * 10) / 10 };
 }
 
 export function pricePoints(usd: number | null): number {
@@ -142,17 +169,18 @@ export function winnerScore(input: WinnerInput): { score: number; breakdown: Win
   const rpm = reviewsPerMonth(input.snapshots);
   const priceUsd = toUsd(input.price, input.currency);
 
-  const talep = reviews ? 30 * clamp01(Math.log10(1 + reviews) / 3) * ratingFactor(input.rating) : 0;
-  const ivme = rpm === null ? 0 : 25 * clamp01(rpm / 30);
-  const trafik = 16 * rankPoints(latestRank) + (change === null ? 0 : 4 * clamp01((change - 1) / 0.2));
-  const gundem = 15 * clamp01(Number(input.trendScore) / 100);
+  const talep = reviews ? 25 * clamp01(Math.log10(1 + reviews) / 3) * ratingFactor(input.rating) : 0;
+  const ivme = rpm === null ? 0 : 20 * clamp01(rpm / 30);
+  const trafik = 12 * rankPoints(latestRank) + (change === null ? 0 : 3 * clamp01((change - 1) / 0.2));
+  const gundem = 10 * clamp01(Number(input.trendScore) / 100);
   const fiyat = pricePoints(priceUsd);
+  const tedarik = supplyPoints(input.supplierMinUsd ?? null, input.marginRatio ?? null);
 
   const salesPerMonth = rpm === null ? null : scale(rpm, REVIEW_TO_SALES);
   const days = new Set([...input.snapshots.map((s) => s.day), ...input.ranks.map((r) => r.day)]);
-  const parts = { talep: round1(talep), ivme: round1(ivme), trafik: round1(trafik), gundem: round1(gundem), fiyat };
+  const parts = { talep: round1(talep), ivme: round1(ivme), trafik: round1(trafik), gundem: round1(gundem), fiyat, tedarik };
   return {
-    score: round1(parts.talep + parts.ivme + parts.trafik + parts.gundem + parts.fiyat),
+    score: round1(parts.talep + parts.ivme + parts.trafik + parts.gundem + parts.fiyat + parts.tedarik),
     breakdown: {
       parts,
       rank: latestRank,

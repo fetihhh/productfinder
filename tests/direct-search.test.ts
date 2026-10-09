@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { directQuery, directSearch, parseAliExpress, parseAmazon, parseOtto, type DirectSite } from "../dtc/directSearch.ts";
+import { directQuery, directSearch, parseAmazon, parseOtto, type DirectSite } from "../dtc/directSearch.ts";
 import { findBrandListing, findMarketplaceListing, isThirdPartyAccessory, type SearchOutcome } from "../dtc/marketplaceSearch.ts";
 import { verifyProduct, WIDE_PENDING, type VerifyDeps } from "../dtc/verify.ts";
 import type { FetchResult } from "../lib/http.ts";
@@ -17,9 +17,6 @@ const AMAZON = `<div class="s-main-slot">
 <div data-asin="" data-component-type="s-search-result"><h2>Boş</h2></div>
 </div>`;
 
-const ALI = `{"itemList":{"content":[{"redirectedId":"1","itemType":"productV3","productId":"1005009945027623","image":{"imgUrl":"//x.jpg"},"title":{"displayTitle":"PC saat k\\u0131l\\u0131f\\u0131 Mibro GS i\\u00e7i bo\\u015f koruyucu k\\u0131l\\u0131f"},"prices":{}},
-{"itemType":"productV3","productId":"1005007556064024","title":{"displayTitle":"Mibro GS Explorer S Smart Watch AMOLED GPS"}}]}}`;
-
 const OTTO = `<article data-qa="reptile-product-tile"><a href="/p/shop-n-smile-ring-S00J10FQ/" aria-label="shop&#39;n smile Smart Ring &amp; Tracker" data-link-type="tile"></a></article>
 <article><a href="/p/mibro-gs-explorer-s-S01/" aria-label="Mibro GS Explorer S Smartwatch" data-link-type="tile"></a></article>`;
 
@@ -31,11 +28,7 @@ test("parseAmazon: marka satırı + ürün adı başlıkta birleşir, ASIN'den i
   ]);
 });
 
-test("parseAliExpress ve parseOtto", () => {
-  const ali = parseAliExpress(ALI);
-  assert.equal(ali.length, 2);
-  assert.equal(ali[0].title, "PC saat kılıfı Mibro GS içi boş koruyucu kılıf");
-  assert.equal(ali[1].url, "https://www.aliexpress.com/item/1005007556064024.html");
+test("parseOtto", () => {
   const otto = parseOtto(OTTO);
   assert.deepEqual(otto.map((x) => x.title), ["shop'n smile Smart Ring & Tracker", "Mibro GS Explorer S Smartwatch"]);
   assert.equal(otto[1].url, "https://www.otto.de/p/mibro-gs-explorer-s-S01/");
@@ -54,7 +47,9 @@ test("Eşleştirme: aksesuarlar atlanır, markanın kendi ilanı bulunur", () =>
   const amazon = parseAmazon(AMAZON);
   assert.equal(findMarketplaceListing(amazon, "mibrofit.com", "Mibro GS Explorer S")?.url, "https://www.amazon.com/dp/B0FL7B6G8F");
   assert.equal(findMarketplaceListing([amazon[1]], "mibrofit.com", "Mibro GS Explorer S"), null);
-  assert.equal(findMarketplaceListing(parseAliExpress(ALI).slice(0, 1), "mibrofit.com", "Mibro GS Explorer S"), null);
+  // Toptan platformundaki ilan (AliExpress) eleme sebebi değildir: tedarikçi adayıdır.
+  assert.equal(findMarketplaceListing([{ title: "Mibro GS Explorer S Smart Watch AMOLED GPS", url: "https://www.aliexpress.com/item/1.html", content: "" }], "mibrofit.com", "Mibro GS Explorer S"), null);
+  assert.equal(findBrandListing([{ title: "Mibro Official Store", url: "https://www.aliexpress.com/store/123", content: "" }], "Mibro", "mibrofit.com"), null);
   assert.equal(findBrandListing([amazon[1]], "Mibro", "mibrofit.com", "Mibro GS Explorer S"), null);
   assert.ok(findBrandListing(amazon, "Mibro", "mibrofit.com", "Mibro GS Explorer S"));
 });

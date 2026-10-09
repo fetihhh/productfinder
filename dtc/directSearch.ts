@@ -1,4 +1,5 @@
-// Doğrudan pazaryeri araması: kota ve anahtar gerektirmez. Yalnızca robots.txt'nin arama sayfasına izin verdiği
+// Doğrudan pazaryeri araması: kota ve anahtar gerektirmez. Toptan platformları (AliExpress, Alibaba) burada aranmaz;
+// onlar eleme sebebi değil tedarik kaynağıdır (dtc/suppliers.ts). Yalnızca robots.txt'nin arama sayfasına izin verdiği
 // ve sonuçları HTML'de sunan siteler kullanılır; istekler lib/http.ts üzerinden (alan adı başına 1 istek/sn).
 // CAPTCHA / bot sayfası dönerse atlatılmaz, o site "kontrol edilemedi" sayılır.
 import { decodeEntities, stripTags } from "../lib/html.ts";
@@ -33,24 +34,6 @@ export function parseAmazon(html: string): SearchResult[] {
   return out;
 }
 
-/** AliExpress arama sayfası: ürünler sayfadaki gömülü JSON'da (productId + displayTitle). */
-export function parseAliExpress(html: string): SearchResult[] {
-  const out: SearchResult[] = [];
-  for (const chunk of html.split(/(?="productId":")/).slice(1)) {
-    const id = chunk.match(/^"productId":"(\d+)"/)?.[1];
-    const raw = chunk.slice(0, 4000).match(/"displayTitle":"((?:[^"\\]|\\.)*)"/)?.[1];
-    if (!id || !raw) continue;
-    let title: string;
-    try {
-      title = JSON.parse(`"${raw}"`) as string;
-    } catch {
-      continue;
-    }
-    if (!out.some((r) => r.url.endsWith(`/${id}.html`))) out.push({ title, url: `https://www.aliexpress.com/item/${id}.html`, content: "" });
-  }
-  return out;
-}
-
 /** otto.de arama sayfası: ürün kutucuğu bağlantısı aria-label'da ürün adını taşır. */
 export function parseOtto(html: string): SearchResult[] {
   const out: SearchResult[] = [];
@@ -63,7 +46,6 @@ export function parseOtto(html: string): SearchResult[] {
 
 export const DIRECT_SITES: DirectSite[] = [
   { name: "Amazon.com", searchUrl: (q) => `https://www.amazon.com/s?k=${encodeURIComponent(q)}`, parse: parseAmazon, required: true },
-  { name: "AliExpress", searchUrl: (q) => `https://www.aliexpress.com/w/wholesale-${encodeURIComponent(q.replace(/\s+/g, "-"))}.html`, parse: parseAliExpress, required: false },
   { name: "Otto", searchUrl: (q) => `https://www.otto.de/suche/${encodeURIComponent(q)}/`, parse: parseOtto, required: false },
 ];
 

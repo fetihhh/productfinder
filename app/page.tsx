@@ -5,7 +5,7 @@ import { logout } from "./login/actions";
 
 export default async function Home({ searchParams }: PageProps<"/">) {
   const f = parseFilters(await searchParams);
-  const [{ rows, error }, { categories, platforms }] = await Promise.all([listProducts(f), facets()]);
+  const [{ rows, error }, { categories, platforms, countries }] = await Promise.all([listProducts(f), facets()]);
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-6">
@@ -16,12 +16,13 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         </form>
       </header>
 
-      <Filters f={f} categories={categories} platforms={platforms} />
+      <Filters f={f} categories={categories} platforms={platforms} countries={countries} />
 
       {error && <p className="mt-6 text-red-600">Veritabanı hatası: {error}</p>}
       <p className="mt-4 text-sm text-zinc-500">
         {rows.length} ürün{rows.length === 200 ? " (ilk 200)" : ""}
-        {f.status === "verified" && " · yalnızca pazaryerinde bulunmayan, markanın kendi sitesinde satılan fiziksel ürünler"}
+        {f.status === "verified" &&
+          " · yalnızca markanın kendi sitesinde satılan fiziksel ürünler (ürün ve marka hiçbir pazaryerinde/büyük perakendecide bulunamadı)"}
       </p>
       {!error && rows.length === 0 && (
         <p className="mt-6 text-zinc-500">Bu filtrelerle ürün yok. Filtreleri genişletin ya da `npm run ingest` çalıştırın.</p>

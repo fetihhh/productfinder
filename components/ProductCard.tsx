@@ -1,4 +1,5 @@
 import { saveTracking } from "@/app/actions";
+import { availabilityLabel, countryLabel, formatPrice, launchLabel } from "@/lib/format";
 import type { ProductRow } from "@/lib/products";
 
 const STATUS: Record<ProductRow["dtc_status"], { label: string; cls: string }> = {
@@ -22,6 +23,40 @@ const SOURCE_NAMES: Record<string, string> = {
 const dateFmt = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short" });
 const badge = "rounded px-1.5 py-0.5 text-xs font-medium";
 const input = "w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900";
+
+/** Satışa dair işaretler: fiyat, yorum, stok, çıkış tarihi, mağaza ülkesi, Türkiye'ye gönderim. */
+function SalesFacts({ p }: { p: ProductRow }) {
+  const price = formatPrice(p.price, p.currency);
+  const availability = availabilityLabel(p.availability);
+  const launch = launchLabel(p.launched_at);
+  const country = p.brands?.country;
+  const tr = p.brands?.ships_to_tr;
+  const facts: [string, string, string?][] = [];
+  if (price) facts.push(["Fiyat", p.variant_count && p.variant_count > 1 ? `${price}'den` : price]);
+  if (p.review_count !== null) {
+    facts.push([
+      "Yorum",
+      p.review_count > 0 ? `★ ${p.rating !== null ? Number(p.rating).toFixed(1) : "–"} · ${p.review_count.toLocaleString("tr-TR")}` : "henüz yok",
+      "Yorum sayısı satış hacmine en iyi yaklaşımdır",
+    ]);
+  }
+  if (availability) facts.push(["Stok", availability]);
+  if (launch) facts.push(["Satışta", launch, "Mağazada yayınlanma tarihi"]);
+  if (country) facts.push(["Mağaza", countryLabel(country)]);
+  if (tr !== null && tr !== undefined) facts.push(["Türkiye", tr ? "Gönderim var" : "Gönderim yok", "Mağazanın gönderim ülkeleri listesinden"]);
+  if (facts.length === 0) return null;
+
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+      {facts.map(([k, v, title]) => (
+        <div key={k} className="contents" title={title}>
+          <dt className="text-zinc-500">{k}</dt>
+          <dd className={k === "Türkiye" && tr ? "font-medium text-emerald-700 dark:text-emerald-400" : ""}>{v}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
 
 export function ProductCard({ p }: { p: ProductRow }) {
   const href = p.product_url ?? `https://${p.brand_domain}`;
@@ -57,6 +92,8 @@ export function ProductCard({ p }: { p: ProductRow }) {
         <a href={`https://${p.brand_domain}`} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
           {p.brand_domain} ↗
         </a>
+
+        <SalesFacts p={p} />
 
         {p.dtc_reason && (
           <p title={p.dtc_reason} className="line-clamp-3 text-xs text-zinc-500">{p.dtc_reason}</p>

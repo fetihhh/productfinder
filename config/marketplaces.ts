@@ -52,7 +52,44 @@ export const MARKETPLACES: Marketplace[] = [
   { name: "Kohl's", labels: ["kohls"], searchDomains: ["kohls.com"] },
   { name: "Macy's", labels: ["macys"], searchDomains: ["macys.com"] },
   { name: "Sam's Club", labels: ["samsclub"], searchDomains: ["samsclub.com"] },
+  ...retailers([
+    // ABD
+    ["Dick's Sporting Goods", "dickssportinggoods.com"], ["Bed Bath & Beyond", "bedbathandbeyond.com"],
+    ["Overstock", "overstock.com"], ["QVC", "qvc.com"], ["HSN", "hsn.com"], ["Sephora", "sephora.com"],
+    ["Ulta", "ulta.com"], ["Urban Outfitters", "urbanoutfitters.com"], ["Huckberry", "huckberry.com"],
+    ["Touch of Modern", "touchofmodern.com"], ["Bloomingdale's", "bloomingdales.com"], ["Saks", "saksfifthavenue.com"],
+    ["Neiman Marcus", "neimanmarcus.com"], ["Sur La Table", "surlatable.com"], ["GameStop", "gamestop.com"],
+    ["Staples", "staples.com"], ["Office Depot", "officedepot.com"], ["Chewy", "chewy.com"], ["Petco", "petco.com"],
+    ["PetSmart", "petsmart.com"], ["Academy Sports", "academy.com"], ["Bass Pro Shops", "basspro.com"],
+    ["Cabela's", "cabelas.com"], ["Sweetwater", "sweetwater.com"], ["Guitar Center", "guitarcenter.com"],
+    ["Adorama", "adorama.com"], ["Crutchfield", "crutchfield.com"], ["Micro Center", "microcenter.com"],
+    ["BJ's", "bjs.com"], ["Zulily", "zulily.com"],
+    // Avrupa / İngiltere
+    ["Argos", "argos.co.uk"], ["Currys", "currys.co.uk"], ["John Lewis", "johnlewis.com"],
+    ["Selfridges", "selfridges.com"], ["Harrods", "harrods.com"], ["Boots", "boots.com"],
+    ["MediaMarkt", "mediamarkt.de"], ["Saturn", "saturn.de"], ["Otto", "otto.de"], ["Zalando", "zalando.com"],
+    ["ASOS", "asos.com"], ["About You", "aboutyou.com"], ["Bol.com", "bol.com"], ["Cdiscount", "cdiscount.com"],
+    ["Fnac", "fnac.com"], ["Darty", "darty.com"], ["Allegro", "allegro.pl"], ["Kaufland", "kaufland.de"],
+    ["Decathlon", "decathlon.com"], ["Galaxus", "galaxus.ch"], ["Digitec", "digitec.ch"], ["Coolblue", "coolblue.nl"],
+    ["Elgiganten", "elgiganten.se"], ["Conrad", "conrad.com"], ["ManoMano", "manomano.fr"], ["Fruugo", "fruugo.com"],
+    ["OnBuy", "onbuy.com"],
+    // Türkiye
+    ["Teknosa", "teknosa.com"], ["Vatan Bilgisayar", "vatanbilgisayar.com"], ["Boyner", "boyner.com.tr"],
+    ["Beymen", "beymen.com"], ["Koçtaş", "koctas.com.tr"],
+    // Diğer bölgeler ve toptan/ikinci el platformlar
+    ["Flipkart", "flipkart.com"], ["Noon", "noon.com"], ["Jumia", "jumia.com"], ["Coupang", "coupang.com"],
+    ["JD.com", "jd.com"], ["Tmall", "tmall.com"], ["Taobao", "taobao.com"], ["Ozon", "ozon.ru"],
+    ["Wildberries", "wildberries.ru"], ["Tokopedia", "tokopedia.com"], ["Kogan", "kogan.com"],
+    ["Catch", "catch.com.au"], ["Takealot", "takealot.com"], ["DHgate", "dhgate.com"], ["Banggood", "banggood.com"],
+    ["Joom", "joom.com"], ["LightInTheBox", "lightinthebox.com"], ["Poshmark", "poshmark.com"],
+    ["Mercari", "mercari.com"], ["Depop", "depop.com"], ["Vinted", "vinted.com"],
+  ]),
 ];
+
+/** Tek alan adlı perakendeci satırı: etiket, alan adının uzantısız adıdır (argos.co.uk → "argos"). */
+function retailers(rows: [name: string, domain: string][]): Marketplace[] {
+  return rows.map(([name, domain]) => ({ name, labels: [domain.split(".")[0]], searchDomains: [domain] }));
+}
 
 // Pazaryeri değil ama "markanın kendi alan adı" da sayılmayan barındırma/sosyal alan adları.
 // Ör. brand.myshopify.com veya instagram.com/brand → kendi alan adı koşulunu (2a) sağlamaz.

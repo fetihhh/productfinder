@@ -55,7 +55,9 @@ test("DTC 1: Shopify mağazası, kargo gerektiren ürün, pazaryerinde yok → v
   assert.equal(r.physical, true);
   assert.equal(r.name, "TDM NEO Hybrid Headphones");
   assert.match(r.reason, /Shopify kargo gerektiriyor/);
-  assert.equal(d.searches.length, 1);
+  // Katı mod: ürün araması + marka araması
+  assert.equal(d.searches.length, 2);
+  assert.equal(r.brandCheck?.status, "clean");
 });
 
 test("DTC 2: WooCommerce mağazası (JSON-LD @graph) → verified", async () => {
@@ -173,7 +175,9 @@ test("Shopify ürün JSON adresi ve ayrıştırma", () => {
   assert.equal(shopifyProductJsonUrl("https://x.com/en-us/products/a-b?variant=1"), "https://x.com/en-us/products/a-b.json");
   assert.equal(shopifyProductJsonUrl("https://x.com/collections/all/products/a"), "https://x.com/collections/all/products/a.json");
   assert.equal(shopifyProductJsonUrl("https://x.com/pages/about"), null);
-  assert.deepEqual(parseShopifyProduct(shopifyJson(true, "T")), { title: "T", image: "https://cdn.shopify.com/p.jpg", requiresShipping: true, variantCount: 1 });
+  assert.deepEqual(parseShopifyProduct(shopifyJson(true, "T")), {
+    id: null, title: "T", image: "https://cdn.shopify.com/p.jpg", requiresShipping: true, variantCount: 1, price: null, publishedAt: null,
+  });
   assert.equal(parseShopifyProduct("<html>"), null);
 });
 

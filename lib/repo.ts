@@ -101,43 +101,71 @@ export async function saveCandidate(c: Candidate): Promise<{ productId: string; 
   return { productId: productId!, created };
 }
 
-export type ProductToVerify = { id: string; name: string; brand_domain: string; product_url: string | null };
+export type ProductToVerify = {
+  id: string;
+  name: string;
+  brand_domain: string;
+  product_url: string | null;
+  dtc_status: "verified" | "rejected_marketplace" | "unverified";
+  brands: { marketplace_status: "clean" | "found" | null; marketplace_evidence: string | null; marketplace_checked_at: string | null } | null;
+};
 
 /** Hiç kontrol edilmemiş (veya geçici hatayla kalmış) ürünler + süresi dolan "verified" ürünler. */
 export async function productsToVerify(limit: number): Promise<ProductToVerify[]> {
   const stale = new Date(Date.now() - REVERIFY_AFTER_DAYS * 86_400_000).toISOString();
   const { data, error } = await db()
     .from("products")
-    .select("id, name, brand_domain, product_url")
+    .select("id, name, brand_domain, product_url, dtc_status, brands(marketplace_status, marketplace_evidence, marketplace_checked_at)")
     .or(`dtc_checked_at.is.null,and(dtc_status.eq.verified,dtc_checked_at.lt.${stale})`)
     .order("dtc_checked_at", { ascending: true, nullsFirst: true })
     .order("first_seen_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(`products okunamadı: ${error.message}`);
-  return data as ProductToVerify[];
+  return data as unknown as ProductToVerify[];
 }
 
 export async function saveVerification(p: ProductToVerify, r: VerifyResult): Promise<void> {
   const now = new Date().toISOString();
-  const update: Record<string, unknown> = {
-    dtc_status: r.status,
-    dtc_reason: r.reason,
-    // Geçici sonuçlarda (kota, ağ hatası) tarih boş kalır → sonraki çalıştırmada yeniden denenir.
-    dtc_checked_at: r.retryable ? null : now,
-  };
+  // Geçici sonuçlarda (kota, ağ hatası) tarih boş kalır → sonraki çalıştırmada yeniden denenir.
+  // Önceden doğrulanmış bir ürün yalnızca geçici bir hata yüzünden listeden düşmez: durumu ve gerekçesi korunur.
+  const keepPrevious = r.retryable && p.dtc_status === "verified";
+  const update: Record<string, unknown> = keepPrevious
+    ? { dtc_checked_at: null }
+    : { dtc_status: r.status, dtc_reason: r.reason, dtc_checked_at: r.retryable ? null : now };
   if (r.name && r.name.length >= 3 && r.name.length <= 150) update.name = r.name;
   if (r.productUrl) update.product_url = r.productUrl;
   if (r.imageUrl && /^https?:\/\//.test(r.imageUrl)) update.image_url = r.imageUrl;
   else if (r.imageUrl?.startsWith("//")) update.image_url = `https:${r.imageUrl}`;
+  // Satışa dair işaretler yalnızca okunabildiyse yazılır (eski değer silinmez).
+  const sales: Record<string, string | number | null> = {
+    price: r.sales.price,
+    currency: r.sales.currency,
+    review_count: r.sales.reviewCount,
+    rating: r.sales.rating,
+    availability: r.sales.availability,
+    launched_at: r.sales.launchedAt,
+    variant_count: r.sales.variantCount,
+  };
+  for (const [k, v] of Object.entries(sales)) {
+    if (v !== null && !(typeof v === "number" && Number.isNaN(v))) update[k] = v;
+  }
 
   const { error } = await db().from("products").update(update).eq("id", p.id);
   if (error) throw new Error(`products güncellenemedi: ${error.message}`);
 
-  if (r.platform) {
-    const { error: brandErr } = await db()
-      .from("brands")
-      .update({ platform: r.platform, has_checkout: r.hasCheckout, check_reason: r.reason, checked_at: now })
-      .eq("domain", p.brand_domain);
+  const brand: Record<string, unknown> = {};
+  if (r.platform) Object.assign(brand, { platform: r.platform, has_checkout: r.hasCheckout, check_reason: r.reason, checked_at: now });
+  if (r.store.country) brand.country = r.store.country;
+  if (r.store.shipsToTr !== null) brand.ships_to_tr = r.store.shipsToTr;
+  if (r.brandCheck) {
+    Object.assign(brand, {
+      marketplace_status: r.brandCheck.status,
+      marketplace_evidence: r.brandCheck.evidence,
+      marketplace_checked_at: now,
+    });
+  }
+  if (Object.keys(brand).length > 0) {
+    const { error: brandErr } = await db().from("brands").update(brand).eq("domain", p.brand_domain);
     if (brandErr) throw new Error(`brands güncellenemedi: ${brandErr.message}`);
   }
 }
@@ -165,4 +193,30 @@ export async function updateTrendScores(): Promise<{ updated: number; total: num
     if (Number(p.trend_score) !== score) updated++;
   }
   return { updated, total: data.length };
+}
+
+/**
+ * Katı mod tutarlılığı: pazaryerinde satıldığı tespit edilen markaların daha önce "verified" olmuş
+ * ürünlerini de eler. Ağ isteği yapmaz.
+ */
+export async function propagateBrandRejections(): Promise<number> {
+  const { data: brands, error } = await db()
+    .from("brands")
+    .select("domain, marketplace_evidence")
+    .eq("marketplace_status", "found");
+  if (error) throw new Error(`brands okunamadı: ${error.message}`);
+  let total = 0;
+  for (const b of brands) {
+    const { error: upErr, count } = await db()
+      .from("products")
+      .update(
+        { dtc_status: "rejected_marketplace", dtc_reason: `Marka pazaryerinde satıyor: ${b.marketplace_evidence ?? ""}` },
+        { count: "exact" },
+      )
+      .eq("brand_domain", b.domain)
+      .eq("dtc_status", "verified");
+    if (upErr) throw new Error(`products güncellenemedi: ${upErr.message}`);
+    total += count ?? 0;
+  }
+  return total;
 }

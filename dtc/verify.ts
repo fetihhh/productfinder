@@ -1,17 +1,25 @@
 // DTC doğrulama: bir ürünün yalnızca markanın kendi sitesinde satılan fiziksel bir ürün olup olmadığına karar verir.
+// Yol üstünde mağaza ülkesi, Türkiye'ye satış ve satışa dair işaretleri (fiyat, yorum, stok, çıkış tarihi) de toplar.
 // Ağ erişimi bağımlılık olarak verilir (testlerde sahte fetch/arama kullanılır).
+import { parse } from "tldts";
+import { BRAND_RECHECK_DAYS, STRICT_BRAND_CHECK } from "../config/limits.ts";
 import { classifyDomain, registrableDomain } from "../lib/domain.ts";
 import type { FetchResult } from "../lib/http.ts";
-import { buildQuery, findMarketplaceListing, type SearchFn } from "./marketplaceSearch.ts";
+import { buildBrandQuery, buildQuery, findBrandListing, findMarketplaceListing, type SearchFn } from "./marketplaceSearch.ts";
 import { modelCoverage, modelTokens } from "./match.ts";
 import {
+  countryFromTld,
   detectPlatform,
   pageSignals,
   parseShopifyCatalog,
+  parseShopifyMeta,
   parseShopifyProduct,
+  parseYotpoBottomline,
   shopifyProductJsonUrl,
   type Platform,
+  type Rating,
   type ShopifyListing,
+  type ShopifyMeta,
 } from "./signals.ts";
 
 /** Katalogda blog başlığındaki model adına en çok benzeyen ürün (model belirteçlerinin ≥%60'ı). */
@@ -30,12 +38,39 @@ export function bestCatalogMatch(catalog: ShopifyListing[], brandDomain: string,
 
 export type DtcStatus = "verified" | "rejected_marketplace" | "unverified";
 
-export type VerifyInput = { brandDomain: string; productUrl: string | null; productName: string };
+/** Marka düzeyi pazaryeri kontrolünün önbelleği (brands tablosu). */
+export type BrandState = {
+  marketplaceStatus: "clean" | "found" | null;
+  marketplaceEvidence: string | null;
+  marketplaceCheckedAt: string | null;
+};
+
+export type VerifyInput = { brandDomain: string; productUrl: string | null; productName: string; brand?: BrandState | null };
 
 export type VerifyDeps = {
   fetchPage: (url: string, accept?: string) => Promise<FetchResult>;
   /** null → arama yapılamaz (kota bitti / anahtar yok). */
   searchMarketplaces: SearchFn | null;
+  now?: number;
+};
+
+export type SalesInfo = {
+  price: number | null;
+  currency: string | null;
+  reviewCount: number | null;
+  rating: number | null;
+  reviewSource: string | null;
+  availability: string | null;
+  launchedAt: string | null;
+  variantCount: number | null;
+};
+
+export type StoreInfo = {
+  brandName: string | null;
+  country: string | null;
+  city: string | null;
+  shipsToTr: boolean | null;
+  productCount: number | null;
 };
 
 export type VerifyResult = {
@@ -50,19 +85,36 @@ export type VerifyResult = {
   imageUrl: string | null;
   /** Blog ana sayfaya link verdiyse katalogda bulunan ürün sayfası. */
   productUrl: string | null;
+  sales: SalesInfo;
+  store: StoreInfo;
+  /** Bu çalıştırmada yapılan marka düzeyi kontrolün sonucu (önbelleğe yazılır). */
+  brandCheck: { status: "clean" | "found"; evidence: string } | null;
 };
 
 const QUOTA_PREFIX = "Pazaryeri kontrolü yapılamadı";
 const CATALOG_MAX_PAGES = 3;
 
+const emptySales = (): SalesInfo => ({
+  price: null, currency: null, reviewCount: null, rating: null, reviewSource: null,
+  availability: null, launchedAt: null, variantCount: null,
+});
+const emptyStore = (): StoreInfo => ({ brandName: null, country: null, city: null, shipsToTr: null, productCount: null });
+
+function isFresh(checkedAt: string | null, now: number): boolean {
+  return Boolean(checkedAt) && now - Date.parse(checkedAt!) < BRAND_RECHECK_DAYS * 86_400_000;
+}
+
 export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promise<VerifyResult> {
+  const now = deps.now ?? Date.now();
   const evidence: string[] = [];
-  const base = { platform: null, hasCheckout: null, physical: null, name: null, imageUrl: null, productUrl: null };
-  const done = (status: DtcStatus, why: string, extra: Partial<VerifyResult> = {}): VerifyResult => ({
-    ...base,
-    retryable: false,
-    ...extra,
+  const r: Omit<VerifyResult, "status" | "reason" | "retryable"> = {
+    platform: null, hasCheckout: null, physical: null, name: null, imageUrl: null, productUrl: null,
+    sales: emptySales(), store: emptyStore(), brandCheck: null,
+  };
+  const done = (status: DtcStatus, why: string, retryable = false): VerifyResult => ({
+    ...r,
     status,
+    retryable,
     reason: [...evidence, why].filter(Boolean).join(" · "),
   });
 
@@ -72,10 +124,15 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
     return done(domainVerdict.kind === "marketplace" ? "rejected_marketplace" : "unverified", domainVerdict.reason);
   }
 
-  // 2) Marka sayfası
+  // 2) Marka daha önce bir pazaryerinde/perakendecide bulunduysa (ve kayıt tazeyse) hiç ağa çıkmadan ele.
+  if (STRICT_BRAND_CHECK && input.brand?.marketplaceStatus === "found" && isFresh(input.brand.marketplaceCheckedAt, now)) {
+    return done("rejected_marketplace", `Marka pazaryerinde satıyor (önceki kontrol): ${input.brand.marketplaceEvidence ?? ""}`);
+  }
+
+  // 3) Marka sayfası
   const pageUrl = input.productUrl ?? `https://${input.brandDomain}/`;
   const page = await deps.fetchPage(pageUrl);
-  if (!page.ok) return done("unverified", `Marka sitesi okunamadı: ${page.reason}`, { retryable: page.retryable });
+  if (!page.ok) return done("unverified", `Marka sitesi okunamadı: ${page.reason}`, page.retryable);
 
   const finalVerdict = classifyDomain(page.url);
   if (!finalVerdict.ok && finalVerdict.kind === "marketplace") {
@@ -86,28 +143,36 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
 
   const platform = detectPlatform(page.text);
   const signals = pageSignals(page.text);
+  const origin = new URL(page.url).origin;
+  r.platform = platform;
+  r.name = signals.productName;
+  r.imageUrl = signals.productImage;
   evidence.push(`Platform: ${platform}`);
 
-  // 3) Shopify: ürün JSON'u (fiziksel ürün kanıtı: requires_shipping).
-  //    Blog ürün sayfası yerine ana sayfaya link verdiyse mağaza kataloğunda ürünü adıyla ara.
+  // 4) Shopify: mağaza bilgisi (/meta.json), ürün JSON'u veya katalog eşleşmesi.
+  let meta: ShopifyMeta | null = null;
   let shopifyShipping: boolean | null = null;
+  let shopifyProductId = signals.shopifyProductId;
   let fromCatalog = false;
   let catalogAvailable: boolean | null = null;
-  let productUrl: string | null = null;
-  let name = signals.productName;
-  let image = signals.productImage;
   if (platform === "shopify") {
+    const metaRes = await deps.fetchPage(`${origin}/meta.json`, "application/json");
+    meta = metaRes.ok ? parseShopifyMeta(metaRes.text) : null;
+
     const jsonUrl = shopifyProductJsonUrl(page.url);
     if (jsonUrl) {
       const res = await deps.fetchPage(jsonUrl, "application/json");
       const product = res.ok ? parseShopifyProduct(res.text) : null;
       if (product) {
         shopifyShipping = product.requiresShipping;
-        name = product.title ?? name;
-        image = product.image ?? image;
+        shopifyProductId = product.id ?? shopifyProductId;
+        r.name = product.title ?? r.name;
+        r.imageUrl = product.image ?? r.imageUrl;
+        r.sales.price = product.price;
+        r.sales.launchedAt = product.publishedAt;
+        r.sales.variantCount = product.variantCount;
       }
     } else {
-      const origin = new URL(page.url).origin;
       const catalog: ShopifyListing[] = [];
       for (let pageNo = 1; pageNo <= CATALOG_MAX_PAGES; pageNo++) {
         const suffix = pageNo === 1 ? "" : `&page=${pageNo}`;
@@ -117,23 +182,59 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
         if (items.length < 250) break;
       }
       const match = bestCatalogMatch(catalog, input.brandDomain, input.productName);
-      if (!match) {
-        return done("unverified", "Blog marka ana sayfasına link veriyor; ürün mağaza kataloğunda bulunamadı", { platform });
+      if (match) {
+        r.productUrl = `${origin}/products/${match.handle}`;
+        evidence.push(`Katalog eşleşmesi: ${r.productUrl}`);
+        shopifyShipping = match.requiresShipping;
+        shopifyProductId = match.id ?? shopifyProductId;
+        r.name = match.title;
+        r.imageUrl = match.image ?? r.imageUrl;
+        r.sales.price = match.price;
+        r.sales.launchedAt = match.publishedAt;
+        r.sales.variantCount = match.variantCount;
+        r.sales.availability = match.available === null ? null : match.available ? "InStock" : "OutOfStock";
+        fromCatalog = true;
+        catalogAvailable = match.available;
       }
-      productUrl = `${origin}/products/${match.handle}`;
-      evidence.push(`Katalog eşleşmesi: ${productUrl}`);
-      shopifyShipping = match.requiresShipping;
-      name = match.title;
-      image = match.image ?? image;
-      fromCatalog = true;
-      catalogAvailable = match.available;
     }
-  } else if (!signals.hasProductSchema && !signals.offer && new URL(page.url).pathname.length <= 1) {
-    return done("unverified", "Blog marka ana sayfasına link veriyor; ürün sayfası bulunamadı", { platform });
   }
-  const extra = { platform, name, imageUrl: image, productUrl };
 
-  // 4) Satın alma özelliği. Katalogdan bulunan üründe ana sayfadaki butonlar başka ürünlere ait olabilir → yalnızca katalog.
+  // 5) Mağaza ve satış işaretleri (karar vermese de karta yazılır).
+  const suffix = parse(page.url).publicSuffix ?? "";
+  r.store = {
+    brandName: meta?.name ?? signals.siteName,
+    country: meta?.country ?? signals.orgCountry ?? countryFromTld(suffix),
+    city: meta?.city ?? null,
+    shipsToTr: meta?.shipsTo ? meta.shipsTo.includes("TR") : null,
+    productCount: meta?.productCount ?? null,
+  };
+  if (r.sales.price === null && signals.offer) r.sales.price = Number(signals.offer.price);
+  r.sales.currency = signals.offer?.currency ?? meta?.currency ?? null;
+  if (!fromCatalog) r.sales.availability = signals.offer?.availability ?? null;
+
+  let rating: Rating | null = signals.rating;
+  if (!rating && signals.yotpoAppKey && shopifyProductId) {
+    const res = await deps.fetchPage(
+      `https://api-cdn.yotpo.com/products/${signals.yotpoAppKey}/${shopifyProductId}/bottomline`,
+      "application/json",
+    );
+    rating = res.ok ? parseYotpoBottomline(res.text) : null;
+  }
+  if (rating) {
+    r.sales.reviewCount = rating.count;
+    r.sales.rating = rating.value;
+    r.sales.reviewSource = rating.source;
+  }
+
+  // 6) Ürün sayfası bulunabildi mi?
+  if (platform === "shopify" && !shopifyProductJsonUrl(page.url) && !fromCatalog) {
+    return done("unverified", "Blog marka ana sayfasına link veriyor; ürün mağaza kataloğunda bulunamadı");
+  }
+  if (platform !== "shopify" && !signals.hasProductSchema && !signals.offer && new URL(page.url).pathname.length <= 1) {
+    return done("unverified", "Blog marka ana sayfasına link veriyor; ürün sayfası bulunamadı");
+  }
+
+  // 7) Satın alma özelliği. Katalogdan bulunan üründe ana sayfadaki butonlar başka ürünlere ait olabilir → yalnızca katalog.
   let purchase: string | null;
   if (fromCatalog) {
     purchase = catalogAvailable === false ? null : "Shopify kataloğunda satışta";
@@ -145,43 +246,59 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
   } else {
     purchase = signals.hasBuyButton ? "satın al butonu" : null;
   }
-  if (!purchase) return done("unverified", "Sitede satın alma özelliği bulunamadı", { ...extra, hasCheckout: false });
+  if (!purchase) {
+    r.hasCheckout = false;
+    return done("unverified", "Sitede satın alma özelliği bulunamadı");
+  }
+  r.hasCheckout = true;
   evidence.push(`Satın alma: ${purchase}`);
 
-  // 5) Fiziksel ürün mü?
-  let physical: boolean | null;
+  // 8) Fiziksel ürün mü?
   if (shopifyShipping === false) {
-    return done("unverified", "Dijital ürün (Shopify: requires_shipping=false)", { ...extra, hasCheckout: true, physical: false });
+    r.physical = false;
+    return done("unverified", "Dijital ürün (Shopify: requires_shipping=false)");
   } else if (signals.digitalType) {
-    return done("unverified", `Dijital/hizmet ürünü (schema.org ${signals.digitalType})`, { ...extra, hasCheckout: true, physical: false });
+    r.physical = false;
+    return done("unverified", `Dijital/hizmet ürünü (schema.org ${signals.digitalType})`);
   } else if (shopifyShipping === true) {
-    physical = true;
     evidence.push("Fiziksel: Shopify kargo gerektiriyor");
   } else if (signals.shippingDetails) {
-    physical = true;
     evidence.push("Fiziksel: kargo/ağırlık bilgisi");
   } else if (signals.hasProductSchema && signals.offer) {
-    physical = true;
     evidence.push("Fiziksel: schema.org Product");
   } else {
-    return done("unverified", "Fiziksel ürün kanıtı bulunamadı", { ...extra, hasCheckout: true, physical: null });
+    return done("unverified", "Fiziksel ürün kanıtı bulunamadı");
   }
-  const ready = { ...extra, hasCheckout: true, physical };
+  r.physical = true;
 
-  // 6) Pazaryeri araması
-  if (!deps.searchMarketplaces) {
-    return done("unverified", `${QUOTA_PREFIX} (günlük/aylık arama kotası doldu)`, { ...ready, retryable: true });
-  }
+  // 9) Ürün düzeyi pazaryeri araması
+  const search = deps.searchMarketplaces;
+  if (!search) return done("unverified", `${QUOTA_PREFIX} (günlük/aylık arama kotası doldu)`, true);
   // Arama/eşleştirme için blog başlığından gelen kısa ad kullanılır; marka sayfasındaki adlar çoğu zaman
   // pazarlama ekleriyle uzundur ("… with 5 Lights & 10 Configurations") ve eşleşmeyi bozar.
-  const productName = input.productName;
-  const outcome = await deps.searchMarketplaces(buildQuery(input.brandDomain, productName));
-  if (!outcome.ok) {
-    return done("unverified", `${QUOTA_PREFIX}: ${outcome.reason}`, { ...ready, retryable: true });
-  }
-  const listing = findMarketplaceListing(outcome.results, input.brandDomain, productName);
+  const outcome = await search(buildQuery(input.brandDomain, input.productName));
+  if (!outcome.ok) return done("unverified", `${QUOTA_PREFIX}: ${outcome.reason}`, true);
+  const listing = findMarketplaceListing(outcome.results, input.brandDomain, input.productName);
   if (listing) {
-    return done("rejected_marketplace", `Pazaryerinde bulundu (${listing.why}): ${listing.url}`, ready);
+    // Markanın bir ürünü pazaryerinde → katı modda marka da "found" (aynı markanın diğer ürünleri de elenir).
+    if (STRICT_BRAND_CHECK) r.brandCheck = { status: "found", evidence: `${listing.why}: ${listing.url}` };
+    return done("rejected_marketplace", `Pazaryerinde bulundu (${listing.why}): ${listing.url}`);
   }
-  return done("verified", `Pazaryeri araması: ${outcome.results.length} sonuç, eşleşme yok`, ready);
+  evidence.push(`Ürün araması: ${outcome.results.length} sonuç, eşleşme yok`);
+
+  // 10) Marka düzeyi kontrol (katı mod): marka herhangi bir pazaryerinde/büyük perakendecide satıyorsa ele.
+  if (!STRICT_BRAND_CHECK) return done("verified", "");
+  if (input.brand?.marketplaceStatus === "clean" && isFresh(input.brand.marketplaceCheckedAt, now)) {
+    return done("verified", "Marka araması: temiz (önceki kontrol)");
+  }
+  const brandName = r.store.brandName ?? input.brandDomain.split(".")[0];
+  const brandOutcome = await search(buildBrandQuery(brandName));
+  if (!brandOutcome.ok) return done("unverified", `${QUOTA_PREFIX} (marka araması): ${brandOutcome.reason}`, true);
+  const brandListing = findBrandListing(brandOutcome.results, brandName, input.brandDomain, input.productName);
+  if (brandListing) {
+    r.brandCheck = { status: "found", evidence: `${brandListing.why}: ${brandListing.url}` };
+    return done("rejected_marketplace", `${brandListing.why}: ${brandListing.url}`);
+  }
+  r.brandCheck = { status: "clean", evidence: `"${brandName}" araması: ${brandOutcome.results.length} sonuç, eşleşme yok` };
+  return done("verified", `Marka araması: ${brandOutcome.results.length} sonuç, eşleşme yok`);
 }

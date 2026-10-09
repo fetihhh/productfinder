@@ -40,7 +40,8 @@ export function tavilySearch(apiKey: string): SearchFn {
 
 export function buildQuery(brandDomain: string, productName: string): string {
   const label = brandDomain.split(".")[0];
-  return normalizeName(productName).includes(normalizeName(label)) ? productName : `${label} ${productName}`;
+  const compact = (s: string) => normalizeName(s).replace(/\s+/g, "");
+  return compact(productName).includes(compact(label)) ? productName : `${label} ${productName}`;
 }
 
 /** Arama/kategori sonuç sayfaları ilan değildir (sorgu kelimelerini zaten içerirler). */
@@ -48,7 +49,9 @@ export function isSearchPage(url: URL): boolean {
   for (const key of ["k", "q", "query", "keyword", "keywords", "_nkw", "search", "searchTerm"]) {
     if (url.searchParams.has(key)) return true;
   }
-  return /(^|\/)(s|sr|search|ara)(\/|$)/i.test(url.pathname);
+  if (/(^|\/)(s|sr|search|ara|market)(\/|$)/i.test(url.pathname)) return true;
+  // Alışveriş dışı alt alanlar (kariyer, yatırımcı, yardım…) ilan değildir.
+  return /^(careers|jobs|investors?|corporate|help|support|press|news|blog|about)\./i.test(url.hostname);
 }
 
 export type MarketplaceMatch = { url: string; why: string };
@@ -87,4 +90,59 @@ export function findMarketplaceListing(results: SearchResult[], brandDomain: str
     }
   }
   return null;
+}
+
+/**
+ * Marka düzeyi kontrol: markanın herhangi bir pazaryerinde/büyük perakendecide satılıp satılmadığı.
+ * Sonuç başlığında marka adı (tam ifade olarak) ya da alan adının birleşik hali geçmeli; arama sayfaları sayılmaz.
+ * 5 harften kısa marka adlarında ürünün model kelimelerinden biri de başlık/açıklamada geçmelidir.
+ */
+export function findBrandListing(
+  results: SearchResult[],
+  brandName: string,
+  brandDomain: string,
+  productName = "",
+): MarketplaceMatch | null {
+  const phrase = normalizeName(brandName.replace(/[®™]/g, ""));
+  const label = normalizeName(brandDomain.split(".")[0]).replace(/\s+/g, "");
+  const model = productName ? modelTokens(brandDomain, productName) : [];
+  for (const r of results) {
+    const marketplace = marketplaceFor(r.url);
+    if (!marketplace) continue;
+    let url: URL;
+    try {
+      url = new URL(r.url);
+    } catch {
+      continue;
+    }
+    if (marketplace.listingPath && !marketplace.listingPath.test(url.pathname)) continue;
+    if (isSearchPage(url)) continue;
+    const title = ` ${normalizeName(r.title)} `;
+    const hasPhrase = phrase.length >= 3 && title.includes(` ${phrase} `);
+    const hasLabel = label.length >= 5 && joinsToLabel(title.trim().split(" "), label);
+    if (!hasPhrase && !hasLabel) continue;
+    // Kısa marka adları (TDM, ACE…) başka ürünlerin model kodlarıyla karışır: ek olarak ürünle ilgili bir kelime gerekir.
+    const distinctive = hasLabel || phrase.replace(/\s+/g, "").length >= 5;
+    if (!distinctive && modelCoverage(model, `${r.title} ${r.content}`) === 0) continue;
+    const kind = marketplace.storePath?.test(url.pathname) ? "mağazası" : "ilanı";
+    return { url: r.url, why: `Marka ${marketplace.name}'da satıyor (${kind})` };
+  }
+  return null;
+}
+
+/** Ardışık 1–4 tam kelimenin birleşimi alan adı etiketine eşit mi ("nocs provisions" → "nocsprovisions"; "remember" ≠ "ember"). */
+function joinsToLabel(words: string[], label: string): boolean {
+  for (let i = 0; i < words.length; i++) {
+    let joined = "";
+    for (let j = i; j < Math.min(words.length, i + 4); j++) {
+      joined += words[j];
+      if (joined === label) return true;
+      if (joined.length >= label.length) break;
+    }
+  }
+  return false;
+}
+
+export function buildBrandQuery(brandName: string): string {
+  return `"${brandName.replace(/[®™"]/g, "").trim()}"`;
 }

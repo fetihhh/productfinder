@@ -126,9 +126,13 @@ export async function politeFetch(
   return { ok: true, status: r.res.status, url: r.url.href, contentType: r.res.headers.get("content-type") ?? "", text };
 }
 
-/** İkili dosya indirme (ör. Tranco listesinin zip'i); aynı robots/hız kurallarıyla. */
-export async function politeFetchBytes(input: string, maxBytes: number): Promise<Failure | { ok: true; url: string; bytes: Uint8Array }> {
-  const r = await politeRequest(input, "application/zip,application/octet-stream,*/*;q=0.5", maxBytes);
+/** İkili dosya indirme (ör. Tranco listesinin zip'i, ürün görselleri); aynı robots/hız kurallarıyla. */
+export async function politeFetchBytes(
+  input: string,
+  maxBytes: number,
+  accept = "application/zip,application/octet-stream,*/*;q=0.5",
+): Promise<Failure | { ok: true; url: string; bytes: Uint8Array }> {
+  const r = await politeRequest(input, accept, maxBytes);
   if (!r.ok) return r;
   const bytes = new Uint8Array(await r.res.arrayBuffer());
   if (bytes.length > maxBytes) return { ok: false, url: r.url.href, reason: "Yanıt çok büyük", retryable: false };

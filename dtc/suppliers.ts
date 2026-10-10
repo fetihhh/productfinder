@@ -4,10 +4,13 @@
 //   Alibaba     /showroom/<sözcükler>.html             (toptan fiyat aralığı + MOQ + tedarikçi)
 //   Made-in-China /products-search/hot-china-products/<Sözcükler>.html
 // Alibaba /trade/search, DHgate arama, CJdropshipping (robots yasak), 1688 (giriş/JS) kullanılmaz.
-// Eşleşme metin benzerliğiyle yapılır; sonuçlar ADAYDIR, görselden kontrol edilmelidir.
+// Eşleşme metin benzerliğiyle yapılır; ürün görselleri verilirse en benzer ilanların fotoğrafları da karşılaştırılır
+// (dropshipping mağazaları çoğunlukla tedarikçinin fotoğrafını kullanır). Görselle eşleşen ilan en güvenilir adaydır.
+import { IMAGE_MATCH_MAX } from "../config/limits.ts";
 import { decodeEntities, stripTags } from "../lib/html.ts";
 import type { FetchResult } from "../lib/http.ts";
 import { normalizeName } from "../lib/productName.ts";
+import { closestDistance } from "./imageDistance.ts";
 import { ACCESSORIES, CONNECTORS } from "./marketplaceSearch.ts";
 import { brandTokens, tokens } from "./match.ts";
 
@@ -26,9 +29,13 @@ export type SupplierOffer = {
   moq: string | null;
   sold: number | null;
   supplierName: string | null;
-  /** Arama sözcüklerinin ilan başlığında geçme oranı (0..1). */
+  /** Arama sözcüklerinin ilan başlığında geçme oranı (0..1); görselle eşleşen ilanda en az 0,95. */
   similarity: number;
+  /** Ürün görseliyle dHash farkı (0 = aynı fotoğraf); karşılaştırılmadıysa null. */
+  imageDistance: number | null;
 };
+
+export const isImageMatch = (o: { imageDistance: number | null }) => o.imageDistance !== null && o.imageDistance <= IMAGE_MATCH_MAX;
 
 export type SupplierResult = { query: string; offers: SupplierOffer[]; failed: string[] };
 
@@ -38,6 +45,9 @@ export const SOURCE_NAMES: Record<SupplierSource, string> = { aliexpress: "AliEx
 const NOT_GENERIC = new Set(["pro", "max", "ultra", "plus", "lite", "gen", "edition", "series", "version", "official", "original", "limited", "classic", "premium"]);
 const MIN_SIMILARITY = 0.7;
 const PER_SOURCE = 5;
+/** Görseli karşılaştırılacak ilanlar: her kaynaktan metin benzerliği ≥ %30 olan en benzer 8 ilan. */
+const IMAGE_POOL = 8;
+const IMAGE_POOL_MIN = 0.3;
 const BOT_PAGE = /punish|captcha|slide to verify|x5sec|unusual traffic|are you a human/i;
 
 /**
@@ -60,9 +70,18 @@ export function isBrandedOrUsed(title: string): boolean {
  * pazarlama ekleri çıkarılır; Shopify ürün türü eksikse eklenir. ör. "TDM. Neo Hybrid Headphone - Speakers"
  * → "neo hybrid headphone speakers".
  */
-export function supplierQuery(name: string, brandDomain: string, productType: string | null = null): string {
-  const brands = new Set(brandTokens(brandDomain, name));
-  const words = tokens(name).filter((t) => !brands.has(t) && !/\d/.test(t) && !NOT_GENERIC.has(t) && t.length >= 3);
+export function supplierQuery(name: string, brandDomain: string, productType: string | null = null, nameStartsWithBrand = true): string {
+  // Yeni mağaza ürünlerinde ad markayla başlamaz ("Multifunctional UV-C Sterilizer Box"): marka yalnızca alan adıdır.
+  const brands = new Set(nameStartsWithBrand ? brandTokens(brandDomain, name) : brandTokens(brandDomain, ""));
+  // Alan adının parçası olan sözcükler de markadır: "Blue Foldable…" @ bluepets.store, "Advent Bricks…" @ adventbricks.com.
+  const label = brandTokens(brandDomain, "")[0] ?? "";
+  for (const t of tokens(name)) if (t.length >= 3 && label.length > t.length && label.includes(t)) brands.add(t);
+  const describe = (s: string) => tokens(s).filter((t) => !brands.has(t) && !/\d/.test(t) && !NOT_GENERIC.has(t) && t.length >= 3);
+  let words = describe(name);
+  // Uzun adlarda ayraçtan (" - ", "|", ",", "(") sonrası pazarlama açıklamasıdır ("… Box - Portable Aromatherapy & Disinfection
+  // Chamber"): sorguyu toptancıda sonuçsuz bırakır. Ana bölüm en az 2 sözcükse yalnızca o aranır.
+  const main = describe(name.split(/\s[-–—|]\s|[,(|]/)[0]);
+  if (words.length > 4 && main.length >= 2) words = main;
   for (const t of tokens(productType ?? "")) if (!words.some((w) => stem(w) === stem(t)) && !/\d/.test(t)) words.push(t);
   return (words.length ? words : tokens(name)).slice(0, 6).join(" ");
 }
@@ -144,7 +163,7 @@ export function priceRange(s: string): [number | null, number | null] {
   return [Math.min(...nums), Math.max(...nums)];
 }
 
-type RawOffer = Omit<SupplierOffer, "similarity">;
+type RawOffer = Omit<SupplierOffer, "similarity" | "imageDistance">;
 
 export function parseAliExpressOffers(html: string): RawOffer[] {
   const out: RawOffer[] = [];
@@ -245,15 +264,24 @@ export const SUPPLIER_SITES: Site[] = [
   },
 ];
 
-/** Üç toptancıyı paralel arar (farklı alan adları); her kaynaktan en benzer 5 ilan, benzerlik ≥ %70. */
+/**
+ * Üç toptancıyı paralel arar (farklı alan adları); her kaynaktan en benzer 5 ilan, benzerlik ≥ %70.
+ * imageHashes + hashImage verilirse en benzer ilanların fotoğrafı ürün fotoğraflarıyla karşılaştırılır.
+ */
 export async function findSuppliers(
-  p: { name: string; brandDomain: string; productType: string | null },
+  p: { name: string; brandDomain: string; productType: string | null; imageHashes?: bigint[]; nameStartsWithBrand?: boolean },
   fetchPage: FetchPage,
   sites: Site[] = SUPPLIER_SITES,
+  hashImage?: (url: string | null) => Promise<bigint | null>,
 ): Promise<SupplierResult> {
-  const query = supplierQuery(p.name, p.brandDomain, p.productType);
+  const productHashes = p.imageHashes ?? [];
+  const query = supplierQuery(p.name, p.brandDomain, p.productType, p.nameStartsWithBrand ?? true);
   // Tek sözcüklük ya da çok kısa tarif ("out", "plate") rastgele sonuç getirir: aranmaz.
-  if (query.split(" ").filter((w) => w.length >= 3).length < 2) return { query, offers: [], failed: ["tarif çok kısa"] };
+  const described = query.split(" ").filter((w) => w.length >= 3).length;
+  if (described < 2) return { query, offers: [], failed: ["tarif çok kısa"] };
+  // Yeni mağaza ürünlerinde iki sözcüklük ad çoğunlukla ürün tarifi değil koleksiyon/baskı adıdır ("BLACK OUT");
+  // ürün türü de bilinmiyorsa aranmaz (alakasız "blackout perde" ilanları getirir).
+  if (p.nameStartsWithBrand === false && described < 3 && !p.productType) return { query, offers: [], failed: ["tarif çok kısa"] };
   // Sonuç çıkmazsa son iki sözcükle (genelde ürün türü: "hybrid headphone speakers" → "headphone speakers") yeniden denenir.
   const words = query.split(" ");
   const attempts = [...new Set([query, words.length > 2 ? words.slice(-2).join(" ") : query])];
@@ -274,10 +302,19 @@ export async function findSuppliers(
         }
         // Benzerlik her zaman ürünün TAM tarifine göre ölçülür (kısaltılmış sorgu yalnızca arama içindir).
         const weights = pageWeights(query, raw.map((o) => o.title));
-        const offers = raw
-          .map((o) => ({ ...o, similarity: similarity(query, o.title, weights) }))
-          .filter((o) => o.similarity >= MIN_SIMILARITY && !isAccessoryListing(query, o.title) && !isBrandedOrUsed(o.title))
-          .sort((a, b) => b.similarity - a.similarity || (b.sold ?? 0) - (a.sold ?? 0))
+        const scored: SupplierOffer[] = raw
+          .map((o) => ({ ...o, similarity: similarity(query, o.title, weights), imageDistance: null }))
+          .filter((o) => !isAccessoryListing(query, o.title) && !isBrandedOrUsed(o.title));
+        if (hashImage && productHashes.length) {
+          const pool = scored.filter((o) => o.similarity >= IMAGE_POOL_MIN && o.imageUrl).sort((a, b) => b.similarity - a.similarity).slice(0, IMAGE_POOL);
+          for (const o of pool) {
+            o.imageDistance = closestDistance(productHashes, await hashImage(o.imageUrl));
+            if (isImageMatch(o)) o.similarity = Math.max(o.similarity, 0.95);
+          }
+        }
+        const offers = scored
+          .filter((o) => o.similarity >= MIN_SIMILARITY)
+          .sort((a, b) => Number(isImageMatch(b)) - Number(isImageMatch(a)) || b.similarity - a.similarity || (b.sold ?? 0) - (a.sold ?? 0))
           .slice(0, PER_SOURCE);
         if (offers.length) return offers;
       }
@@ -285,6 +322,6 @@ export async function findSuppliers(
       return [];
     }),
   );
-  const offers = perSite.flat().sort((a, b) => b.similarity - a.similarity);
+  const offers = perSite.flat().sort((a, b) => Number(isImageMatch(b)) - Number(isImageMatch(a)) || b.similarity - a.similarity);
   return { query, offers, failed };
 }

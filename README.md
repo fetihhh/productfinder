@@ -29,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0010`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0011`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -59,6 +59,7 @@ cp .env.example .env.local   # değerleri doldurun
 | `npm run ingest -- verify` | Toplama hariç hepsi |
 | `npm run ingest -- no-stores` | Yeni mağaza keşfi ve kontrolleri atlanır |
 | `npm run ingest -- recheck` | Ayrıca tüm `verified` ürünleri tarihe bakmadan yeniden kontrol eder (doğrulama kuralları değişince) |
+| `npm run ingest -- resupply` | Toptancı aramasını 7 günlük süreyi beklemeden tüm doğrulanmış/takip edilen ürünler için yeniler |
 
 ## Ücretsiz katman limitleri
 
@@ -73,6 +74,7 @@ cp .env.example .env.local   # değerleri doldurun
 | **cenk/nrd** (WhoisDS listelerinin 60 günlük birikimi, dl.cenk.app) | Ücretsiz, robots.txt izinli | Yalnızca ilk kurulumda, liste bitene kadar günde 1 indirme (~75 MB) |
 | **DNS** (sistem çözümleyicisi) | Ücretsiz | Günde ~35–300 bin sorgu; sitelere istek gönderilmez |
 | **RDAP** (rdap.org → kayıt kuruluşları) | Ücretsiz, resmi WHOIS halefi | Marka başına 1 sorgu (kayıt tarihi) |
+| **TCMB günlük kurlar** (tcmb.gov.tr/kurlar/today.xml) | Ücretsiz, resmi, anahtar gerekmez; robots.txt izinli | Günde 1 istek (kâr hesaplayıcının USD/TL kuru) |
 | **Tranco top-1M listesi** (tranco-list.eu) | Ücretsiz, anahtar gerekmez; günlük ~10 MB zip | Günde 1 indirme. robots.txt `/api` ve `/list/` yollarını yasaklar, yalnızca izinli `/top-1m.csv.zip` kullanılır |
 | **Doğrudan pazaryeri araması** (amazon.com, otto.de arama sayfaları) ve **toptancı araması** (aliexpress.com, alibaba.com/showroom, made-in-china.com) | Ücretsiz, anahtar ve kota yok | robots.txt bu arama yollarına izin veriyor; site başına 1 istek/sn. CAPTCHA/503 dönerse atlatılmaz, o site "okunamadı" sayılır |
 | **RSS beslemeleri, Shopify `meta.json` / `products.json`, Yotpo yorum özeti** | Herkese açık, ücretsiz | robots.txt'ye uyularak, alan adı başına 1 istek/sn |
@@ -182,11 +184,24 @@ Doğrulanmış ürünler ile favori/incelenecek listesindeki ürünler için 7 g
 1. **Genel ürün tarifi** çıkarılır: ürün adından marka sözcükleri, model kodları (rakam içerenler) ve pazarlama ekleri (pro, max, ultra…) atılır, Shopify ürün türü eklenir. ör. "TDM. Neo Hybrid Headphone - Speakers" → `neo hybrid headphone speakers`.
 2. Üç toptancının arama sayfası aranır (robots.txt izinli yollar, site başına 1 istek/sn): **AliExpress** (adet fiyatı, satış adedi; İngilizce/USD tercihiyle), **Alibaba showroom** (toptan fiyat aralığı, MOQ, tedarikçi), **Made-in-China** (fiyat aralığı, MOQ, üretici). Sonuç çıkmazsa son iki sözcükle yeniden denenir. Bot doğrulama sayfası gelirse atlatılmaz, site "okunamadı" sayılır (Alibaba sık sık bunu yapıyor). DHgate (403), CJdropshipping (robots yasak), 1688 (giriş/JS) kullanılamıyor.
 3. **Benzerlik:** tarif sözcüklerinin ilan başlığında geçme oranı; sözcükler aynı sonuç sayfasındaki sıklıklarına göre ağırlıklanır (ayırt edici "cork" ağır, her başlıkta geçen "wallet" hafif). ≥ %70 olanlar listelenir. "Case for X / X için kılıf" gibi aksesuarlar, büyük marka ürünleri (DJI, GoPro, Samsung…) ve ikinci el ilanlar atlanır.
-4. **Marj** = perakende fiyat / benzerliği ≥ %70 ilanlardaki en düşük birim fiyat (yaklaşık kurlarla USD). Kargo, gümrük ve vergi **hariç**tir.
+4. **Görsel eşleştirme** (`dtc/imageHash.ts`): ürünün ana görseli ve Shopify ürününün ilk 4 görseli, her kaynaktaki metin benzerliği ≥ %30 olan en benzer 8 ilanın fotoğrafıyla karşılaştırılır. Karşılaştırma algısal özetle (dHash, 256 bit) yapılır: kenarlardaki düz arka plan kırpılır, görsel 17×16 gri tonlamaya küçültülür; aynı fotoğraf farklı boyut/sıkıştırma/kenar boşluğuyla da eşleşir (ölçülen fark 0–10), farklı ürünler 60+ fark verir (aynı boş tişörtün farklı baskılı fotoğrafı 84). Fark ≤ 40 → **"📷 Aynı fotoğraf"**: dropshipping mağazaları çoğunlukla tedarikçinin fotoğrafını kullandığı için bu ilan büyük ihtimalle mağazanın tedarikçisidir; metin benzerliği düşük olsa da listelenir ve en üstte gösterilir. Görseller `lib/http.ts` üzerinden (robots.txt, alan adı başına 1 istek/sn) indirilir, Shopify görselleri 300 px istenir; görseller saklanmaz, yalnızca fark kaydedilir. Görsel işleme `sharp` (açık kaynak, ücretsiz) ile yapılır.
+5. **Marj** = perakende fiyat / en düşük birim fiyat (yaklaşık kurlarla USD). Fotoğrafla eşleşen fiyatlı ilan varsa yalnızca onlar, yoksa benzerliği ≥ %70 ilanlar kullanılır. Kargo, gümrük ve vergi **hariç**tir; bunlar için ürün sayfasındaki **kâr hesabı**na bakın.
 
 Toptan platformları (AliExpress, Alibaba, DHgate, Made-in-China) **eleme sebebi değildir**: ürünün buralarda bulunması tedarik edilebildiğini gösterir. Amazon, eBay, Walmart, Trendyol, Hepsiburada gibi perakende pazaryerleri ise eleme sebebidir.
 
-**Bilinen sınır:** eşleşme metinle yapılır, görselle değil. Aynı ürün olup olmadığını ürün sayfasındaki toptancı görsellerinden kontrol edin.
+**Bilinen sınır:** tedarikçi farklı bir fotoğraf kullanıyorsa (stüdyo çekimi, başka açı) görsel eşleşme çıkmaz ve ilan yalnızca metin benzerliğiyle listelenir; bu ilanların aynı ürün olup olmadığını görselden kontrol edin.
+
+## Kâr hesabı (`lib/profit.ts`, `components/ProfitCalculator.tsx`)
+
+Ürün sayfasında, kendi sitesinden satış için adet başı kâr hesabı. Varsayılanlar: rakibin fiyatı (TCMB kuruyla TL'ye çevrilip 10'a yuvarlanır), en ucuz toptan ilan (fotoğrafla eşleşen varsa o) ve senaryo tahminleri; hepsi sayfada değiştirilebilir.
+
+| Senaryo | Varsayılanlar |
+|---|---|
+| Türkiye · Çin'den tek tek gönderim (dropshipping) | Kargo 4 $/paket, gümrük %60 (ürün + kargo üzerinden; Şubat 2026'dan beri 30 € muafiyeti yok, AB dışı gönderilerde yaygın oran), paket başı beyanname bedeli (kargo firmasına sorun), fiyata %20 KDV dahil |
+| Türkiye · toplu ithalat (stok) | Navlun 1 $/adet, gümrük %30 (GTİP koduna göre değişir; ithalat KDV'si satış KDV'sinden düşüldüğü için maliyet sayılmaz), yurt içi kargo 100 TL, %20 KDV dahil |
+| Yurt dışı müşteri (USD) | Kargo 5 $/paket, gümrük 0, KDV yok |
+
+Tüm senaryolarda ödeme komisyonu %3,5, iade/hasar payı %5, reklam (satış başına, CPA) fiyatın %25'i. Sonuçlar: **adet başı net kâr** ve marj, **reklama en fazla** harcanabilecek tutar (başabaş CPA) ve **başabaş ROAS**, girilen reklam maliyetiyle **en düşük satış fiyatı**. Gelir vergisi ve sabit giderler (site aboneliği vb.) dahil değildir. Gümrük oranları tahmindir; kesin oran için gümrük müşavirine danışın.
 
 ## Ülke ve satışa dair işaretler
 

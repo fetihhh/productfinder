@@ -4,11 +4,13 @@
 //             npm run ingest -- verify  (toplama hariç hepsi)
 //             npm run ingest -- recheck (ayrıca tüm "verified" ürünleri tarihe bakmadan yeniden kontrol eder)
 //             npm run ingest -- no-stores (yeni mağaza keşfi ve kontrolleri atlanır)
+//             npm run ingest -- resupply  (toptancı aramasını tüm doğrulanmış/takip edilen ürünler için hemen yeniler)
 import { BIG_BRAND_MAX_RANK, SNAPSHOT_PER_RUN, STRICT_BRAND_CHECK, SUPPLIER_PER_RUN, TAVILY_DAILY_LIMIT, TAVILY_MONTHLY_LIMIT, VERIFY_PER_RUN } from "../config/limits.ts";
 import { directSearch } from "../dtc/directSearch.ts";
 import { tavilySearch, type SearchFn } from "../dtc/marketplaceSearch.ts";
 import { readSales } from "../dtc/sales.ts";
-import { findSuppliers } from "../dtc/suppliers.ts";
+import { imageHasher, productImageUrls } from "../dtc/imageHash.ts";
+import { findSuppliers, isImageMatch, SUPPLIER_SITES } from "../dtc/suppliers.ts";
 import { verifyProduct, type BrandState } from "../dtc/verify.ts";
 import { politeFetch, politeFetchBytes } from "../lib/http.ts";
 import {
@@ -32,6 +34,8 @@ import {
   updateTrendScores,
   updateWinnerScores,
 } from "../lib/repo.ts";
+import { parseTcmb, TCMB_URL } from "../lib/fx.ts";
+import { setJobState } from "../lib/stores.ts";
 import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranco.ts";
 import { enabledAdapters } from "../sources/index.ts";
 import { adSignals } from "./ads.ts";
@@ -182,16 +186,26 @@ async function snapshots(): Promise<boolean> {
 
 /** Doğrulanmış/takip edilen ürünler için toptancı adayları (AliExpress, Alibaba, Made-in-China). */
 async function suppliers(): Promise<boolean> {
-  const products = await productsToSource(SUPPLIER_PER_RUN);
-  console.log(`\n▶ Toptancı araması: ${products.length} ürün`);
+  const products = await productsToSource(SUPPLIER_PER_RUN, process.argv.includes("resupply"));
+  console.log(`\n▶ Toptancı araması: ${products.length} ürün (metin + görsel eşleştirme)`);
+  const hashImage = imageHasher((url) => politeFetchBytes(url, 5_000_000, "image/avif,image/webp,image/jpeg,image/png,*/*;q=0.5"));
   let ok = true;
   for (const p of products) {
     try {
-      const r = await findSuppliers({ name: p.name, brandDomain: p.brand_domain, productType: p.product_type }, politeFetch);
+      const images = await productImageUrls(p.image_url, p.product_url, politeFetch);
+      const imageHashes = (await Promise.all(images.map(hashImage))).filter((h): h is bigint => h !== null);
+      const r = await findSuppliers(
+        { name: p.name, brandDomain: p.brand_domain, productType: p.product_type, imageHashes, nameStartsWithBrand: !p.from_store },
+        politeFetch,
+        SUPPLIER_SITES,
+        hashImage,
+      );
       await saveSuppliers(p, r);
       const best = r.offers[0];
+      const byImage = r.offers.filter(isImageMatch).length;
       console.log(
         `  • ${p.name} — "${r.query}": ${r.offers.length} eşleşme` +
+          (byImage ? ` (📷 ${byImage} görselle)` : imageHashes.length ? "" : " (ürün görseli okunamadı)") +
           (best ? `, en iyi ${best.source} ${best.priceMin ?? "?"} ${best.currency ?? ""} (%${Math.round(best.similarity * 100)})` : "") +
           (r.failed.length ? ` · okunamadı: ${r.failed.join(", ")}` : ""),
       );
@@ -201,6 +215,19 @@ async function suppliers(): Promise<boolean> {
     }
   }
   return ok;
+}
+
+/** TCMB günlük kurları (kâr hesaplayıcı için). */
+async function exchangeRates(): Promise<boolean> {
+  const res = await politeFetch(TCMB_URL, "application/xml,text/xml");
+  const fx = res.ok ? parseTcmb(res.text) : null;
+  if (!fx) {
+    console.error(`\n▶ Döviz kurları: okunamadı (${res.ok ? "biçim tanınmadı" : res.reason})`);
+    return false;
+  }
+  await setJobState("fx", fx);
+  console.log(`\n▶ Döviz kurları (TCMB ${fx.date}): 1 USD = ${fx.rates.USD} TL, 1 EUR = ${fx.rates.EUR ?? "?"} TL`);
+  return true;
 }
 
 async function main() {
@@ -224,13 +251,14 @@ async function main() {
     if (n) console.log(`\n▶ Katı mod: pazaryerinde satan markaların ${n} ürünü daha elendi`);
   }
   const measured = await snapshots();
+  const fx = await exchangeRates();
   const sourced = await suppliers();
   const aged = await brandAges();
   const scores = await updateTrendScores();
   console.log(`\n▶ Trend skoru: ${scores.total} ürün, ${scores.updated} değişti`);
   console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
   console.log(`\nBitti: ${((Date.now() - started) / 1000).toFixed(1)} sn`);
-  if (![collected, discovered, checked, advertised, promoted, verified, ranked, measured, sourced, aged].every(Boolean)) process.exitCode = 1;
+  if (![collected, discovered, checked, advertised, promoted, verified, ranked, measured, fx, sourced, aged].every(Boolean)) process.exitCode = 1;
 }
 
 await main();

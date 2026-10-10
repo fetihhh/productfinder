@@ -1,4 +1,5 @@
 // Arayüz için ürün sorguları (yalnızca sunucu).
+import { IMAGE_MATCH_MAX } from "../config/limits.ts";
 import { adHistory, adSignalsFor, type AdSignalRow } from "./ads.ts";
 import { db } from "./db.ts";
 import type { ScoreBreakdown } from "./score.ts";
@@ -56,6 +57,7 @@ export type ProductRow = {
   supplier_min_usd: number | null;
   margin_ratio: number | null;
   supplier_checked_at: string | null;
+  supplier_image_match: boolean;
   brands: {
     platform: string | null;
     country: string | null;
@@ -124,7 +126,7 @@ export async function listProducts(f: Filters): Promise<{ rows: ProductRow[]; er
   const brandFilter = Boolean(f.platform || f.country || f.shipsTr || f.age || f.ads);
   const select = [
     "id, name, brand_domain, product_url, image_url, category, dtc_status, dtc_reason, trend_score, score_breakdown, winner_score, winner_breakdown, momentum_score, first_seen_at",
-    "price, currency, review_count, rating, availability, launched_at, variant_count, product_type, supplier_count, supplier_min_usd, margin_ratio, supplier_checked_at",
+    "price, currency, review_count, rating, availability, launched_at, variant_count, product_type, supplier_count, supplier_min_usd, margin_ratio, supplier_checked_at, supplier_image_match",
     `brands${brandFilter ? "!inner" : ""}(platform, country, ships_to_tr, tranco_rank, registered_at, first_product_at, ads_active, ad_points)`,
     "mentions(source, url, title, posted_at)",
     `tracking${f.track !== "all" ? "!inner" : ""}(status, note, tr_competitor, tr_est_cost, tr_note)`,
@@ -195,7 +197,11 @@ export type SupplierRow = {
   sold: number | null;
   supplier_name: string | null;
   similarity: number;
+  image_distance: number | null;
 };
+
+/** Toptan ilanın fotoğrafı ürün fotoğrafıyla aynı mı (dHash farkı ≤ eşik). */
+export const sameImage = (s: { image_distance: number | null }) => s.image_distance !== null && s.image_distance <= IMAGE_MATCH_MAX;
 
 export type HistoryPoint = { day: string; price: number | null; currency: string | null; review_count: number | null; rating: number | null; availability: string | null };
 
@@ -216,7 +222,7 @@ export async function getProduct(
     .select(
       [
         "id, name, brand_domain, product_url, image_url, category, dtc_status, dtc_reason, trend_score, score_breakdown, winner_score, winner_breakdown, momentum_score, first_seen_at",
-        "price, currency, review_count, rating, availability, launched_at, variant_count, product_type, supplier_count, supplier_min_usd, margin_ratio, supplier_checked_at",
+        "price, currency, review_count, rating, availability, launched_at, variant_count, product_type, supplier_count, supplier_min_usd, margin_ratio, supplier_checked_at, supplier_image_match",
         "brands(platform, country, ships_to_tr, tranco_rank, tranco_day, marketplace_evidence, registered_at, first_product_at, ads_active, ad_points)",
         "mentions(source, url, title, posted_at)",
         "tracking(status, note, tr_competitor, tr_est_cost, tr_note)",
@@ -230,7 +236,7 @@ export async function getProduct(
   const [history, ranks, suppliers, ads, adHist] = await Promise.all([
     db().from("product_snapshots").select("day, price, currency, review_count, rating, availability").eq("product_id", id).order("day").limit(400),
     db().from("traffic_ranks").select("day, rank").eq("domain", p.brand_domain).order("day").limit(400),
-    db().from("suppliers").select("url, source, title, image_url, price_min, price_max, currency, moq, sold, supplier_name, similarity").eq("product_id", id).order("similarity", { ascending: false }).limit(15),
+    db().from("suppliers").select("url, source, title, image_url, price_min, price_max, currency, moq, sold, supplier_name, similarity, image_distance").eq("product_id", id).order("similarity", { ascending: false }).limit(15),
     adSignalsFor([p.brand_domain]),
     adHistory(p.brand_domain),
   ]);
@@ -246,7 +252,9 @@ export async function getProduct(
       price_min: s.price_min === null ? null : Number(s.price_min),
       price_max: s.price_max === null ? null : Number(s.price_max),
       similarity: Number(s.similarity),
-    })),
+    }))
+      // Fotoğrafla eşleşen ilanlar önce.
+      .sort((a, b) => Number(sameImage(b)) - Number(sameImage(a)) || b.similarity - a.similarity),
     ads: ads.get(p.brand_domain) ?? null,
     adHistory: adHist,
   };

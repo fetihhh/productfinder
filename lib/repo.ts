@@ -1,7 +1,7 @@
 // Toplama işinin veritabanı yazma katmanı (yalnızca sunucu/cron).
 import { BIG_BRAND_MAX_RANK, REVERIFY_AFTER_DAYS, SUPPLIER_REFRESH_DAYS } from "../config/limits.ts";
 import type { SalesSnapshot } from "../dtc/sales.ts";
-import type { SupplierResult } from "../dtc/suppliers.ts";
+import { isImageMatch, type SupplierResult } from "../dtc/suppliers.ts";
 import { bigBrandReason, type VerifyResult } from "../dtc/verify.ts";
 import type { Candidate, SeenItem } from "../sources/types.ts";
 import { adPointsByDomain } from "./ads.ts";
@@ -323,26 +323,43 @@ export async function rejectBigBrands(): Promise<number> {
   return total;
 }
 
-export type ProductToSource = { id: string; name: string; brand_domain: string; product_type: string | null; price: number | null; currency: string | null };
+export type ProductToSource = {
+  id: string;
+  name: string;
+  brand_domain: string;
+  product_type: string | null;
+  price: number | null;
+  currency: string | null;
+  image_url: string | null;
+  product_url: string | null;
+  /** Yeni mağaza keşfinden geldi (adı markayla başlamaz). */
+  from_store: boolean;
+};
 
-/** Toptancı araması: doğrulanmış ve favori/incelenecek ürünlerden hiç aranmamış ya da süresi dolanlar. */
-export async function productsToSource(limit: number): Promise<ProductToSource[]> {
+/** Toptancı araması: doğrulanmış ve favori/incelenecek ürünlerden hiç aranmamış ya da süresi dolanlar (all: hepsi). */
+export async function productsToSource(limit: number, all = false): Promise<ProductToSource[]> {
   const stale = new Date(Date.now() - SUPPLIER_REFRESH_DAYS * 86_400_000).toISOString();
-  const cols = "id, name, brand_domain, product_type, price, currency";
+  const cols = "id, name, brand_domain, product_type, price, currency, image_url, product_url, mentions(source)";
   const due = `supplier_checked_at.is.null,supplier_checked_at.lt.${stale}`;
-  const [verified, tracked] = await Promise.all([
-    db().from("products").select(cols).eq("dtc_status", "verified").or(due).limit(limit),
-    db().from("products").select(`${cols}, tracking!inner(status)`).in("tracking.status", ["favorite", "review"]).or(due).limit(limit),
-  ]);
+  let verifiedQ = db().from("products").select(cols).eq("dtc_status", "verified");
+  let trackedQ = db().from("products").select(`${cols}, tracking!inner(status)`).in("tracking.status", ["favorite", "review"]);
+  if (!all) {
+    verifiedQ = verifiedQ.or(due);
+    trackedQ = trackedQ.or(due);
+  }
+  const [verified, tracked] = await Promise.all([verifiedQ.limit(limit), trackedQ.limit(limit)]);
   for (const r of [verified, tracked]) if (r.error) throw new Error(`toptancı listesi okunamadı: ${r.error.message}`);
   const byId = new Map<string, ProductToSource>();
-  for (const p of [...verified.data!, ...tracked.data!] as ProductToSource[]) {
-    byId.set(p.id, { id: p.id, name: p.name, brand_domain: p.brand_domain, product_type: p.product_type, price: p.price, currency: p.currency });
+  type Row = Omit<ProductToSource, "from_store"> & { mentions: { source: string }[] };
+  for (const p of [...verified.data!, ...tracked.data!] as unknown as Row[]) {
+    const { id, name, brand_domain, product_type, price, currency, image_url, product_url, mentions } = p;
+    const from_store = mentions.length > 0 && mentions.every((m) => m.source === "yenimagaza");
+    byId.set(id, { id, name, brand_domain, product_type, price, currency, image_url, product_url, from_store });
   }
   return [...byId.values()].slice(0, limit);
 }
 
-/** Toptancı adaylarını yeniler; en iyi eşleşmelerden (benzerlik ≥ %60) en düşük fiyatı ve kâr marjını yazar. */
+/** Toptancı adaylarını yeniler; en iyi eşleşmelerden (benzerlik ≥ %70, fotoğrafla eşleşen varsa yalnızca onlar) en düşük fiyatı ve kâr marjını yazar. */
 export async function saveSuppliers(p: ProductToSource, r: SupplierResult): Promise<void> {
   const { error: delErr } = await db().from("suppliers").delete().eq("product_id", p.id);
   if (delErr) throw new Error(`suppliers silinemedi: ${delErr.message}`);
@@ -361,6 +378,7 @@ export async function saveSuppliers(p: ProductToSource, r: SupplierResult): Prom
         sold: o.sold,
         supplier_name: o.supplierName,
         similarity: o.similarity,
+        image_distance: o.imageDistance,
       })),
       { onConflict: "product_id,url" },
     );
@@ -369,7 +387,13 @@ export async function saveSuppliers(p: ProductToSource, r: SupplierResult): Prom
   const { minUsd, margin } = supplierEconomics(r.offers, p.price === null ? null : Number(p.price), p.currency);
   const { error } = await db()
     .from("products")
-    .update({ supplier_checked_at: new Date().toISOString(), supplier_count: r.offers.length, supplier_min_usd: minUsd, margin_ratio: margin })
+    .update({
+      supplier_checked_at: new Date().toISOString(),
+      supplier_count: r.offers.length,
+      supplier_min_usd: minUsd,
+      margin_ratio: margin,
+      supplier_image_match: r.offers.some(isImageMatch),
+    })
     .eq("id", p.id);
   if (error) throw new Error(`products güncellenemedi: ${error.message}`);
 }

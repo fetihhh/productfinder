@@ -55,7 +55,9 @@ function SalesFacts({ p }: { p: ProductRow }) {
   if (p.supplier_count !== null) {
     facts.push(
       p.supplier_min_usd !== null
-        ? ["Toptan", `${formatPrice(p.supplier_min_usd, "USD")}'den · ${p.supplier_count} ilan`, "AliExpress / Alibaba / Made-in-China'da benzer ürünlerin en düşük birim fiyatı"]
+        ? p.supplier_image_match
+          ? ["Toptan", `${formatPrice(p.supplier_min_usd, "USD")}'den · 📷 aynı fotoğraf`, "Ürün fotoğrafıyla aynı fotoğrafı kullanan toptan ilanın en düşük birim fiyatı (büyük ihtimalle mağazanın tedarikçisi)"]
+          : ["Toptan", `${formatPrice(p.supplier_min_usd, "USD")}'den · ${p.supplier_count} ilan`, "AliExpress / Alibaba / Made-in-China'da benzer ürünlerin en düşük birim fiyatı (metin benzerliği)"]
         : ["Toptan", p.supplier_count ? `${p.supplier_count} benzer ilan (fiyat yok)` : "benzeri bulunamadı", "Toptancı araması"],
     );
   }

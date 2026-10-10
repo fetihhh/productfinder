@@ -64,3 +64,9 @@ export const AD_MIN_STORE_SCORE = 35;
 export const AD_RECHECK_DAYS = { found: 3, none: 10 } as const;
 export const AD_COUNTRIES = ["DE", "FR", "IT", "ES", "NL", "BE", "AT", "PL", "SE", "IE", "DK", "FI", "PT"];
 export const GRAPH_API_VERSION = "v24.0";
+
+/**
+ * Görsel eşleştirme: ürün fotoğrafıyla toptan ilan fotoğrafı arasındaki dHash farkı (256 bit) ≤ bu değer → aynı fotoğraf.
+ * Ölçüm: aynı fotoğrafın farklı boyut/sıkıştırma/kenar boşluğu 0–10, farklı ürünler 60+ (aynı boş tişörtün farklı baskısı 84).
+ */
+export const IMAGE_MATCH_MAX = 40;

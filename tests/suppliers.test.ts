@@ -36,6 +36,19 @@ test("supplierQuery: marka, model kodu ve pazarlama ekleri çıkarılır; ürün
   assert.equal(supplierQuery("Mibro GS Explorer S Pro", "mibrofit.com", "Smart Watch"), "explorer smart watch");
 });
 
+test("supplierQuery: yeni mağaza ürününde ilk sözcük marka sayılmaz; uzun adda ayraç sonrası açıklama atılır", () => {
+  const name = "Multifunctional UV-C Sterilizer Box - Portable Aromatherapy & Disinfection Chamber";
+  // Eski davranış: "Multifunctional" marka sanılıyor, açıklama sorguyu sonuçsuz bırakıyordu.
+  assert.equal(supplierQuery(name, "aerocleantech.store", null, false), "multifunctional sterilizer box");
+  assert.equal(supplierQuery("Bluetooth Pet Tracker & Anti-Loss Alarm", "1of1daily.com", null, false), "bluetooth pet tracker anti loss alarm");
+  assert.equal(supplierQuery("BLACK OUT", "1fastbreak1.com", null, false), "black out");
+  // Alan adının parçası olan sözcükler marka sayılır.
+  assert.equal(supplierQuery("Blue Foldable Dog Poop Catcher", "bluepets.store", null, false), "foldable dog poop catcher");
+  assert.equal(supplierQuery("Advent Bricks™ Nativity Set", "adventbricks.com", "Calendar", false), "nativity calendar");
+  // Kısa adda ayraç sonrası (ürün türü) korunur.
+  assert.equal(supplierQuery("TDM. Neo Hybrid Headphone - Speakers", "tdmofficial.com"), "neo hybrid headphone speakers");
+});
+
 test("similarity: tekil/çoğul eşleşmesiyle sözcük kapsama oranı", () => {
   assert.equal(similarity("neo hybrid headphone speakers", "Hybrid Headphone Speaker 2 in 1"), 0.75);
   assert.equal(similarity("adventure camera", "Bluetooth speaker"), 0);
@@ -106,6 +119,14 @@ test("findSuppliers: benzerlik eşiği, sıralama, okunamayan site", async () =>
   assert.equal(seen.find((s) => s.url.includes("aliexpress"))?.url, "https://www.aliexpress.com/w/wholesale-neo-hybrid-headphone-speakers.html");
   assert.match(seen.find((s) => s.url.includes("aliexpress"))?.extra?.Cookie ?? "", /c_tp=USD/);
   assert.equal(SUPPLIER_SITES[2].url("neo hybrid headphone"), "https://www.made-in-china.com/products-search/hot-china-products/Neo_Hybrid_Headphone.html");
+
+  // Yeni mağaza ürünü: iki sözcüklük ad ve ürün türü yok → aranmaz (istek gönderilmez).
+  const before = seen.length;
+  const short = await findSuppliers({ name: "BLACK OUT", brandDomain: "1fastbreak1.com", productType: null, nameStartsWithBrand: false }, async () => {
+    seen.push({ url: "x" });
+    return pages["www.aliexpress.com"];
+  });
+  assert.deepEqual([short.offers.length, short.failed, seen.length], [0, ["tarif çok kısa"], before]);
 });
 
 test("supplierEconomics ve supplyPoints: en düşük toptan fiyat ve marj", () => {

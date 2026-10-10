@@ -21,6 +21,8 @@
 //   gündem  20 × min(1, son 7 gündeki blog yazısı / 2)
 //   reklam  25 × min(1, son 14 günde açılan reklam / 3)   (reklam bütçesinin artırılması). Toplam en fazla 100.
 
+import { IMAGE_MATCH_MAX } from "../config/limits.ts";
+
 export type RankPoint = { day: string; rank: number | null };
 export type SnapshotPoint = { day: string; review_count: number | null };
 export type Range = { low: number; high: number };
@@ -138,14 +140,18 @@ export function supplyPoints(supplierMinUsd: number | null, margin: number | nul
   return 8 + (m >= 4 ? 12 : m >= 3 ? 9 : m >= 2 ? 5 : 0);
 }
 
-/** Benzerliği ≥ %70 olan toptancı ilanlarındaki en düşük birim fiyat (USD) ve perakende fiyata oranı. */
+/**
+ * Benzerliği ≥ %70 olan toptancı ilanlarındaki en düşük birim fiyat (USD) ve perakende fiyata oranı.
+ * Fotoğrafla eşleşen (aynı ürün olduğu neredeyse kesin) fiyatlı ilan varsa yalnızca onlar kullanılır.
+ */
 export function supplierEconomics(
-  offers: { similarity: number; priceMin: number | null; currency: string | null }[],
+  offers: { similarity: number; priceMin: number | null; currency: string | null; imageDistance?: number | null }[],
   retailPrice: number | null,
   retailCurrency: string | null,
 ): { minUsd: number | null; margin: number | null } {
-  const prices = offers
-    .filter((o) => o.similarity >= 0.7 && o.priceMin !== null && o.priceMin > 0)
+  const priced = offers.filter((o) => o.similarity >= 0.7 && o.priceMin !== null && o.priceMin > 0);
+  const byImage = priced.filter((o) => o.imageDistance != null && o.imageDistance <= IMAGE_MATCH_MAX);
+  const prices = (byImage.length ? byImage : priced)
     .map((o) => toUsd(o.priceMin, o.currency))
     .filter((n): n is number => n !== null && n > 0);
   if (prices.length === 0) return { minUsd: null, margin: null };

@@ -4,11 +4,13 @@ import { LineChart, ScoreBars } from "@/components/Charts";
 import { SOURCE_NAMES, STATUS } from "@/components/ProductCard";
 import { TrackingForm } from "@/components/TrackingForm";
 import { availabilityLabel, compact, countryLabel, dayLabel, formatPrice, launchLabel, moneyRange, rangeLabel } from "@/lib/format";
-import { getProduct } from "@/lib/products";
+import { getProduct, sameImage } from "@/lib/products";
 import { adLibraryPageUrl } from "@/dtc/adLibrary";
 import type { AdSignalRow } from "@/lib/ads";
 import { SOURCE_NAMES as SUPPLIER_SOURCES } from "@/dtc/suppliers";
-import { REVIEW_TO_SALES, visitsFromRank } from "@/lib/winner";
+import { REVIEW_TO_SALES, toUsd, visitsFromRank } from "@/lib/winner";
+import { getFx } from "@/lib/fx";
+import { ProfitCalculator } from "@/components/ProfitCalculator";
 
 function Kpi({ label, value, sub, hint }: { label: string; value: string; sub?: string; hint?: string }) {
   return (
@@ -95,7 +97,7 @@ function AdsSection({ domain, ads, history }: { domain: string; ads: AdSignalRow
 
 export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
   const { id } = await params;
-  const data = await getProduct(id);
+  const [data, fx] = await Promise.all([getProduct(id), getFx()]);
   if (!data) notFound();
   const { p, history, ranks, suppliers, ads, adHistory } = data;
   const w = p.winner_breakdown;
@@ -202,7 +204,8 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
           </p>
         </div>
         <p className="mb-3 text-xs text-zinc-500">
-          AliExpress, Alibaba ve Made-in-China&apos;da ürün tarifiyle bulunan benzer ilanlar. Eşleşme metin benzerliğiyle yapılır: aynı ürün olup olmadığını görselden kontrol edin.
+          AliExpress, Alibaba ve Made-in-China&apos;da ürün tarifiyle bulunan benzer ilanlar. En benzer ilanların fotoğrafı ürün fotoğraflarıyla
+          karşılaştırılır: &quot;Aynı fotoğraf&quot; işaretli ilan büyük ihtimalle mağazanın tedarikçisidir ve toptan fiyat yalnızca bu ilanlardan hesaplanır.
           Marj kargo, gümrük ve vergi hariçtir.
         </p>
         {p.supplier_checked_at === null ? (
@@ -217,13 +220,18 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
                 href={s.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex flex-col overflow-hidden rounded border border-zinc-200 hover:border-amber-500 dark:border-zinc-800"
+                className={`flex flex-col overflow-hidden rounded border hover:border-amber-500 ${sameImage(s) ? "border-emerald-500" : "border-zinc-200 dark:border-zinc-800"}`}
               >
-                <span className="block aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-900">
+                <span className="relative block aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-900">
+                  {sameImage(s) && (
+                    <span className="absolute left-1 top-1 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-medium text-white">📷 Aynı fotoğraf</span>
+                  )}
                   {s.image_url && <img src={s.image_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />}
                 </span>
                 <span className="flex flex-1 flex-col gap-0.5 p-2 text-xs">
-                  <span className="font-medium text-amber-700 dark:text-amber-400">{SUPPLIER_SOURCES[s.source]} · %{Math.round(s.similarity * 100)} benzer</span>
+                  <span className="font-medium text-amber-700 dark:text-amber-400">
+                    {SUPPLIER_SOURCES[s.source]} · {sameImage(s) ? "aynı fotoğraf" : `%${Math.round(s.similarity * 100)} benzer`}
+                  </span>
                   <span className="line-clamp-2" title={s.title}>{s.title}</span>
                   {s.price_min !== null && (
                     <span className="font-semibold">
@@ -240,6 +248,14 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
           </div>
         )}
       </section>
+
+      <ProfitCalculator
+        competitorUsd={toUsd(p.price, currency)}
+        supplierUsd={p.supplier_min_usd === null ? null : Number(p.supplier_min_usd)}
+        supplierByImage={p.supplier_image_match}
+        usdTry={fx?.rates.USD ?? null}
+        fxDate={fx?.date ?? null}
+      />
 
       <AdsSection domain={p.brand_domain} ads={ads} history={adHistory} />
 

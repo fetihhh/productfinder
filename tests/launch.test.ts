@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { anglesOf, guessLang, offerLines, turkishDrafts } from "../dtc/adCopy.ts";
+import { anglesOf, guessLang, offerLines, shortProductName, turkishDrafts } from "../dtc/adCopy.ts";
 import { audienceOf, turkeyTargeting } from "../dtc/audience.ts";
 import type { ArchivedAd } from "../dtc/adLibrary.ts";
 
@@ -57,4 +57,8 @@ test("turkishDrafts: rakibin açıları önce, teklif satırları reklamlardan; 
   assert.match(d[0].primary, /Galaxy Projector/);
   assert.match(d[0].primary, /✅ %33 indirim\n✅ Ücretsiz kargo\n✅ 30 gün koşulsuz iade/);
   assert.equal(d[4].headline, "%33 indirim: Galaxy Projector");
+  assert.equal(shortProductName("Cosmora Galaxy Projector — Multi-Slide Star Night Light"), "Cosmora Galaxy Projector");
+  assert.equal(shortProductName("BRASAPRO - LIMPIADOR DE PARRILLA"), "BRASAPRO LIMPIADOR DE PARRILLA");
+  assert.equal(shortProductName("CYCLAIR PRO® | Lunettes de vélo photochromiques"), "CYCLAIR PRO");
+  assert.equal(shortProductName("Posture Corrector Pro Max Ultra Edition"), "Posture Corrector Pro Max");
 });

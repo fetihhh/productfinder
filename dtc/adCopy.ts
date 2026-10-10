@@ -70,9 +70,17 @@ export function offerLines(o: Pick<DraftInput, "adOffers" | "storeOffer">): stri
   return lines.slice(0, 4);
 }
 
+/** Reklam metni için kısa ürün adı: ayraçtan ("—", " - ", "|", "·", ":", "(") önceki kısım, en fazla 4 kelime. */
+export function shortProductName(name: string): string {
+  const parts = name.replace(/[™®]/g, "").split(/\s+[—–|·:-]\s+|\s*[|(]/).map((x) => x.trim()).filter(Boolean);
+  // Yalnızca marka (tek kelime) ise ürün tanımı da eklenir: "BRASAPRO - LIMPIADOR DE PARRILLA".
+  const base = parts.length > 1 && parts[0].split(/\s+/).length === 1 ? `${parts[0]} ${parts[1]}` : (parts[0] ?? "");
+  return base.split(/\s+/).slice(0, 4).join(" ");
+}
+
 /** 4–5 Türkçe taslak: kazanan reklamların açıları önce, sonra teklif odaklı taslak. */
 export function turkishDrafts(input: DraftInput): CopyDraft[] {
-  const p = input.product.trim() || "[ürün adı]";
+  const p = shortProductName(input.product) || "[ürün adı]";
   const offers = offerLines(input);
   const bullets = offers.map((o) => `✅ ${o}`).join("\n");
   const top = offers[0];

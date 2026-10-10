@@ -66,7 +66,7 @@ cp .env.example .env.local   # değerleri doldurun
 | Servis | Ücretsiz limit | Bu projedeki kullanım |
 |---|---|---|
 | **Supabase Free** | 500 MB veritabanı, 5 GB çıkış/ay, 2 aktif proje. 7 gün işlem olmazsa proje duraklar | Birkaç MB. Günlük iş projeyi aktif tutar |
-| **GitHub Actions** (private repo) | 2.000 dakika/ay (public repoda sınırsız) | İlk ~10 gün (60 günlük geriye dönük tarama) ~35 dk/gün, sonra ~20–25 dk/gün ≈ 700 dk/ay. Public repolarda 60 gün commit olmazsa zamanlanmış iş durur |
+| **GitHub Actions** (private repo) | 2.000 dakika/ay (public repoda sınırsız) | Ölçülen: ~30 dk/gün (mağaza kontrolü, görsel özetleri, 150 reklam araması, 60 doğrulama, 40 toptancı araması) ≈ 900 dk/ay. Public repolarda 60 gün commit olmazsa zamanlanmış iş durur |
 | **Vercel Hobby** | 100 GB veri aktarımı, 1M fonksiyon çağrısı, 4 CPU-saat/ay; fonksiyon süresi 300 sn. **Yalnızca kişisel, ticari olmayan kullanım** | Tek kullanıcı, çok düşük trafik |
 | **Tavily Free** | 1.000 kredi/ay, kart istemez (basic arama = 1 kredi) | Kod sınırı: günde 30, ayda 950. Kota dolarsa ürün ertesi güne kalır, ücretli kullanıma **asla** geçilmez |
 | **Meta Reklam Kütüphanesi API'si** (graph.facebook.com/ads_archive) | Ücretsiz, kart istemez; kimliği doğrulanmış Facebook hesabı gerekir. Hız sınırı API tarafından uygulanır (aşılırsa istek reddedilir, ücret çıkmaz) | Günde en fazla 150 arama, saniyede 1. Hız sınırına takılırsa kalan aramalar ertesi güne kalır |

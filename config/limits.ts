@@ -79,3 +79,7 @@ export const IMAGE_MATCH_MAX = 40;
  */
 export const COPY_HASH_PER_RUN = Number(process.env.COPY_HASH_PER_RUN) || 400;
 export const COPY_MIN_STORE_SCORE = 35;
+
+/** Satış hareketi olan ürünleri aday yapma: en az bu kadar stok azalması, çalıştırma başına en fazla bu kadar mağaza. */
+export const MOVER_MIN_STOCK_DROPS = 2;
+export const MOVER_STORES_PER_RUN = 40;

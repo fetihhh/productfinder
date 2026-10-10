@@ -4,6 +4,8 @@ import {
   COPY_MIN_STORE_SCORE,
   DNS_CONCURRENCY,
   IMAGE_MATCH_MAX,
+  MOVER_MIN_STOCK_DROPS,
+  MOVER_STORES_PER_RUN,
   NRD_BOOTSTRAP_PER_RUN,
   STORE_CHECK_CONCURRENCY,
   STORE_CHECKS_PER_RUN,
@@ -11,6 +13,7 @@ import {
   STORE_PROMOTE_PER_RUN,
 } from "../config/limits.ts";
 import { hashToHex } from "../dtc/copies.ts";
+import { movementOrder } from "../dtc/storeSnapshot.ts";
 import { imageHasher } from "../dtc/imageHash.ts";
 import { registrationDate } from "../dtc/rdap.ts";
 import { parseStoreProducts, probeStore } from "../dtc/storeProbe.ts";
@@ -29,6 +32,7 @@ import {
   setJobState,
   storesToCheck,
   storesToPromote,
+  storesWithMovers,
 } from "../lib/stores.ts";
 import { unzipFirst } from "../lib/tranco.ts";
 
@@ -182,6 +186,49 @@ export async function promoteStores(): Promise<boolean> {
   return ok;
 }
 
+/**
+ * Mağazanın asıl satan ürünleri: öne çıkan ürün dışında stoğu en az 2 kez azalan ürünler de aday olur (mağaza başına en
+ * fazla 2). Öne çıkan ürün mağazanın vitrinidir; satış hareketi gösteren ürün çoğu zaman asıl "winner"dır.
+ */
+export async function promoteMovers(): Promise<boolean> {
+  const stores = await storesWithMovers(MOVER_STORES_PER_RUN, MOVER_MIN_STOCK_DROPS);
+  let created = 0;
+  let ok = true;
+  for (const s of stores) {
+    const movers = s.products_snapshot
+      .filter((i) => i.so >= MOVER_MIN_STOCK_DROPS && i.h !== s.hero_handle)
+      .sort(movementOrder)
+      .slice(0, 2);
+    for (const i of movers) {
+      try {
+        const r = await saveCandidate({
+          source: "yenimagaza",
+          sourceItemId: `${s.domain}/${i.h}`,
+          sourceUrl: `https://${s.domain}/`,
+          title: s.shop_name ?? s.domain,
+          productName: i.t,
+          brandDomain: registrableDomain(`https://${s.domain}/`) ?? s.domain,
+          productUrl: `https://${s.domain}/products/${i.h}`,
+          imageUrl: i.img,
+          category: null,
+          postedAt: new Date(i.c ?? Date.now()),
+          engagement: i.so,
+          comments: 0,
+          marketplaceLinks: [],
+        });
+        if (r.created) {
+          created++;
+          console.log(`  + ${i.t}  [${s.domain}] ${i.so} kez stok azaldı`);
+        }
+      } catch (err) {
+        ok = false;
+        console.error(`  ! ${s.domain}/${i.h}: ${(err as Error).message}`);
+      }
+    }
+  }
+  console.log(`\n▶ Satış hareketi olan ürünlerden aday: ${created} yeni (${stores.length} mağaza tarandı)`);
+  return ok;
+}
 /** Markaların yaşı: RDAP kayıt tarihi + Shopify'daki ilk ürünün tarihi. */
 export async function brandAges(limit = 80): Promise<boolean> {
   const list = await brandsWithoutAge(limit);

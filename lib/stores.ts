@@ -161,6 +161,23 @@ export async function storesToPromote(limit: number, minScore: number): Promise<
   return data as StoreToPromote[];
 }
 
+export type StoreWithMovers = { domain: string; shop_name: string | null; hero_handle: string | null; products_snapshot: SnapItem[] };
+
+/** Ürünlerinde stok hareketi olan yeni, açık mağazalar (hareket sırasına göre). */
+export async function storesWithMovers(limit: number, minDrops: number): Promise<StoreWithMovers[]> {
+  const since = new Date(Date.now() - NEW_STORE_MAX_AGE_DAYS * DAY).toISOString();
+  const { data, error } = await db()
+    .from("stores")
+    .select("domain, shop_name, hero_handle, products_snapshot")
+    .eq("status", "live")
+    .gte("first_product_at", since)
+    .gte("stock_drops", minDrops)
+    .not("products_snapshot", "is", null)
+    .order("stock_drops", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`stores okunamadı: ${error.message}`);
+  return data as StoreWithMovers[];
+}
 export async function markStorePromoted(domain: string, productId: string): Promise<void> {
   const { error } = await db().from("stores").update({ product_id: productId }).eq("domain", domain);
   if (error) throw new Error(`stores güncellenemedi: ${error.message}`);

@@ -40,7 +40,7 @@ import { setJobState } from "../lib/stores.ts";
 import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranco.ts";
 import { enabledAdapters } from "../sources/index.ts";
 import { adSignals } from "./ads.ts";
-import { brandAges, checkStores, copyClusters, discoverStores, promoteStores } from "./stores.ts";
+import { brandAges, checkStores, copyClusters, discoverStores, promoteMovers, promoteStores } from "./stores.ts";
 
 async function collect(): Promise<boolean> {
   let ok = true;
@@ -250,7 +250,10 @@ async function main() {
   const copied = skipStores ? true : await copyClusters();
   // Reklam sinyali aday seçiminden önce: reklam veren mağazaların toplam puanı yükselir.
   const advertised = await adSignals();
-  const promoted = skipStores ? true : await promoteStores();
+  const promotedHero = skipStores ? true : await promoteStores();
+  // Öne çıkan ürün dışında, mağazada stoğu tekrar tekrar azalan (asıl satan) ürünler.
+  const promotedMovers = skipStores ? true : await promoteMovers();
+  const promoted = promotedHero && promotedMovers;
   // Trafik sırası doğrulamadan önce: büyük markalar ağa çıkmadan ve Tavily kredisi harcanmadan elenir.
   const ranked = await traffic();
   const big = await rejectBigBrands();

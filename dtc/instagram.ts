@@ -24,6 +24,13 @@ const RESERVED = new Set([
   "web",
   "embed",
   "privacy",
+  // Tema/platform hesapları (temanın varsayılan sosyal bağlantısı; mağazanın kendi hesabı değil).
+  "shopify",
+  "shopifypartners",
+  "themefullstack",
+  "outofthesandbox",
+  "pixelunion",
+  "archetypethemes",
 ]);
 
 /** Ana sayfadaki instagram.com/<kullanıcı> bağlantılarından en sık geçen kullanıcı adı. */

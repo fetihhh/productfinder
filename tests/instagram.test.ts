@@ -8,12 +8,15 @@ test("instagramHandle: ana sayfadaki en sık hesap; gönderi/reels/paylaş bağl
     <a href="https://instagram.com/reel/abc">reel</a>
     <a href="https://www.instagram.com/Get.Cosmora/" class="social">IG</a>
     <a href="https://www.instagram.com/get.cosmora?igsh=1">IG</a>
-    <a href="https://www.instagram.com/shopify">x</a>
+    <a href="https://www.instagram.com/themefullstack">x</a>
+    <a href="https://www.instagram.com/themefullstack">x</a>
+    <a href="https://www.instagram.com/themefullstack">x</a>
     <a href="https://www.instagram.com/12345">x</a>`;
   assert.equal(instagramHandle(html), "get.cosmora");
   assert.equal(instagramHandle('<a href="https://www.instagram.com/explore/tags/x">'), null);
   assert.equal(instagramHandle('{"instagram":"https:\\/\\/instagram.com\\/brasapro"}'), "brasapro");
   assert.equal(instagramHandle(null), null);
+  assert.equal(instagramHandle('<a href="https://instagram.com/shopify">'), null); // temanın varsayılan bağlantısı
 });
 
 test("rankPosts: etkileşim = beğeni + 3 × yorum; ortancaya göre kaç kat", () => {

@@ -23,7 +23,10 @@ export async function igTargets(limit: number): Promise<IgTarget[]> {
     .order("total_score", { ascending: false })
     .limit(400);
   if (error) throw new Error(`stores okunamadı: ${error.message}`);
-  const usernames = [...new Set((stores ?? []).map((s) => s.instagram as string))];
+  // Birden çok mağazanın bağladığı hesap çoğu zaman temanın varsayılan bağlantısıdır (mağazanın hesabı değil): atlanır.
+  const { data: shared } = await db().rpc("shared_instagram_handles");
+  const skip = new Set(((shared as { instagram: string }[] | null) ?? []).map((r) => r.instagram));
+  const usernames = [...new Set((stores ?? []).map((s) => s.instagram as string))].filter((u) => !skip.has(u));
   if (usernames.length === 0) return [];
   const { data: accounts, error: e2 } = await db().from("ig_accounts").select("username, next_check_at").in("username", usernames);
   if (e2) throw new Error(`ig_accounts okunamadı: ${e2.message}`);
@@ -32,7 +35,7 @@ export async function igTargets(limit: number): Promise<IgTarget[]> {
   const out: IgTarget[] = [];
   for (const s of stores ?? []) {
     const u = s.instagram as string;
-    if (seen.has(u) || (next.get(u) ?? 0) > Date.now()) continue;
+    if (skip.has(u) || seen.has(u) || (next.get(u) ?? 0) > Date.now()) continue;
     seen.add(u);
     out.push({ username: u, domain: s.domain as string });
     if (out.length >= limit) break;

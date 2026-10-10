@@ -1,6 +1,6 @@
 // Instagram: mağazanın Instagram hesabı (ana sayfadaki bağlantı) ve resmi Instagram Graph API "Business Discovery" ile
 // hesabın herkese açık son gönderileri (beğeni, yorum, görsel/video adresi). Ücretsizdir; Meta erişim anahtarında
-// instagram_basic + pages_show_list izinleri ve Facebook sayfasına bağlı bir Instagram profesyonel hesabı gerekir.
+// instagram_basic + instagram_manage_insights + pages_show_list izinleri ve Facebook sayfasına bağlı bir Instagram profesyonel hesabı gerekir.
 // instagram.com sayfaları kazınmaz (robots.txt tüm botları engeller); yalnızca graph.facebook.com kullanılır.
 
 import { classifyGraphError } from "./adLibrary.ts";

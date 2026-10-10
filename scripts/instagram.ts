@@ -94,7 +94,7 @@ export async function instagramPosts(): Promise<boolean> {
   if (stopped) {
     console.error(`  ✖ Durduruldu: ${stopped}`);
     const granted = await ig.permissions();
-    const need = ["instagram_basic", "pages_show_list", "pages_read_engagement", "business_management"];
+    const need = ["instagram_basic", "instagram_manage_insights", "pages_show_list", "pages_read_engagement", "business_management"];
     console.error(`  anahtarın izinleri: ${granted.join(", ") || "okunamadı"}`);
     const missing = need.filter((p) => !granted.includes(p));
     if (missing.length) console.error(`  eksik izin: ${missing.join(", ")}`);

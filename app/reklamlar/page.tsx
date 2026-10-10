@@ -37,7 +37,7 @@ function IgNotice({ state, empty }: { state: InstagramState | null; empty: boole
           <li>Instagram uygulaması → Ayarlar → Hesap türü → <b>Profesyonel hesaba geç</b> (İşletme ya da İçerik üreticisi).</li>
           <li>Bir Facebook sayfası açın (ücretsiz) ve Instagram hesabını bu sayfaya bağlayın (Sayfa ayarları → Bağlı hesaplar → Instagram).</li>
           <li>
-            Graph API Explorer&apos;da uygulamanızı seçin → izinlere <code>instagram_basic</code>, <code>pages_show_list</code>, <code>pages_read_engagement</code>,{" "}
+            Graph API Explorer&apos;da uygulamanızı seçin → izinlere <code>instagram_basic</code>, <code>instagram_manage_insights</code>, <code>pages_show_list</code>, <code>pages_read_engagement</code>,{" "}
             <code>business_management</code> ekleyin → <b>Generate Access Token</b> → Access Token Debugger&apos;da <b>Extend</b>.
           </li>
           <li>

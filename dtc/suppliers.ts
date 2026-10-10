@@ -73,14 +73,14 @@ export function isBrandedOrUsed(title: string): boolean {
 export function supplierQuery(name: string, brandDomain: string, productType: string | null = null, nameStartsWithBrand = true): string {
   // Yeni mağaza ürünlerinde ad markayla başlamaz ("Multifunctional UV-C Sterilizer Box"): marka yalnızca alan adıdır.
   const brands = new Set(nameStartsWithBrand ? brandTokens(brandDomain, name) : brandTokens(brandDomain, ""));
-  // Alan adının parçası olan sözcükler de markadır: "Blue Foldable…" @ bluepets.store, "Advent Bricks…" @ adventbricks.com.
-  const label = brandTokens(brandDomain, "")[0] ?? "";
-  for (const t of tokens(name)) if (t.length >= 3 && label.length > t.length && label.includes(t)) brands.add(t);
+  // Alan adını oluşturan sözcükler de markadır: "Advent Bricks…" @ adventbricks.com (sözcükler birleşince alan adı),
+  // "Blue Foldable…" @ bluepets.store (sözcük + mağaza eki). "Cabin backpack" @ cabineo.store ise ürün tarifidir.
+  for (const t of domainBrandWords(brandTokens(brandDomain, "")[0] ?? "", tokens(name))) brands.add(t);
   const describe = (s: string) => tokens(s).filter((t) => !brands.has(t) && !/\d/.test(t) && !NOT_GENERIC.has(t) && t.length >= 3);
   let words = describe(name);
   // Uzun adlarda ayraçtan (" - ", "|", ",", "(") sonrası pazarlama açıklamasıdır ("… Box - Portable Aromatherapy & Disinfection
   // Chamber"): sorguyu toptancıda sonuçsuz bırakır. Ana bölüm en az 2 sözcükse yalnızca o aranır.
-  const main = describe(name.split(/\s[-–—|]\s|[,(|]/)[0]);
+  const main = describe(name.split(/\s[-–—|·•]\s|[,(|·•]/)[0]);
   if (words.length > 4 && main.length >= 2) words = main;
   for (const t of tokens(productType ?? "")) if (!words.some((w) => stem(w) === stem(t)) && !/\d/.test(t)) words.push(t);
   return (words.length ? words : tokens(name)).slice(0, 6).join(" ");
@@ -90,6 +90,33 @@ function stem(t: string): string {
   return t.length > 4 && t.endsWith("s") ? t.slice(0, -1) : t;
 }
 
+/** Mağaza alan adlarında ürün sözcüğüne eklenen yaygın ekler/önekler (bluepets, getlumitree, trycalm). */
+const STORE_SUFFIXES = ["pets", "pet", "shop", "store", "co", "home", "life", "hub", "hq", "daily", "mart", "world", "land", "lab", "labs", "official", "gear", "goods", "house", "club", "box", "studio"];
+const STORE_PREFIXES = ["get", "try", "my", "the", "shop", "buy", "go", "hello", "hey", "use"];
+
+/**
+ * Ürün adındaki sözcüklerden alan adını oluşturanlar: ardışık sözcüklerin birleşimi alan adına eşitse hepsi;
+ * alan adı = (önek) + sözcük + (ek) ise o sözcük.
+ */
+export function domainBrandWords(label: string, words: string[]): string[] {
+  const out = new Set<string>();
+  for (let i = 0; i < words.length; i++) {
+    let joined = "";
+    for (let j = i; j < Math.min(words.length, i + 4); j++) {
+      joined += words[j];
+      if (joined === label && j > i) for (let k = i; k <= j; k++) out.add(words[k]);
+    }
+  }
+  for (const w of words) {
+    if (w.length < 3 || w === label) continue;
+    for (const pre of ["", ...STORE_PREFIXES]) {
+      for (const suf of ["", ...STORE_SUFFIXES]) {
+        if ((pre || suf) && `${pre}${w}${suf}` === label) out.add(w);
+      }
+    }
+  }
+  return [...out];
+}
 /** "Case for X", "X için kılıf": aranan ürün değil, onun aksesuarı (sorguda aksesuar sözcüğü yoksa). */
 export function isAccessoryListing(query: string, title: string): boolean {
   const q = new Set(query.split(" ").map(stem));

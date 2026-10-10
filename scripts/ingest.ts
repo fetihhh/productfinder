@@ -221,7 +221,8 @@ async function suppliers(): Promise<boolean> {
         {
           name: english ?? p.name,
           brandDomain: p.brand_domain,
-          productType: p.product_type,
+          // Shopify ürün türü de mağazanın dilindedir ("belleza", "luces"): çevrilmiş sorguya eklenmez.
+          productType: english ? null : p.product_type,
           imageHashes,
           nameStartsWithBrand: !p.from_store,
           aliImageIds: images.map(aliImageId).filter((id): id is string => id !== null),

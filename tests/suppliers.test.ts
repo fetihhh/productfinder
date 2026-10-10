@@ -11,6 +11,7 @@ import {
   priceRange,
   similarity,
   supplierQuery,
+  domainBrandWords,
   SUPPLIER_SITES,
 } from "../dtc/suppliers.ts";
 import { bigBrandReason, isBigBrand, verifyProduct } from "../dtc/verify.ts";
@@ -45,6 +46,10 @@ test("supplierQuery: yeni mağaza ürününde ilk sözcük marka sayılmaz; uzun
   // Alan adının parçası olan sözcükler marka sayılır.
   assert.equal(supplierQuery("Blue Foldable Dog Poop Catcher", "bluepets.store", null, false), "foldable dog poop catcher");
   assert.equal(supplierQuery("Advent Bricks™ Nativity Set", "adventbricks.com", "Calendar", false), "nativity calendar");
+  // Alan adında geçse de ürün tarifi olan sözcük atılmaz; "·" ayraçtır.
+  assert.equal(supplierQuery("Sac à dos cabine Cabin backpack 40 cm", "cabineo.store", null, false).includes("cabin"), true);
+  assert.equal(supplierQuery("Smart LED Curtain Lights · facades, balconies and interior", "holachristmas.com", null, false), "smart led curtain lights");
+  assert.deepEqual(domainBrandWords("getlumitree", ["lumitree", "festive", "led", "projector"]), ["lumitree"]);
   // Kısa adda ayraç sonrası (ürün türü) korunur.
   assert.equal(supplierQuery("TDM. Neo Hybrid Headphone - Speakers", "tdmofficial.com"), "neo hybrid headphone speakers");
 });

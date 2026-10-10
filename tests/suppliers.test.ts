@@ -88,6 +88,7 @@ test("Toptancı sayfaları ayrıştırılır (AliExpress, Alibaba, Made-in-China
     moq: "500 pieces",
     sold: null,
     supplierName: "Shenzhen Audio Co., Ltd.",
+    rating: null,
   });
   assert.equal(alibaba[1].priceMin, 1200);
 
@@ -103,6 +104,7 @@ test("Toptancı sayfaları ayrıştırılır (AliExpress, Alibaba, Made-in-China
     moq: "1,000 Pieces",
     sold: null,
     supplierName: "Fuzhou Acme Electric Co., Ltd.",
+    rating: null,
   });
 });
 

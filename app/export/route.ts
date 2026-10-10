@@ -20,6 +20,7 @@ const COLUMNS = [
   ["Yorum", "review_count"],
   ["Toptancı 1", "supplier_1"],
   ["Toptancı 1 fiyat", "supplier_1_price"],
+  ["Toptancı 1 puan", "supplier_1_rating"],
   ["Toptancı 2", "supplier_2"],
   ["Toptancı 2 fiyat", "supplier_2_price"],
   ["Not", "note"],
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
   const { data, error } = await db()
     .from("products")
     .select(
-      "id, name, brand_domain, product_url, price, currency, winner_score, supplier_min_usd, margin_ratio, supplier_image_match, supplier_sold, supplier_sold_per_week, copy_count, review_count, tracking!inner(status, note), suppliers(url, price_min, currency, similarity, image_distance)",
+      "id, name, brand_domain, product_url, price, currency, winner_score, supplier_min_usd, margin_ratio, supplier_image_match, supplier_sold, supplier_sold_per_week, copy_count, review_count, tracking!inner(status, note), suppliers(url, price_min, currency, similarity, image_distance, rating)",
     )
     .in("tracking.status", ["favorite", "review"])
     .order("winner_score", { ascending: false });
@@ -50,7 +51,7 @@ export async function GET(request: Request) {
   type Row = Record<string, unknown> & {
     id: string;
     tracking: { status: string; note: string | null } | { status: string; note: string | null }[];
-    suppliers: { url: string; price_min: number | null; currency: string | null; similarity: number; image_distance: number | null }[];
+    suppliers: { url: string; price_min: number | null; currency: string | null; similarity: number; image_distance: number | null; rating: number | null }[];
   };
   const rows = (data as unknown as Row[]).map((p) => {
     const t = Array.isArray(p.tracking) ? p.tracking[0] : p.tracking;
@@ -61,6 +62,7 @@ export async function GET(request: Request) {
       note: t?.note,
       supplier_1: sup[0]?.url,
       supplier_1_price: sup[0]?.price_min !== undefined && sup[0]?.price_min !== null ? `${sup[0].price_min} ${sup[0].currency ?? ""}`.trim() : null,
+      supplier_1_rating: sup[0]?.rating ?? null,
       supplier_2: sup[1]?.url,
       supplier_2_price: sup[1]?.price_min !== undefined && sup[1]?.price_min !== null ? `${sup[1].price_min} ${sup[1].currency ?? ""}`.trim() : null,
       detail: `${origin}/p/${p.id}`,

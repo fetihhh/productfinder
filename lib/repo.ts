@@ -394,6 +394,7 @@ export async function saveSuppliers(p: ProductToSource, r: SupplierResult): Prom
         supplier_name: o.supplierName,
         similarity: o.similarity,
         image_distance: o.imageDistance,
+        rating: o.rating,
       })),
       { onConflict: "product_id,url" },
     );

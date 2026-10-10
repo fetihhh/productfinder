@@ -75,7 +75,7 @@ test("findSuppliers: fotoğrafla eşleşen ilan metin benzerliği düşük olsa 
         currency: "USD",
         moq: null,
         sold: null,
-        supplierName: null,
+        supplierName: null, rating: null
       })),
   };
   const fetchPage = async (url: string): Promise<FetchResult> => ({ ok: true, status: 200, url, contentType: "text/html", text: page });
@@ -106,8 +106,8 @@ test("findSuppliers: mağaza görselinin AliExpress kimliği ilanın görsel adr
     source: "aliexpress" as const,
     url: (q: string) => `https://x.test/${q}`,
     parse: () => [
-      { source: "aliexpress" as const, url: "https://x.test/item/1", title: "Mini UV Lamp Box Phone", imageUrl: `https://ae-pic-a1.aliexpress-media.com/kf/${id}.jpg`, priceMin: 6.5, priceMax: 6.5, currency: "USD", moq: null, sold: 120, supplierName: null },
-      { source: "aliexpress" as const, url: "https://x.test/item/2", title: "Sterilizer Box Multifunctional UV", imageUrl: "https://ae-pic-a1.aliexpress-media.com/kf/Sother.jpg", priceMin: 3, priceMax: 3, currency: "USD", moq: null, sold: 5, supplierName: null },
+      { source: "aliexpress" as const, url: "https://x.test/item/1", title: "Mini UV Lamp Box Phone", imageUrl: `https://ae-pic-a1.aliexpress-media.com/kf/${id}.jpg`, priceMin: 6.5, priceMax: 6.5, currency: "USD", moq: null, sold: 120, supplierName: null, rating: null },
+      { source: "aliexpress" as const, url: "https://x.test/item/2", title: "Sterilizer Box Multifunctional UV", imageUrl: "https://ae-pic-a1.aliexpress-media.com/kf/Sother.jpg", priceMin: 3, priceMax: 3, currency: "USD", moq: null, sold: 5, supplierName: null, rating: null },
     ],
   };
   let hashed = 0;

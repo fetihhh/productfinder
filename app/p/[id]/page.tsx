@@ -180,7 +180,13 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
                     </span>
                   )}
                   {s.moq && <span className="text-zinc-500">MOQ {s.moq}</span>}
-                  {s.sold !== null && <span className="text-zinc-500">{s.sold.toLocaleString("tr-TR")} satıldı</span>}
+                  {(s.sold !== null || s.rating !== null) && (
+                    <span className="text-zinc-500">
+                      {s.sold !== null ? `${s.sold.toLocaleString("tr-TR")} satıldı` : ""}
+                      {s.sold !== null && s.rating !== null ? " · " : ""}
+                      {s.rating !== null ? `★ ${Number(s.rating).toLocaleString("tr-TR")}` : ""}
+                    </span>
+                  )}
                   {s.supplier_name && <span className="truncate text-zinc-500" title={s.supplier_name}>{s.supplier_name}</span>}
                 </span>
               </a>

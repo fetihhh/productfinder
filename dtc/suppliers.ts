@@ -29,6 +29,8 @@ export type SupplierOffer = {
   moq: string | null;
   sold: number | null;
   supplierName: string | null;
+  /** İlan puanı (AliExpress yıldız ortalaması, 0–5); yoksa null. */
+  rating: number | null;
   /** Arama sözcüklerinin ilan başlığında geçme oranı (0..1); görselle eşleşen ilanda en az 0,95. */
   similarity: number;
   /** Ürün görseliyle dHash farkı (0 = aynı fotoğraf); karşılaştırılmadıysa null. */
@@ -207,6 +209,7 @@ export function parseAliExpressOffers(html: string): RawOffer[] {
     }
     const price = head.match(/"salePrice":\{[^}]*?"currencyCode":"([A-Z]{3})","minPrice":([\d.]+)/);
     const sold = head.match(/"real_trade_count":"(\d+)"/)?.[1] ?? head.match(/"tradeDesc":"([\d.,]+)\+?/)?.[1]?.replace(/[.,]/g, "");
+    const star = Number(head.match(/"starRating":([\d.]+)/)?.[1]);
     out.push({
       source: "aliexpress",
       url: `https://www.aliexpress.com/item/${id}.html`,
@@ -218,6 +221,7 @@ export function parseAliExpressOffers(html: string): RawOffer[] {
       moq: null,
       sold: sold ? Number(sold) : null,
       supplierName: null,
+      rating: star > 0 && star <= 5 ? star : null,
     });
   }
   return out;
@@ -243,6 +247,7 @@ export function parseAlibabaOffers(html: string): RawOffer[] {
       moq: it.moq ?? null,
       sold: null,
       supplierName: it.supplier?.name ?? null,
+      rating: null,
     }];
   });
 }
@@ -268,6 +273,7 @@ export function parseMadeInChinaOffers(html: string): RawOffer[] {
       moq: block.match(/<span>([^<]+)<\/span>\s*<\/span>\s*<span class="moq-text">/)?.[1]?.trim() ?? null,
       sold: null,
       supplierName: decodeEntities(block.match(/class="company-name[^"]*">\s*<a[^>]*title="([^"]+)"/)?.[1] ?? "") || null,
+      rating: null,
     });
   }
   return out;
@@ -357,7 +363,7 @@ export async function findSuppliers(
         }
         const offers = scored
           .filter((o) => o.similarity >= MIN_SIMILARITY)
-          .sort((a, b) => Number(isImageMatch(b)) - Number(isImageMatch(a)) || b.similarity - a.similarity || (b.sold ?? 0) - (a.sold ?? 0))
+          .sort((a, b) => Number(isImageMatch(b)) - Number(isImageMatch(a)) || b.similarity - a.similarity || (b.sold ?? 0) - (a.sold ?? 0) || (b.rating ?? 0) - (a.rating ?? 0))
           .slice(0, PER_SOURCE);
         if (offers.length) return offers;
       }

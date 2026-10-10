@@ -216,6 +216,7 @@ export type SupplierRow = {
   supplier_name: string | null;
   similarity: number;
   image_distance: number | null;
+  rating: number | null;
 };
 
 /** Toptan ilanın fotoğrafı ürün fotoğrafıyla aynı mı (dHash farkı ≤ eşik). */
@@ -256,7 +257,7 @@ export async function getProduct(
   const [history, ranks, suppliers, ads, adHist, tr] = await Promise.all([
     db().from("product_snapshots").select("day, price, currency, review_count, rating, availability").eq("product_id", id).order("day").limit(400),
     db().from("traffic_ranks").select("day, rank").eq("domain", p.brand_domain).order("day").limit(400),
-    db().from("suppliers").select("url, source, title, image_url, price_min, price_max, currency, moq, sold, supplier_name, similarity, image_distance").eq("product_id", id).order("similarity", { ascending: false }).limit(15),
+    db().from("suppliers").select("url, source, title, image_url, price_min, price_max, currency, moq, sold, supplier_name, similarity, image_distance, rating").eq("product_id", id).order("similarity", { ascending: false }).limit(15),
     adSignalsFor([p.brand_domain]),
     adHistory(p.brand_domain),
     db().from("translations").select("translated").eq("text", p.name.trim()).limit(1).maybeSingle(),

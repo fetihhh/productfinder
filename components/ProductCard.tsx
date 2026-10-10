@@ -32,6 +32,37 @@ const badge = "rounded px-1.5 py-0.5 text-xs font-medium";
 export const RISING_BADGE = 40;
 
 /** Satışa dair işaretler: fiyat, yorum, stok, çıkış tarihi, mağaza ülkesi, Türkiye'ye gönderim. */
+/** Winner skorunun en çok katkı veren bileşenleri (kendi azami puanına oranla), kısa gerekçe etiketleri olarak. */
+const WINNER_PARTS: { key: keyof NonNullable<ProductRow["winner_breakdown"]>["parts"]; max: number; label: (p: ProductRow) => string }[] = [
+  { key: "talep", max: 25, label: (p) => (p.review_count ? `${p.review_count.toLocaleString("tr-TR")} yorum` : "Tedarikçide çok satıyor") },
+  { key: "ivme", max: 20, label: () => "Satışı hızlanıyor" },
+  { key: "trafik", max: 15, label: () => "Site trafiği" },
+  { key: "gundem", max: 10, label: () => "Bloglarda gündemde" },
+  { key: "fiyat", max: 10, label: () => "Uygun fiyat bandı" },
+  { key: "tedarik", max: 20, label: (p) => (p.margin_ratio ? `Marj ${Number(p.margin_ratio).toLocaleString("tr-TR")}×` : "Toptancısı var") },
+  { key: "reklam", max: 15, label: () => "Reklam veriyor" },
+  { key: "hareket", max: 10, label: () => "📉 Stok hareketi" },
+  { key: "kopya", max: 10, label: (p) => `${p.copy_count} rakip mağaza` },
+];
+
+function WinnerReasons({ p }: { p: ProductRow }) {
+  const parts = p.winner_breakdown?.parts;
+  if (!parts) return null;
+  const top = WINNER_PARTS.map((w) => ({ ...w, ratio: Number(parts[w.key] ?? 0) / w.max }))
+    .filter((w) => w.ratio >= 0.4)
+    .sort((a, b) => b.ratio - a.ratio)
+    .slice(0, 3);
+  if (top.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1" title="Winner skoruna en çok katkı veren bileşenler">
+      {top.map((w) => (
+        <span key={w.key} className="rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-900 ring-1 ring-amber-200 dark:bg-amber-950 dark:text-amber-200 dark:ring-amber-900">
+          {w.label(p)}
+        </span>
+      ))}
+    </div>
+  );
+}
 function SalesFacts({ p }: { p: ProductRow }) {
   const price = formatPrice(p.price, p.currency);
   const availability = availabilityLabel(p.availability);
@@ -108,7 +139,9 @@ export function ProductCard({ p }: { p: ProductRow }) {
   const b = p.score_breakdown;
   const w = p.winner_breakdown?.parts;
   const scoreTitle = [
-    w ? `Winner: talep ${w.talep} + ivme ${w.ivme} + trafik ${w.trafik} + gündem ${w.gundem} + fiyat ${w.fiyat}` : null,
+    w
+      ? `Winner: talep ${w.talep} + ivme ${w.ivme} + trafik ${w.trafik} + gündem ${w.gundem} + fiyat ${w.fiyat} + tedarik ${w.tedarik ?? 0} + reklam ${w.reklam ?? 0} + stok hareketi ${w.hareket ?? 0} + rakip ${w.kopya ?? 0}`
+      : null,
     b ? `Trend ${Number(p.trend_score).toFixed(0)}: kaynak ${b.parts.kaynak} + artış ${b.parts.artis} + hacim ${b.parts.hacim} (${b.sources} kaynak · 7 gün ${b.m7} · 30 gün ${b.m30})` : null,
   ].filter(Boolean).join("\n");
   const t = p.tracking;
@@ -148,6 +181,7 @@ export function ProductCard({ p }: { p: ProductRow }) {
           {p.brand_domain} ↗
         </a>
 
+        <WinnerReasons p={p} />
         <SalesFacts p={p} />
         <Link href={`/p/${p.id}`} className="text-sm font-medium text-amber-700 hover:underline dark:text-amber-400">
           Grafikler ve detay →

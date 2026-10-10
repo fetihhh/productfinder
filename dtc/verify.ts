@@ -133,6 +133,29 @@ function isFresh(checkedAt: string | null, now: number): boolean {
   return Boolean(checkedAt) && now - Date.parse(checkedAt!) < BRAND_RECHECK_DAYS * 86_400_000;
 }
 
+/**
+ * Ürün düzeyi eşleşme. Yeni mağaza ürünlerinde marka mağaza adıdır; ama mağaza başka bir markanın ürününü de satıyor
+ * olabilir ("Wacaco Prestina Portable Coffee Press" @ furtherfield.co). Bu yüzden ürün adının ilk kelimesini marka sayan
+ * aramayla da bakılır. Ürün düzeyi eşleşme katıdır (model kelimelerinin ilki ve en az %60'ı ilanda geçmeli).
+ */
+export function findProductListing(
+  results: Parameters<typeof findMarketplaceListing>[0],
+  brandDomain: string,
+  productName: string,
+  brandWords: string[] | undefined,
+): ReturnType<typeof findMarketplaceListing> {
+  const own = findMarketplaceListing(results, brandDomain, productName, brandWords);
+  if (own || !brandWords) return own;
+  // İlk kelime yalnızca marka gibi yazılmışsa marka sayılır: mağazada ™/® ile ("Wacaco™ …") ya da pazaryeri başlığında
+  // tamamen büyük harfle ("WACACO Prestina …"). Genel kelimeler ("Lumen Lamp", "Calendario de Adviento") böylece eleme sebebi olmaz.
+  const first = productName.trim().split(/\s+/)[0]?.replace(/[™®©]+$/, "") ?? "";
+  if (first.length < 3) return null;
+  const marked = new RegExp(`^${first.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[™®]`).test(productName.trim());
+  const upper = first.toUpperCase();
+  const brandLike = (title: string) => marked || (first.length >= 4 && title.split(/[^\p{L}\p{N}]+/u).includes(upper));
+  const other = findMarketplaceListing(results.filter((r) => brandLike(r.title)), brandDomain, productName);
+  return other ? { url: other.url, why: `${other.why}, ürün başka bir markanın` } : null;
+}
 export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promise<VerifyResult> {
   const now = deps.now ?? Date.now();
   const evidence: string[] = [];
@@ -311,7 +334,7 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
   if (deps.directSearch) {
     const d = await deps.directSearch(directQuery(brandName, input.productName));
     if (d.ok) {
-      const listing = findMarketplaceListing(d.results, input.brandDomain, input.productName, brandWords);
+      const listing = findProductListing(d.results, input.brandDomain, input.productName, brandWords);
       if (listing) {
         if (STRICT_BRAND_CHECK) r.brandCheck = { status: "found", evidence: `${listing.why}: ${listing.url}` };
         return done("rejected_marketplace", `Pazaryerinde bulundu (${listing.why}, doğrudan arama): ${listing.url}`);
@@ -349,7 +372,7 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
     if (outcome.quota && directComplete && VERIFY_WITH_DIRECT_ONLY) return done("verified", WIDE_PENDING, true);
     return done("unverified", `${QUOTA_PREFIX}: ${outcome.reason}`, true);
   }
-  const listing = findMarketplaceListing(outcome.results, input.brandDomain, input.productName, brandWords);
+  const listing = findProductListing(outcome.results, input.brandDomain, input.productName, brandWords);
   if (listing) {
     // Markanın bir ürünü pazaryerinde → katı modda marka da "found" (aynı markanın diğer ürünleri de elenir).
     if (STRICT_BRAND_CHECK) r.brandCheck = { status: "found", evidence: `${listing.why}: ${listing.url}` };

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { findBrandListing, findMarketplaceListing, isBookListing } from "../dtc/marketplaceSearch.ts";
+import { findProductListing } from "../dtc/verify.ts";
 import { clip } from "../lib/text.ts";
 
 test("clip: emoji ortasından kesilmez, bozuk vekil karakter temizlenir", () => {
@@ -32,4 +33,19 @@ test("findMarketplaceListing ve findBrandListing: kitap ilanı sayılmaz", () =>
   const book = [{ title: "Mineraly Restore Chews", url: "https://www.amazon.com/dp/5171221561", content: "restore chews" }];
   assert.equal(findMarketplaceListing(book, "getmineraly.com", "Mineraly Restore Chews"), null);
   assert.equal(findBrandListing(book, "Mineraly", "getmineraly.com", "Mineraly Restore Chews"), null);
+});
+
+test("findProductListing: yeni mağaza başka markanın ürününü satıyorsa (ilk kelime marka) ürün düzeyinde yakalanır", () => {
+  const results = [{ title: "WACACO Prestina Portable Coffee Press, Manual Espresso Maker", url: "https://www.amazon.com/dp/B0ABCDE123", content: "portable coffee press" }];
+  const storeBrand = ["furtherfield"];
+  const r = findProductListing(results, "furtherfield.co", "Wacaco Prestina Portable Coffee Press", storeBrand);
+  assert.ok(r);
+  assert.match(r!.why, /başka bir markanın/);
+  // ™ ile işaretli ilk kelime de marka sayılır (başlık büyük harf olmasa da).
+  const plain = [{ title: "Wacaco Prestina Portable Coffee Press", url: "https://www.amazon.com/dp/B0ABCDE124", content: "" }];
+  assert.ok(findProductListing(plain, "furtherfield.co", "Wacaco™ Prestina Portable Coffee Press", storeBrand));
+  assert.equal(findProductListing(plain, "furtherfield.co", "Wacaco Prestina Portable Coffee Press", storeBrand), null);
+  // Uydurma mağaza adı + genel ürün: ilk kelime ("Calendario") ilanda model kelimeleriyle birlikte geçmez → eşleşme yok.
+  const advent = [{ title: "Advent Calendar 2026 Christmas Countdown", url: "https://www.amazon.com/dp/B0ZZZZZZZZ", content: "" }];
+  assert.equal(findProductListing(advent, "advientocristiano.store", "Calendario de Adviento de Navidad 2026", ["advientocristiano"]), null);
 });

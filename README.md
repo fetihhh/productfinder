@@ -29,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0014`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0015`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -132,6 +132,10 @@ Amaç: **son 5 ayda açılmış küçük dropshipping mağazalarını** yakalama
 6. **Aday:** toplam puanı (mağaza puanı + reklam puanı + kopya puanı, en fazla 100) ≥ 55, açık ve ilk ürünü son 150 gün içinde olan mağazanın ana sayfasında öne çıkardığı ürün (yoksa en yeni fiziksel ürün) aday olur; sonra normal hattan geçer: pazaryeri kontrolü → toptancı araması → skorlar.
 
 **Yeni mağazalar** sayfası (`/yeni`): açık yeni mağazalar, mağaza yaşı, ürün sayısı, indirim ve dropship işaretleri, AliExpress görseli, aynı ürünü satan rakip mağazalar ("N mağaza daha satıyor" → kümeyi listeler; "Aynı ürünü satan en çok mağaza" sıralaması), Türkiye'ye gönderim, toptan fiyat/marj ve keşif hattının özeti (bulunan / açık / kapalı / kapanmış). Ana listede de **Mağaza yaşı** filtresi (≤ 30 / 90 / 150 gün) vardır; markaların yaşı RDAP kayıt tarihi ve Shopify'daki ilk ürün tarihinden hesaplanır.
+
+**Mağaza detayı** (`/m/<alan adı>`): puan dökümü (odak, yenilik, dropship, indirim, fiyat, hareket, reklam, kopya, merch), kontrol geçmişi grafikleri (ürün sayısı, stokta olan varyant oranı), reklamlar, aynı ürünü satan mağazalar ve **ürün bazında hareket**: puanı ≥ 35 olan mağazalarda her kontrolde ürün listesinin anlık görüntüsü saklanır (en fazla 60 ürün); stokta olan varyant sayısı azalan ("📉 N kez stok azaldı"), fiyatı değişen ve yeni eklenen ürünler en üste çıkar — mağazanın asıl sattığı ürün genelde budur. Yeni mağazalar sayfasında **En çok stok hareketi** sıralaması vardır.
+
+**Shopify kısıtlaması:** aynı IP'den çok sayıda mağazaya istek gidince Shopify tüm mağazalar için geçici olarak 429 ("çok fazla istek") döner — robots.txt dahil. Bu durumda robots.txt "yasak" sayılmaz, istek yapılmaz ve mağaza durumu korunur (ertesi gün yeniden denenir); art arda 25 kısıtlama gelirse günlük kontrol durdurulur ve kalan mağazalar ertesi güne kalır (devre kesici).
 
 **Bilinen sınırlar:** WhoisDS ücretsiz listesi tüm kayıtları değil bir kısmını içerir; 60 günden eski mağazalar ancak izlemeye alındıktan sonra yaşlanarak listede kalır (5 aylık pencere birkaç ay içinde dolar). "Hareket" işaretleri en az iki haftalık kontrol gerektirir.
 

@@ -78,6 +78,12 @@ test("probeStore: açık, şifreli, kapalı ve silinmiş mağaza", async () => {
   assert.equal((await probeStore("shop.example", async (u) => ({ ok: false, url: u, reason: "HTTP 402", retryable: false }))).state, "closed");
   assert.equal((await probeStore("shop.example", async (u) => ({ ok: false, url: u, reason: "HTTP 404", retryable: false }))).state, "dead");
   assert.equal((await probeStore("shop.example", async (u) => ({ ok: false, url: u, reason: "HTTP 429", retryable: true }))).state, "error");
+  // robots.txt kalıcı yasak → kapanmış sayılır; geçici okunamaması (Shopify 429) → hata, ertesi gün yeniden denenir.
+  assert.equal((await probeStore("shop.example", async (u) => ({ ok: false, url: u, reason: "robots.txt izin vermiyor", retryable: false }))).state, "dead");
+  assert.equal(
+    (await probeStore("shop.example", async (u) => ({ ok: false, url: u, reason: "robots.txt geçici olarak okunamadı (HTTP 429)", retryable: true }))).state,
+    "error",
+  );
   assert.deepEqual(await probeStore("shop.example", async (u) => ok(u, '{"products":[]}')), { state: "closed", why: "Boş mağaza" });
 });
 

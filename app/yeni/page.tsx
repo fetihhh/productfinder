@@ -77,6 +77,7 @@ export default async function NewStoresPage({ searchParams }: PageProps<"/yeni">
           <option value="products">En az ürün (tek ürün mağazaları)</option>
           <option value="ads">En çok reklam</option>
           <option value="copies">Aynı ürünü satan en çok mağaza</option>
+          <option value="moving">En çok stok hareketi</option>
         </select>
         <label className="flex items-center gap-1.5 text-sm">
           <input type="checkbox" name="tr" value="1" defaultChecked={f.tr} className="h-4 w-4" /> Türkiye&apos;ye gönderenler
@@ -210,14 +211,27 @@ export default async function NewStoresPage({ searchParams }: PageProps<"/yeni">
                       </dd>
                     </>
                   )}
+                  {s.stock_drops > 0 && (
+                    <>
+                      <dt className="text-zinc-500">Hareket</dt>
+                      <dd className="font-medium text-rose-700 dark:text-rose-400" title="İki kontrol arasında stokta olan varyant sayısı azaldı (satış işareti)">
+                        {s.moving_products} üründe {s.stock_drops} kez stok azaldı
+                      </dd>
+                    </>
+                  )}
                   <dt className="text-zinc-500">Kontrol</dt>
                   <dd>{s.checks} kez</dd>
                 </dl>
-                {s.product_id && (
-                  <Link href={`/p/${s.product_id}`} className="mt-auto pt-1 text-sm font-medium text-amber-700 hover:underline dark:text-amber-400">
-                    Doğrulama, toptancı ve grafikler →
+                <div className="mt-auto flex flex-wrap gap-x-3 pt-1 text-sm font-medium">
+                  <Link href={`/m/${s.domain}`} className="text-sky-700 hover:underline dark:text-sky-400">
+                    Mağaza detayı →
                   </Link>
-                )}
+                  {s.product_id && (
+                    <Link href={`/p/${s.product_id}`} className="text-amber-700 hover:underline dark:text-amber-400">
+                      Toptancı ve kâr →
+                    </Link>
+                  )}
+                </div>
               </div>
             </article>
           );

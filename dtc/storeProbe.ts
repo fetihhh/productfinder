@@ -127,7 +127,8 @@ export async function probeStore(domain: string, fetchPage: FetchPage): Promise<
   const res = await fetchPage(`https://${domain}/products.json?limit=250`, "application/json");
   if (!res.ok) {
     if (/HTTP (402|423)/.test(res.reason)) return { state: "closed", why: `Mağaza kapalı (${res.reason})` };
-    if (/HTTP (404|410)|robots/.test(res.reason)) return { state: "dead", why: res.reason };
+    // robots.txt yasağı kalıcıdır; robots.txt'nin geçici okunamaması (429/5xx) değil.
+    if (/HTTP (404|410)/.test(res.reason) || (/robots/.test(res.reason) && !res.retryable)) return { state: "dead", why: res.reason };
     return { state: "error", why: res.reason };
   }
   if (/\/password\b/.test(new URL(res.url).pathname)) return { state: "closed", why: "Şifreli (henüz açılmamış)" };
@@ -192,20 +193,29 @@ export function storeActivity(prev: { product_count: number | null; available_va
  *   baskılı giyim/merch mağazası (ürünlerin ≥ %50'si) −20.
  * Fiziksel ürün oranı %50'nin altındaysa (dijital/hizmet) puan 0.
  */
-export function storeScore(s: LiveStore, activity: StoreActivity, now = Date.now()): number {
-  if (s.productCount === 0 || s.physicalCount / Math.max(1, s.products.length) < 0.5) return 0;
+export type StoreScoreParts = { odak: number; yenilik: number; dropship: number; indirim: number; fiyat: number; hareket: number; merch: number };
+
+/** Puanın bileşenleri (merch eksi puandır). Fiziksel olmayan mağazada null. */
+export function storeScoreParts(s: LiveStore, activity: StoreActivity, now = Date.now()): StoreScoreParts | null {
+  if (s.productCount === 0 || s.physicalCount / Math.max(1, s.products.length) < 0.5) return null;
   const n = s.productCount;
   const total = Math.max(1, s.products.length);
-  const odak = n <= 1 ? 25 : n <= 5 ? 21 : n <= 15 ? 15 : n <= 50 ? 8 : 2;
   const age = s.firstProductAt ? (now - Date.parse(s.firstProductAt)) / DAY : Infinity;
-  const yenilik = age <= 30 ? 15 : age <= 90 ? 10 : age <= 150 ? 6 : 0;
-  const dropship = s.dropshipCount / total >= 0.5 ? 20 : s.dropshipCount > 0 ? 10 : 0;
-  const indirim = s.discountedCount / total >= 0.5 ? 10 : 0;
   const hp = s.hero?.price ?? null;
-  const fiyat = hp !== null && hp >= 15 && hp <= 150 ? 10 : 0;
-  const hareket = (activity.productGrowth > 0 ? 10 : 0) + (activity.soldOut > 0 ? 10 : 0);
-  const merch = s.apparelCount / total >= 0.5 ? 20 : 0;
-  return Math.max(0, odak + yenilik + dropship + indirim + fiyat + hareket - merch);
+  return {
+    odak: n <= 1 ? 25 : n <= 5 ? 21 : n <= 15 ? 15 : n <= 50 ? 8 : 2,
+    yenilik: age <= 30 ? 15 : age <= 90 ? 10 : age <= 150 ? 6 : 0,
+    dropship: s.dropshipCount / total >= 0.5 ? 20 : s.dropshipCount > 0 ? 10 : 0,
+    indirim: s.discountedCount / total >= 0.5 ? 10 : 0,
+    fiyat: hp !== null && hp >= 15 && hp <= 150 ? 10 : 0,
+    hareket: (activity.productGrowth > 0 ? 10 : 0) + (activity.soldOut > 0 ? 10 : 0),
+    merch: s.apparelCount / total >= 0.5 ? -20 : 0,
+  };
+}
+
+export function storeScore(s: LiveStore, activity: StoreActivity, now = Date.now()): number {
+  const p = storeScoreParts(s, activity, now);
+  return p ? Math.max(0, p.odak + p.yenilik + p.dropship + p.indirim + p.fiyat + p.hareket + p.merch) : 0;
 }
 
 /**

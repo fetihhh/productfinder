@@ -1,6 +1,7 @@
 // Yeni mağaza keşfinin veritabanı katmanı (yalnızca cron).
-import { NEW_STORE_MAX_AGE_DAYS } from "../config/limits.ts";
-import { nextCheck, storeActivity, storeScore, type StoreProbe } from "../dtc/storeProbe.ts";
+import { COPY_MIN_STORE_SCORE, NEW_STORE_MAX_AGE_DAYS } from "../config/limits.ts";
+import { nextCheck, storeActivity, storeScore, storeScoreParts, type StoreProbe } from "../dtc/storeProbe.ts";
+import { mergeSnapshot, type SnapItem } from "../dtc/storeSnapshot.ts";
 import { db } from "./db.ts";
 
 const DAY = 86_400_000;
@@ -32,12 +33,12 @@ export async function insertStores(domains: string[], source: string, registered
   return inserted;
 }
 
-export type StoreToCheck = { domain: string; registered_on: string | null; discovered_at: string; first_product_at: string | null };
+export type StoreToCheck = { domain: string; registered_on: string | null; discovered_at: string; first_product_at: string | null; status?: string };
 
 export async function storesToCheck(limit: number): Promise<StoreToCheck[]> {
   const { data, error } = await db()
     .from("stores")
-    .select("domain, registered_on, discovered_at, first_product_at")
+    .select("domain, registered_on, discovered_at, first_product_at, status")
     .in("status", ["pending", "closed", "live"])
     .lte("next_check_at", new Date().toISOString())
     .order("next_check_at", { ascending: true })
@@ -66,8 +67,12 @@ export async function saveStoreCheck(s: StoreToCheck, probe: StoreProbe): Promis
 
   const firstProductAt = probe.state === "live" ? probe.firstProductAt : s.first_product_at;
   const age = storeAgeDays({ ...s, first_product_at: firstProductAt });
-  const score = probe.state === "live" ? storeScore(probe, storeActivity(prevRows[0] ?? null, probe)) : 0;
-  const { status, next } = nextCheck(probe.state, age, Date.now(), score);
+  const activity = probe.state === "live" ? storeActivity(prevRows[0] ?? null, probe) : null;
+  const score = probe.state === "live" ? storeScore(probe, activity!) : 0;
+  const planned = nextCheck(probe.state, age, Date.now(), score);
+  // Geçici hata (429, zaman aşımı): açık/kapalı mağaza durumunu korur, ertesi gün yeniden denenir.
+  const status = probe.state === "error" && (s.status === "live" || s.status === "closed") ? s.status : planned.status;
+  const next = planned.next;
   const update: Record<string, unknown> = { status, next_check_at: next, last_checked_at: new Date().toISOString() };
   if (probe.state === "live") {
     Object.assign(update, {
@@ -91,12 +96,26 @@ export async function saveStoreCheck(s: StoreToCheck, probe: StoreProbe): Promis
       hero_image: probe.hero?.image ?? null,
       hero_price: probe.hero?.price ?? null,
       store_score: score,
+      score_parts: storeScoreParts(probe, activity!),
     });
+    // Ürün bazında hareket yalnızca aday olabilecek mağazalarda izlenir (veritabanı boyutu).
+    if (score >= COPY_MIN_STORE_SCORE) {
+      const { data: snapRow, error: sErr } = await db().from("stores").select("products_snapshot").eq("domain", s.domain).maybeSingle();
+      if (sErr) throw new Error(`stores okunamadı: ${sErr.message}`);
+      const { items } = mergeSnapshot((snapRow?.products_snapshot as SnapItem[] | null) ?? null, probe.products, today);
+      Object.assign(update, {
+        products_snapshot: items,
+        stock_drops: items.reduce((n, i) => n + i.so, 0),
+        moving_products: items.filter((i) => i.so > 0).length,
+      });
+    }
   }
   const { error } = await db().from("stores").update(update).eq("domain", s.domain);
   if (error) throw new Error(`stores güncellenemedi: ${error.message}`);
-  const { error: rpcErr } = await db().rpc("increment_store_checks", { p_domain: s.domain });
-  if (rpcErr) throw new Error(`kontrol sayacı artırılamadı: ${rpcErr.message}`);
+  if (probe.state !== "error") {
+    const { error: rpcErr } = await db().rpc("increment_store_checks", { p_domain: s.domain });
+    if (rpcErr) throw new Error(`kontrol sayacı artırılamadı: ${rpcErr.message}`);
+  }
 
   if (probe.state !== "error") {
     const { error: cErr } = await db().from("store_checks").upsert(

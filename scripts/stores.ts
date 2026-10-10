@@ -91,12 +91,20 @@ export async function checkStores(): Promise<boolean> {
   const counts: Record<string, number> = {};
   let failures = 0;
   let next = 0;
+  // Devre kesici: Shopify aynı IP'den çok istek gelince tüm mağazalar için 429 döner. Art arda bu kadar kısıtlama
+  // gelirse kontroller durdurulur, kalan mağazalar ertesi güne kalır (siteleri zorlamamak ve yanlış "kapandı" dememek için).
+  const THROTTLE_LIMIT = 25;
+  let throttled = 0;
+  let tripped = false;
   const t0 = Date.now();
   const worker = async () => {
-    while (next < list.length) {
+    while (next < list.length && !tripped) {
       const s = list[next++];
       try {
         const probe = await probeStore(s.domain, politeFetch);
+        if (probe.state === "error" && /429|robots\.txt geçici/.test(probe.why)) {
+          if (++throttled >= THROTTLE_LIMIT) tripped = true;
+        } else if (probe.state !== "error") throttled = 0;
         const { status, score } = await saveStoreCheck(s, probe);
         counts[status] = (counts[status] ?? 0) + 1;
         if (probe.state === "live" && score >= STORE_PROMOTE_MIN_SCORE) {
@@ -110,6 +118,7 @@ export async function checkStores(): Promise<boolean> {
   };
   await Promise.all(Array.from({ length: STORE_CHECK_CONCURRENCY }, worker));
   console.log(`  durum: ${JSON.stringify(counts)}${failures ? `, hata ${failures}` : ""} (${secs(t0)} sn)`);
+  if (tripped) console.log(`  ! Shopify art arda ${THROTTLE_LIMIT} kez "çok fazla istek" (429) döndü: kontroller durduruldu, ${list.length - next} mağaza yarına kaldı`);
   return failures < Math.max(10, list.length * 0.2);
 }
 

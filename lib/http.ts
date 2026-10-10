@@ -14,7 +14,7 @@ export type FetchResult =
   | { ok: false; url: string; reason: string; /** geçici hata mı (ağ, zaman aşımı, 429, 5xx) */ retryable: boolean };
 
 const nextSlot = new Map<string, number>();
-const robotsCache = new Map<string, Promise<RobotsRules>>();
+const robotsCache = new Map<string, Promise<RobotsRules | { transient: string }>>();
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -34,14 +34,17 @@ async function rawGet(url: URL, accept: string, extra: Record<string, string> = 
   });
 }
 
+/** robots.txt geçici olarak okunamadı (429/5xx/ağ hatası): istek yapılmaz, ama site "yasak" da sayılmaz. */
+type RobotsTransient = { transient: string };
+
 /**
- * robots.txt kuralları. 2xx → ayrıştır; 404/410 gibi "yok" yanıtları → serbest;
- * 401/403/429/5xx ya da ağ hatası → ihtiyatlı davranıp tamamen yasak say.
+ * robots.txt kuralları. 2xx → ayrıştır; 404/410 gibi "yok" yanıtları → serbest; 401/403 → ihtiyatlı davranıp tamamen yasak say.
+ * 429/5xx ya da ağ hatası → geçici: o siteye istek yapılmaz, sonuç önbelleğe alınmaz (sonraki çağrıda yeniden denenir).
  */
-function robotsFor(origin: string): Promise<RobotsRules> {
+function robotsFor(origin: string): Promise<RobotsRules | RobotsTransient> {
   let cached = robotsCache.get(origin);
   if (!cached) {
-    cached = (async () => {
+    cached = (async (): Promise<RobotsRules | RobotsTransient> => {
       try {
         let url = new URL("/robots.txt", origin);
         for (let i = 0; i <= MAX_REDIRECTS; i++) {
@@ -51,15 +54,19 @@ function robotsFor(origin: string): Promise<RobotsRules> {
             continue;
           }
           if (res.ok) return parseRobots(await res.text(), AGENT_TOKEN);
-          if ([401, 403, 429].includes(res.status) || res.status >= 500) return DISALLOW_ALL;
+          if (res.status === 429 || res.status >= 500) return { transient: `HTTP ${res.status}` };
+          if (res.status === 401 || res.status === 403) return DISALLOW_ALL;
           return ALLOW_ALL;
         }
         return DISALLOW_ALL;
-      } catch {
-        return DISALLOW_ALL;
+      } catch (err) {
+        return { transient: `ağ hatası: ${(err as Error).message}` };
       }
     })();
     robotsCache.set(origin, cached);
+    void cached.then((r) => {
+      if ("transient" in r) robotsCache.delete(origin);
+    });
   }
   return cached;
 }
@@ -85,6 +92,9 @@ async function politeRequest(
       return { ok: false, url: url.href, reason: `Desteklenmeyen protokol: ${url.protocol}`, retryable: false };
     }
     const rules = await robotsFor(url.origin);
+    if ("transient" in rules) {
+      return { ok: false, url: url.href, reason: `robots.txt geçici olarak okunamadı (${rules.transient})`, retryable: true };
+    }
     if (!isAllowed(rules, url.pathname + url.search)) {
       return { ok: false, url: url.href, reason: "robots.txt izin vermiyor", retryable: false };
     }

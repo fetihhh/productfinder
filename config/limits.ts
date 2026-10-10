@@ -83,3 +83,7 @@ export const COPY_MIN_STORE_SCORE = 35;
 /** Satış hareketi olan ürünleri aday yapma: en az bu kadar stok azalması, çalıştırma başına en fazla bu kadar mağaza. */
 export const MOVER_MIN_STOCK_DROPS = 2;
 export const MOVER_STORES_PER_RUN = 40;
+
+/** Ürün adı çevirisi (MyMemory, anahtarsız 5.000 karakter/gün): günde en fazla 100 çeviri (~40 karakter → ~4.000 karakter). */
+export const TRANSLATE_DAILY_LIMIT = 100;
+export const TRANSLATE_MONTHLY_LIMIT = 3000;

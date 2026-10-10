@@ -5,7 +5,17 @@
 //             npm run ingest -- recheck (ayrıca tüm "verified" ürünleri tarihe bakmadan yeniden kontrol eder)
 //             npm run ingest -- no-stores (yeni mağaza keşfi ve kontrolleri atlanır)
 //             npm run ingest -- resupply  (toptancı aramasını tüm doğrulanmış/takip edilen ürünler için hemen yeniler)
-import { BIG_BRAND_MAX_RANK, SNAPSHOT_PER_RUN, STRICT_BRAND_CHECK, SUPPLIER_PER_RUN, TAVILY_DAILY_LIMIT, TAVILY_MONTHLY_LIMIT, VERIFY_PER_RUN } from "../config/limits.ts";
+import {
+  BIG_BRAND_MAX_RANK,
+  SNAPSHOT_PER_RUN,
+  STRICT_BRAND_CHECK,
+  SUPPLIER_PER_RUN,
+  TAVILY_DAILY_LIMIT,
+  TAVILY_MONTHLY_LIMIT,
+  TRANSLATE_DAILY_LIMIT,
+  TRANSLATE_MONTHLY_LIMIT,
+  VERIFY_PER_RUN,
+} from "../config/limits.ts";
 import { directSearch } from "../dtc/directSearch.ts";
 import { tavilySearch, type SearchFn } from "../dtc/marketplaceSearch.ts";
 import { readSales } from "../dtc/sales.ts";
@@ -36,6 +46,7 @@ import {
   updateWinnerScores,
 } from "../lib/repo.ts";
 import { parseTcmb, TCMB_URL } from "../lib/fx.ts";
+import { sourceLang, translateToEnglish } from "../lib/translate.ts";
 import { setJobState } from "../lib/stores.ts";
 import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranco.ts";
 import { enabledAdapters } from "../sources/index.ts";
@@ -193,11 +204,14 @@ async function suppliers(): Promise<boolean> {
   let ok = true;
   for (const p of products) {
     try {
+      // İngilizce olmayan mağazanın ürün adı toptancıda İngilizce aranır.
+      const lang = sourceLang(p.country);
+      const english = lang ? await translateToEnglish(p.name, lang, politeFetch, () => tryConsumeQuota("mymemory", TRANSLATE_DAILY_LIMIT, TRANSLATE_MONTHLY_LIMIT)) : null;
       const images = await productImageUrls(p.image_url, p.product_url, politeFetch);
       const imageHashes = (await Promise.all(images.map(hashImage))).filter((h): h is bigint => h !== null);
       const r = await findSuppliers(
         {
-          name: p.name,
+          name: english ?? p.name,
           brandDomain: p.brand_domain,
           productType: p.product_type,
           imageHashes,

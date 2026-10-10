@@ -346,12 +346,14 @@ export type ProductToSource = {
   product_url: string | null;
   /** Yeni mağaza keşfinden geldi (adı markayla başlamaz). */
   from_store: boolean;
+  /** Mağaza ülkesi (ürün adının dilini tahmin etmek için). */
+  country: string | null;
 };
 
 /** Toptancı araması: doğrulanmış ve favori/incelenecek ürünlerden hiç aranmamış ya da süresi dolanlar (all: hepsi). */
 export async function productsToSource(limit: number, all = false): Promise<ProductToSource[]> {
   const stale = new Date(Date.now() - SUPPLIER_REFRESH_DAYS * 86_400_000).toISOString();
-  const cols = "id, name, brand_domain, product_type, price, currency, image_url, product_url, mentions(source)";
+  const cols = "id, name, brand_domain, product_type, price, currency, image_url, product_url, mentions(source), brands(country)";
   const due = `supplier_checked_at.is.null,supplier_checked_at.lt.${stale}`;
   let verifiedQ = db().from("products").select(cols).eq("dtc_status", "verified");
   let trackedQ = db().from("products").select(`${cols}, tracking!inner(status)`).in("tracking.status", ["favorite", "review"]);
@@ -362,11 +364,11 @@ export async function productsToSource(limit: number, all = false): Promise<Prod
   const [verified, tracked] = await Promise.all([verifiedQ.limit(limit), trackedQ.limit(limit)]);
   for (const r of [verified, tracked]) if (r.error) throw new Error(`toptancı listesi okunamadı: ${r.error.message}`);
   const byId = new Map<string, ProductToSource>();
-  type Row = Omit<ProductToSource, "from_store"> & { mentions: { source: string }[] };
+  type Row = Omit<ProductToSource, "from_store" | "country"> & { mentions: { source: string }[]; brands: { country: string | null } | null };
   for (const p of [...verified.data!, ...tracked.data!] as unknown as Row[]) {
-    const { id, name, brand_domain, product_type, price, currency, image_url, product_url, mentions } = p;
+    const { id, name, brand_domain, product_type, price, currency, image_url, product_url, mentions, brands } = p;
     const from_store = mentions.length > 0 && mentions.every((m) => m.source === "yenimagaza");
-    byId.set(id, { id, name, brand_domain, product_type, price, currency, image_url, product_url, from_store });
+    byId.set(id, { id, name, brand_domain, product_type, price, currency, image_url, product_url, from_store, country: brands?.country ?? null });
   }
   return [...byId.values()].slice(0, limit);
 }

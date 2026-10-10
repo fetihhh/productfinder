@@ -18,6 +18,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
           <Link href="/yeni" className="font-medium text-sky-700 hover:underline dark:text-sky-400">Yeni mağazalar</Link>
           <Link href="/?sort=rising" className="text-rose-600 hover:underline dark:text-rose-400">↗ Yükselenler</Link>
           <Link href="/siteler" className="text-blue-600 hover:underline dark:text-blue-400">Siteler ve trafik</Link>
+          <a href="/export" className="text-zinc-600 hover:underline dark:text-zinc-400" title="Favori ve incelenecek ürünler: fiyat, toptancı bağlantıları, marj, satış (Excel'de açılır)">
+            Seçilenleri indir (CSV)
+          </a>
           <form action={logout}>
             <button className="text-zinc-500 hover:underline">Çıkış</button>
           </form>

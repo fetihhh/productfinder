@@ -278,6 +278,7 @@ Toplam en fazla 100.
 
 ## Arayüz
 
+- **Seçilenleri indir (CSV)** (`/export`): favori ve incelenecek ürünler; fiyat, winner, toptan fiyat, marj, fotoğraf eşleşmesi, toptancı satışı, rakip mağaza, ilk iki toptancı bağlantısı ve fiyatı, not. Türkçe Excel için `;` ayırıcı ve virgüllü ondalık.
 - **Özet** (`/ozet`): günlük bakış — son 24 saatte bulunan mağaza ve aday ürün sayıları, en çok satış hareketi olan yeni mağazalar, birden çok bağımsız mağazanın sattığı ürünler, en yüksek winner skorlu ürünler, toptancıda hızla satan ürünler, reklamı artan mağazalar.
 - Varsayılan görünüm yalnızca `verified` ürünler; **elenen** (✕ Ele) ürünler gizlenir ("Takip: Elendi" filtresiyle görülür). Üst menüde **Bugün yeni (N)**: son 24 saatte eklenen ürünler.
 - Arama (ürün/marka), durum, **mağaza ülkesi**, **yalnızca Türkiye'ye gönderenler**, kategori, platform, tarih, takip durumu, **minimum yorum**, minimum winner skoru, **fiyat aralığı**; sıralama: winner skoru, trend skoru, **yorum sayısı**, en yeni, fiyat. Filtreler URL'de tutulur.

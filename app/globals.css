@@ -1,26 +1,145 @@
 @import "tailwindcss";
 
+/* Tasarım belirteçleri: açık/koyu tema. Marka rengi kehribar-turuncu ("winner"). */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f5f6f8;
+  --foreground: #18181b;
+  --surface: #ffffff;
+  --surface-muted: #f4f4f5;
+  --border: #e4e4e7;
+  --muted: #71717a;
+  --brand: #f59e0b;
+  --brand-strong: #ea580c;
+  --ring: rgb(245 158 11 / 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #09090b;
+    --foreground: #f4f4f5;
+    --surface: #131316;
+    --surface-muted: #1c1c21;
+    --border: #27272a;
+    --muted: #a1a1aa;
+    --brand: #fbbf24;
+    --brand-strong: #fb923c;
+    --ring: rgb(251 191 36 / 0.3);
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-line: var(--border);
+  --color-muted: var(--muted);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+}
+
+/* Sayfanın üstünde marka renginde hafif bir ışık. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 420px;
+  pointer-events: none;
+  z-index: -1;
+  background: radial-gradient(60% 100% at 50% 0%, rgb(245 158 11 / 0.1), transparent 70%);
+}
+
+@layer components {
+  /* Sayfa kabı */
+  .page {
+    @apply mx-auto w-full max-w-7xl px-4 pt-6 pb-16 sm:px-6;
+  }
+
+  /* Kartlar */
+  .card {
+    @apply rounded-2xl border border-line bg-surface shadow-[0_1px_2px_rgb(0_0_0/0.04),0_4px_16px_-8px_rgb(0_0_0/0.08)];
+  }
+  .card-hover {
+    @apply transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgb(0_0_0/0.05),0_16px_32px_-12px_rgb(0_0_0/0.18)];
+  }
+  .card-title {
+    @apply text-base font-semibold tracking-tight;
+  }
+  .card-note {
+    @apply mt-0.5 text-xs leading-relaxed text-muted;
+  }
+
+  /* Form alanları */
+  .field {
+    @apply w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm shadow-xs transition outline-none placeholder:text-muted focus:border-brand focus:ring-4 focus:ring-(--ring);
+  }
+  .label {
+    @apply mb-1 block text-xs font-medium text-muted;
+  }
+  .check {
+    @apply h-4 w-4 rounded accent-amber-500;
+  }
+
+  /* Düğmeler */
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl border border-line bg-surface px-3.5 py-2 text-sm font-medium shadow-xs transition hover:bg-surface-muted active:scale-[0.98];
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl bg-linear-to-b from-amber-400 to-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_1px_0_rgb(255_255_255/0.3)_inset,0_6px_16px_-6px_rgb(234_88_12/0.6)] transition hover:brightness-105 active:scale-[0.98];
+  }
+  .btn-sm {
+    @apply px-2.5 py-1 text-xs;
+  }
+
+  /* Etiketler */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] leading-5 font-semibold;
+  }
+  .chip {
+    @apply inline-flex items-center rounded-full border border-line bg-surface-muted px-2.5 py-0.5 text-xs text-foreground/80;
+  }
+
+  /* Bağlantılar */
+  .link {
+    @apply font-medium text-amber-700 underline-offset-4 hover:underline dark:text-amber-400;
+  }
+
+  /* Sayfa başlığı */
+  .eyebrow {
+    @apply text-xs font-semibold tracking-[0.14em] text-brand-strong uppercase;
+  }
+  .h1 {
+    @apply text-2xl font-semibold tracking-tight sm:text-3xl;
+  }
+  .lead {
+    @apply mt-1.5 max-w-3xl text-sm leading-relaxed text-muted;
+  }
+
+  /* Tanım listeleri (kart içi ölçümler) */
+  .facts {
+    @apply grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs;
+  }
+  .facts dt {
+    @apply text-muted;
+  }
+  .facts dd {
+    @apply min-w-0 truncate font-medium;
+  }
+}
+
+/* Yatay kaydırılan menülerde kaydırma çubuğu gizlenir. */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
 }

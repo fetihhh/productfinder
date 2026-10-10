@@ -7,7 +7,7 @@ const W = 640;
 const H = 220;
 const PAD = { top: 14, right: 14, bottom: 34, left: 100 };
 // Grafik ekran genişliğine ölçeklenir; dar ekranda yazılar küçülmesin diye viewBox birimi büyütülür.
-const AXIS = "fill-zinc-500 text-[22px] sm:text-[13px]";
+const AXIS = "fill-(--muted) text-[22px] sm:text-[13px]";
 
 function niceTicks(min: number, max: number, count = 4): number[] {
   if (min === max) {
@@ -58,7 +58,7 @@ export function LineChart({
   const sorted = [...points].sort((a, b) => a.day.localeCompare(b.day));
   const ys = sorted.map((p) => p.y).filter((y): y is number => y !== null);
   if (ys.length === 0) {
-    return <div className="flex h-40 items-center justify-center rounded border border-dashed border-zinc-300 text-sm text-zinc-500 dark:border-zinc-700">{empty}</div>;
+    return <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-line text-sm text-muted">{empty}</div>;
   }
 
   const t0 = Date.parse(sorted[0].day);
@@ -80,7 +80,7 @@ export function LineChart({
     <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img">
       {ticks.map((t) => (
         <g key={t}>
-          <line x1={PAD.left} x2={W - PAD.right} y1={sy(t)} y2={sy(t)} className="stroke-zinc-200 dark:stroke-zinc-800" strokeWidth={1} />
+          <line x1={PAD.left} x2={W - PAD.right} y1={sy(t)} y2={sy(t)} className="stroke-(--border)" strokeWidth={1} />
           <text x={PAD.left - 6} y={sy(t)} dy="0.32em" textAnchor="end" className={AXIS}>{format(t)}</text>
         </g>
       ))}
@@ -111,7 +111,7 @@ export function LineChart({
 /** Küçük eğilim çizgisi (kart ve tablo için). */
 export function Sparkline({ values, className = "stroke-emerald-500" }: { values: (number | null)[]; className?: string }) {
   const ys = values.filter((v): v is number => v !== null);
-  if (ys.length < 2) return <span className="text-xs text-zinc-400">—</span>;
+  if (ys.length < 2) return <span className="text-xs text-muted">—</span>;
   const w = 80;
   const h = 22;
   const min = Math.min(...ys);
@@ -132,9 +132,9 @@ export function ScoreBars({ parts }: { parts: { label: string; value: number; ma
     <div className="space-y-1.5">
       {parts.map((p) => (
         <div key={p.label} title={p.hint} className="grid grid-cols-[4.5rem_1fr_3.5rem] items-center gap-2 text-xs">
-          <span className="text-zinc-500">{p.label}</span>
-          <span className="h-2 overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800">
-            <span className="block h-full rounded bg-amber-500" style={{ width: `${Math.min(100, (p.value / p.max) * 100)}%` }} />
+          <span className="text-muted">{p.label}</span>
+          <span className="h-2 overflow-hidden rounded-full bg-surface-muted">
+            <span className="block h-full rounded-full bg-linear-to-r from-amber-400 to-orange-500" style={{ width: `${Math.min(100, (p.value / p.max) * 100)}%` }} />
           </span>
           <span className="text-right tabular-nums">{p.value.toFixed(1)}/{p.max}</span>
         </div>

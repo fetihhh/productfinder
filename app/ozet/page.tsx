@@ -6,35 +6,35 @@ import { getSummary, type SummaryProduct, type SummaryStore } from "@/lib/summar
 
 function Section({ title, note, href, children }: { title: string; note: string; href?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+    <section className="card p-5">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="font-medium">{title}</h2>
+        <h2 className="card-title">{title}</h2>
         {href && (
-          <Link href={href} className="shrink-0 text-sm text-blue-600 hover:underline dark:text-blue-400">
+          <Link href={href} className="shrink-0 link text-sm">
             Tümü →
           </Link>
         )}
       </div>
-      <p className="mb-3 text-xs text-zinc-500">{note}</p>
+      <p className="card-note mb-4">{note}</p>
       {children}
     </section>
   );
 }
 
 function Empty({ text }: { text: string }) {
-  return <p className="text-sm text-zinc-500">{text}</p>;
+  return <p className="text-sm text-muted">{text}</p>;
 }
 
 function Row({ href, image, title, sub, right }: { href: string; image: string | null; title: string; sub: React.ReactNode; right: React.ReactNode }) {
   return (
     <li>
-      <Link href={href} className="flex items-center gap-3 rounded p-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-900">
-        <span className="h-12 w-12 shrink-0 overflow-hidden rounded bg-zinc-100 dark:bg-zinc-900">
+      <Link href={href} className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-surface-muted">
+        <span className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-surface-muted ring-1 ring-line">
           {image && <img src={image} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{title}</span>
-          <span className="block truncate text-xs text-zinc-500">{sub}</span>
+          <span className="block truncate text-xs text-muted">{sub}</span>
         </span>
         <span className="shrink-0 text-right text-xs">{right}</span>
       </Link>
@@ -61,12 +61,12 @@ export default async function SummaryPage() {
   await connection();
   const s = await getSummary();
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-6">
-      <Link href="/" className="text-sm text-zinc-500 hover:underline">← Ürünler</Link>
-      <h1 className="mt-3 text-xl font-semibold">Özet</h1>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Günlük işin en önemli sonuçları. Her satır ayrıntı sayfasına gider.</p>
+    <main className="page">
+      <p className="eyebrow">Günlük bakış</p>
+      <h1 className="h1 mt-1">Özet</h1>
+      <p className="lead">Günlük işin en önemli sonuçları. Her satır ayrıntı sayfasına gider.</p>
 
-      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Kpi label="Son 24 saatte bulunan mağaza" value={s.counts.storesFound24h.toLocaleString("tr-TR")} sub="yeni kayıtlı alan adlarından" />
         <Kpi label="Son 7 günde açılan" value={s.counts.storesOpened7d.toLocaleString("tr-TR")} sub="ilk ürünü bu hafta" />
         <Kpi label="Açık yeni mağaza" value={s.counts.liveNew.toLocaleString("tr-TR")} sub="son 5 ayda açılmış" />
@@ -90,7 +90,7 @@ export default async function SummaryPage() {
                     <span className="font-medium text-rose-700 dark:text-rose-400">
                       📉 {m.stock_drops}
                       <br />
-                      <span className="text-zinc-500">{m.moving_products} ürün</span>
+                      <span className="text-muted">{m.moving_products} ürün</span>
                     </span>
                   }
                 />
@@ -130,7 +130,7 @@ export default async function SummaryPage() {
                   image={p.image_url}
                   title={p.name}
                   sub={productSub(p)}
-                  right={<span className="rounded bg-amber-500 px-1.5 py-0.5 font-medium text-white">{Number(p.winner_score).toFixed(0)}</span>}
+                  right={<span className="badge bg-linear-to-b from-amber-400 to-orange-500 text-white">{Number(p.winner_score).toFixed(0)}</span>}
                 />
               ))}
             </ul>
@@ -182,7 +182,7 @@ export default async function SummaryPage() {
                     <span>
                       <strong>+{a.new_ads_14d}</strong> yeni
                       <br />
-                      <span className="text-zinc-500">{a.active_ads} yayında</span>
+                      <span className="text-muted">{a.active_ads} yayında</span>
                     </span>
                   }
                 />

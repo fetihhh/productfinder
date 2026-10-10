@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AD_SHARE, calculateProfit, PAYMENT_PCT, PROFIT_DEFAULTS, RETURN_PCT, suggestedPrice, type ProfitMode } from "@/lib/profit";
 
-const input = "w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm tabular-nums dark:border-zinc-700 dark:bg-zinc-900";
+const input = "field tabular-nums";
 
 const MODES: { value: ProfitMode; label: string; hint: string }[] = [
   { value: "tr_parcel", label: "Türkiye · Çin'den tek tek gönderim", hint: "Dropshipping: sipariş gelince tedarikçi doğrudan müşteriye yollar. Her paket gümrükte vergilendirilir." },
@@ -14,7 +14,7 @@ const MODES: { value: ProfitMode; label: string; hint: string }[] = [
 function Field({ label, hint, value, onChange, step = "any", suffix }: { label: string; hint?: string; value: number; onChange: (n: number) => void; step?: string; suffix?: string }) {
   return (
     <label className="block text-xs" title={hint}>
-      <span className="text-zinc-500">
+      <span className="text-muted">
         {label}
         {suffix ? ` (${suffix})` : ""}
       </span>
@@ -101,9 +101,9 @@ export function ProfitCalculator({
   const good = r.profit > 0 && !missingCost;
 
   return (
-    <section className="mt-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-      <h2 className="font-medium">Kâr hesabı — kendi sitenden satış</h2>
-      <p className="mb-3 text-xs text-zinc-500">
+    <section className="card mt-5 p-5">
+      <h2 className="card-title">Kâr hesabı — kendi sitenden satış</h2>
+      <p className="card-note mb-4">
         Varsayılanlar tahmindir; kendi teklif ve fiyatlarınızla değiştirin. Gümrük oranı ürünün GTİP koduna göre değişir: kesin oran için gümrük
         müşavirine danışın. Gelir vergisi ve sabit giderler (site, abonelik) dahil değildir.
       </p>
@@ -111,7 +111,7 @@ export function ProfitCalculator({
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <div className="space-y-3">
           <label className="block text-xs">
-            <span className="text-zinc-500">Senaryo</span>
+            <span className="text-muted">Senaryo</span>
             <select value={mode} onChange={(e) => switchMode(e.target.value as ProfitMode)} className={input}>
               {MODES.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -119,7 +119,7 @@ export function ProfitCalculator({
                 </option>
               ))}
             </select>
-            <span className="mt-1 block text-zinc-500">{MODES.find((m) => m.value === mode)?.hint}</span>
+            <span className="mt-1 block text-muted">{MODES.find((m) => m.value === mode)?.hint}</span>
           </label>
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -159,7 +159,7 @@ export function ProfitCalculator({
             <Field label="Reklam / satış (CPA)" suffix={cur} value={adCost} onChange={setAdCost} hint="Bir satış için reklama harcanan tutar. Gerçek değer ancak test reklamıyla öğrenilir; başlangıç tahmini fiyatın %25'i" />
           </div>
           {!abroad && (
-            <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+            <label className="flex items-center gap-2 text-xs text-muted">
               <input type="checkbox" checked={vatIncluded} onChange={(e) => setVatIncluded(e.target.checked)} className="h-4 w-4" />
               Satış fiyatına %20 KDV dahil (şirket/şahıs şirketi olarak satıyorsanız)
             </label>
@@ -168,23 +168,23 @@ export function ProfitCalculator({
 
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            <div className={`rounded-lg border p-3 ${missingCost ? "border-amber-300 dark:border-amber-800" : good ? "border-emerald-300 dark:border-emerald-800" : "border-red-300 dark:border-red-800"}`}>
-              <div className="text-xs text-zinc-500">Adet başı net kâr</div>
+            <div className={`rounded-2xl border p-4 ${missingCost ? "border-amber-300 dark:border-amber-800" : good ? "border-emerald-300 dark:border-emerald-800" : "border-red-300 dark:border-red-800"}`}>
+              <div className="text-xs text-muted">Adet başı net kâr</div>
               {missingCost ? (
                 <div className="text-sm font-medium text-amber-700 dark:text-amber-400">Önce toptan fiyatı girin</div>
               ) : (
                 <>
                   <div className={`text-xl font-semibold tabular-nums ${good ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{money(r.profit, cur)}</div>
-                  <div className="text-xs text-zinc-500">satışın %{r.marginPct.toLocaleString("tr-TR")}&apos;i</div>
+                  <div className="text-xs text-muted">satışın %{r.marginPct.toLocaleString("tr-TR")}&apos;i</div>
                 </>
               )}
             </div>
-            <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800" title="Reklam hariç tüm maliyetler düşüldükten sonra kalan: satış başına reklama bundan fazlası harcanırsa zarar edilir">
-              <div className="text-xs text-zinc-500">Reklama en fazla (başabaş)</div>
+            <div className="rounded-2xl border border-line p-4" title="Reklam hariç tüm maliyetler düşüldükten sonra kalan: satış başına reklama bundan fazlası harcanırsa zarar edilir">
+              <div className="text-xs text-muted">Reklama en fazla (başabaş)</div>
               <div className="text-xl font-semibold tabular-nums">{money(Math.max(0, r.maxAdCost), cur)}</div>
-              <div className="text-xs text-zinc-500">{r.breakevenRoas !== null ? `başabaş ROAS ${r.breakevenRoas.toLocaleString("tr-TR")}` : "reklamsız da zarar"}</div>
+              <div className="text-xs text-muted">{r.breakevenRoas !== null ? `başabaş ROAS ${r.breakevenRoas.toLocaleString("tr-TR")}` : "reklamsız da zarar"}</div>
             </div>
-            <div className="col-span-2 rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+            <div className="col-span-2 rounded-2xl border border-line p-4 text-sm">
               {r.breakevenPrice !== null ? (
                 <>
                   Bu maliyetlerle zarar etmemek için en düşük satış fiyatı: <strong className="tabular-nums">{money(r.breakevenPrice, cur)}</strong>
@@ -197,8 +197,8 @@ export function ProfitCalculator({
           <table className="w-full text-sm">
             <tbody>
               {r.lines.map((l) => (
-                <tr key={l.label} className="border-b border-zinc-100 last:border-0 dark:border-zinc-900">
-                  <td className="py-1 text-zinc-600 dark:text-zinc-400">{l.label}</td>
+                <tr key={l.label} className="border-b border-line last:border-0">
+                  <td className="py-1 text-muted">{l.label}</td>
                   <td className={`py-1 text-right tabular-nums ${l.amount < 0 ? "" : "font-medium"}`}>{money(l.amount, cur)}</td>
                 </tr>
               ))}

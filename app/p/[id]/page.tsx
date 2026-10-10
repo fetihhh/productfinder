@@ -14,9 +14,9 @@ import { ProfitCalculator } from "@/components/ProfitCalculator";
 
 function Panel({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-      <h2 className="font-medium">{title}</h2>
-      {note && <p className="mb-2 text-xs text-zinc-500">{note}</p>}
+    <section className="card p-5">
+      <h2 className="card-title">{title}</h2>
+      {note && <p className="card-note mb-3">{note}</p>}
       {children}
     </section>
   );
@@ -43,39 +43,39 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
   const accumulating = `Günlük ölçüm birikiyor (${history.length} gün). Grafik her gün otomatik dolar.`;
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-6">
-      <Link href="/" className="text-sm text-zinc-500 hover:underline">← Ürünler</Link>
+    <main className="page">
+      <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground"><svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m15 18-6-6 6-6" /></svg>Ürünler</Link>
 
       <header className="mt-3 grid gap-4 md:grid-cols-[240px_1fr]">
-        <a href={href} target="_blank" rel="noopener noreferrer" className="block aspect-[4/3] overflow-hidden rounded-lg bg-zinc-100 dark:bg-zinc-900">
+        <a href={href} target="_blank" rel="noopener noreferrer" className="card block aspect-[4/3] overflow-hidden bg-surface-muted">
           {p.image_url && <img src={p.image_url} alt={p.name} referrerPolicy="no-referrer" className="h-full w-full object-cover" />}
         </a>
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${STATUS[p.dtc_status].cls}`}>{STATUS[p.dtc_status].label}</span>
+            <span className={`badge ${STATUS[p.dtc_status].cls}`}>{STATUS[p.dtc_status].label}</span>
             {brand?.platform && brand.platform !== "unknown" && (
-              <span className="rounded bg-violet-100 px-1.5 py-0.5 text-xs font-medium text-violet-800 dark:bg-violet-950 dark:text-violet-300">{brand.platform}</span>
+              <span className="badge bg-violet-500/12 text-violet-700 ring-1 ring-violet-500/25 dark:text-violet-300">{brand.platform}</span>
             )}
-            {brand?.country && <span className="text-xs text-zinc-500">{countryLabel(brand.country)}</span>}
+            {brand?.country && <span className="text-xs text-muted">{countryLabel(brand.country)}</span>}
             {brand?.ships_to_tr !== null && brand?.ships_to_tr !== undefined && (
-              <span className={`text-xs ${brand.ships_to_tr ? "text-emerald-700 dark:text-emerald-400" : "text-zinc-500"}`}>
+              <span className={`text-xs ${brand.ships_to_tr ? "text-emerald-700 dark:text-emerald-400" : "text-muted"}`}>
                 · Türkiye'ye {brand.ships_to_tr ? "gönderim var" : "gönderim yok"}
               </span>
             )}
           </div>
-          <h1 className="text-xl font-semibold leading-snug">
+          <h1 className="h1 leading-tight">
             <a href={href} target="_blank" rel="noopener noreferrer" className="hover:underline">{p.name}</a>
           </h1>
-          {nameEn && <p className="text-sm text-zinc-500" title="Makine çevirisi (MyMemory)">İngilizcesi: {nameEn}</p>}
-          <a href={`https://${p.brand_domain}`} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
+          {nameEn && <p className="text-sm text-muted" title="Makine çevirisi (MyMemory)">İngilizcesi: {nameEn}</p>}
+          <a href={`https://${p.brand_domain}`} target="_blank" rel="noopener noreferrer" className="link text-sm">
             {p.brand_domain} ↗
           </a>
           {isStore && (
-            <Link href={`/m/${p.brand_domain}`} className="ml-3 text-sm font-medium text-sky-700 hover:underline dark:text-sky-400">
+            <Link href={`/m/${p.brand_domain}`} className="link ml-3 text-sm">
               Mağaza detayı →
             </Link>
           )}
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="text-sm text-muted">
             {[
               formatPrice(p.price, p.currency) && `Fiyat ${formatPrice(p.price, p.currency)}${p.variant_count && p.variant_count > 1 ? "'den" : ""}`,
               p.review_count !== null && `${p.review_count.toLocaleString("tr-TR")} yorum${p.rating !== null ? ` · ★ ${Number(p.rating).toFixed(1)}` : ""}`,
@@ -85,7 +85,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
               .filter(Boolean)
               .join(" · ")}
           </p>
-          {p.dtc_reason && <p className="text-xs text-zinc-500">{p.dtc_reason}</p>}
+          {p.dtc_reason && <p className="text-xs text-muted">{p.dtc_reason}</p>}
         </div>
       </header>
 
@@ -121,9 +121,9 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
         />
       </div>
 
-      <section className="mt-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <section className="card mt-5 p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-medium">Toptancı adayları</h2>
+          <h2 className="card-title">Toptancı adayları</h2>
           <p className="text-sm">
             {p.supplier_min_usd !== null && (
               <>
@@ -143,15 +143,15 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
             )}
           </p>
         </div>
-        <p className="mb-3 text-xs text-zinc-500">
+        <p className="card-note mb-4">
           AliExpress, Alibaba ve Made-in-China&apos;da ürün tarifiyle bulunan benzer ilanlar. En benzer ilanların fotoğrafı ürün fotoğraflarıyla
           karşılaştırılır: &quot;Aynı fotoğraf&quot; işaretli ilan büyük ihtimalle mağazanın tedarikçisidir ve toptan fiyat yalnızca bu ilanlardan hesaplanır.
           Marj kargo, gümrük ve vergi hariçtir.
         </p>
         {p.supplier_checked_at === null ? (
-          <p className="text-sm text-zinc-500">Toptancı araması bir sonraki günlük çalıştırmada yapılacak.</p>
+          <p className="text-sm text-muted">Toptancı araması bir sonraki günlük çalıştırmada yapılacak.</p>
         ) : suppliers.length === 0 ? (
-          <p className="text-sm text-zinc-500">Benzer toptan ilanı bulunamadı.</p>
+          <p className="text-sm text-muted">Benzer toptan ilanı bulunamadı.</p>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {suppliers.map((s) => (
@@ -160,11 +160,11 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
                 href={s.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`flex flex-col overflow-hidden rounded border hover:border-amber-500 ${sameImage(s) ? "border-emerald-500" : "border-zinc-200 dark:border-zinc-800"}`}
+                className={`flex flex-col overflow-hidden rounded-xl border hover:border-amber-500 ${sameImage(s) ? "border-emerald-500" : "border-line"}`}
               >
-                <span className="relative block aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-900">
+                <span className="relative block aspect-square overflow-hidden bg-surface-muted">
                   {sameImage(s) && (
-                    <span className="absolute left-1 top-1 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-medium text-white">📷 Aynı fotoğraf</span>
+                    <span className="badge absolute top-1.5 left-1.5 bg-emerald-600 text-white shadow-sm">📷 Aynı fotoğraf</span>
                   )}
                   {s.image_url && <img src={s.image_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />}
                 </span>
@@ -179,15 +179,15 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
                       {s.price_max !== null && s.price_max !== s.price_min ? `–${formatPrice(s.price_max, s.currency ?? "USD")}` : ""}
                     </span>
                   )}
-                  {s.moq && <span className="text-zinc-500">MOQ {s.moq}</span>}
+                  {s.moq && <span className="text-muted">MOQ {s.moq}</span>}
                   {(s.sold !== null || s.rating !== null) && (
-                    <span className="text-zinc-500">
+                    <span className="text-muted">
                       {s.sold !== null ? `${s.sold.toLocaleString("tr-TR")} satıldı` : ""}
                       {s.sold !== null && s.rating !== null ? " · " : ""}
                       {s.rating !== null ? `★ ${Number(s.rating).toLocaleString("tr-TR")}` : ""}
                     </span>
                   )}
-                  {s.supplier_name && <span className="truncate text-zinc-500" title={s.supplier_name}>{s.supplier_name}</span>}
+                  {s.supplier_name && <span className="truncate text-muted" title={s.supplier_name}>{s.supplier_name}</span>}
                 </span>
               </a>
             ))}
@@ -249,7 +249,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
               ]}
             />
           ) : (
-            <p className="text-sm text-zinc-500">Skor bir sonraki çalıştırmada hesaplanacak.</p>
+            <p className="text-sm text-muted">Skor bir sonraki çalıştırmada hesaplanacak.</p>
           )}
           {w?.momentum && (
             <>
@@ -264,7 +264,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
               />
             </>
           )}
-          <p className="mt-3 text-xs text-zinc-500">
+          <p className="mt-3 text-xs text-muted">
             Ölçüm geçmişi: {w?.historyDays ?? 0} gün. Satış tahminleri yorum oranı varsayımına dayanır; kesin satış sayısını yalnızca marka bilir.
           </p>
         </Panel>

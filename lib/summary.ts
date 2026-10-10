@@ -1,5 +1,6 @@
 // Özet sayfasının sorguları (yalnızca sunucu): günlük bakışta en önemli değişimler.
 import { NEW_STORE_MAX_AGE_DAYS } from "../config/limits.ts";
+import type { AdStage } from "../dtc/adAnalysis.ts";
 import { db } from "./db.ts";
 
 const DAY = 86_400_000;
@@ -43,7 +44,20 @@ export type Summary = {
   copied: SummaryStore[];
   winners: SummaryProduct[];
   supplierHot: SummaryProduct[];
-  adsRising: { domain: string; active_ads: number; new_ads_14d: number; longest_active_days: number | null; page_name: string | null }[];
+  /** Reklam kanıtı en güçlü mağazalar: kanıtlanmış winner / ölçeklenen (reklam kanıt skoruna göre). */
+  adsRising: {
+    domain: string;
+    active_ads: number;
+    new_ads_14d: number;
+    longest_active_days: number | null;
+    page_name: string | null;
+    ad_score: number;
+    ad_stage: AdStage;
+    spend_low: number | null;
+    top_products: { handle: string; title: string; ads: number }[];
+    hero_image: string | null;
+    hero_title: string | null;
+  }[];
 };
 
 const STORE_COLS =
@@ -71,7 +85,12 @@ export async function getSummary(): Promise<Summary> {
       .limit(40),
     db().from("products").select(PRODUCT_COLS).eq("dtc_status", "verified").order("winner_score", { ascending: false }).limit(8),
     db().from("products").select(PRODUCT_COLS).not("supplier_sold", "is", null).order("supplier_sold_per_week", { ascending: false, nullsFirst: false }).order("supplier_sold", { ascending: false }).limit(8),
-    db().from("ad_signals").select("domain, active_ads, new_ads_14d, longest_active_days, page_name").gt("new_ads_14d", 0).order("new_ads_14d", { ascending: false }).limit(8),
+    db()
+      .from("ad_signals")
+      .select("domain, active_ads, new_ads_14d, longest_active_days, page_name, ad_score, ad_stage, spend_low, top_products")
+      .gt("active_ads", 0)
+      .order("ad_score", { ascending: false })
+      .limit(8),
   ]);
   for (const r of [found, opened, candidates, liveNew, movers, copied, winners, hot, ads]) if (r.error) throw new Error(r.error.message);
   // Kümeden bir mağaza (ilk açılan): aynı ürün listede tekrar etmesin.
@@ -88,6 +107,14 @@ export async function getSummary(): Promise<Summary> {
     copied: copiedOne.slice(0, 8),
     winners: winners.data as SummaryProduct[],
     supplierHot: hot.data as SummaryProduct[],
-    adsRising: ads.data as Summary["adsRising"],
+    adsRising: await withHero(ads.data as Omit<Summary["adsRising"][number], "hero_image" | "hero_title">[]),
   };
+}
+
+/** Reklam satırlarına mağazanın öne çıkan ürün görseli ve adı. */
+async function withHero<T extends { domain: string }>(rows: T[]): Promise<(T & { hero_image: string | null; hero_title: string | null })[]> {
+  if (rows.length === 0) return [];
+  const { data } = await db().from("stores").select("domain, hero_image, hero_title").in("domain", rows.map((r) => r.domain));
+  const by = new Map((data ?? []).map((s) => [s.domain as string, s as { hero_image: string | null; hero_title: string | null }]));
+  return rows.map((r) => ({ ...r, hero_image: by.get(r.domain)?.hero_image ?? null, hero_title: by.get(r.domain)?.hero_title ?? null }));
 }

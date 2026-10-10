@@ -4,6 +4,16 @@ on:
   schedule:
     - cron: "0 5 * * *" # her gün 05:00 UTC = 08:00 Türkiye
   workflow_dispatch: # Actions sekmesinden elle çalıştırma
+    inputs:
+      mode:
+        description: "Çalıştırma türü"
+        type: choice
+        default: full
+        options:
+          - full # tam günlük iş
+          - ads # yalnızca reklam analizi (~5 dk)
+          - verify # toplama hariç hepsi
+          - resupply # toptancı aramasını hemen yenile
 
 permissions:
   contents: read
@@ -24,8 +34,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npm run ingest
+      - run: npm run ingest -- $INGEST_MODE
         env:
+          # Zamanlanmış çalıştırmada boş (tam iş); elle çalıştırmada seçilen tür (seçenek listesiyle sınırlı).
+          INGEST_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'full' && inputs.mode || '' }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { STATUS } from "@/components/ProductCard";
+import { AdStageBadge } from "@/components/DetailSections";
 import { OverlayBadge, ScoreRing, Stat, Toggle } from "@/components/ui";
 import { adLibraryPageUrl } from "@/dtc/adLibrary";
 import { adSignalsFor } from "@/lib/ads";
@@ -97,7 +98,7 @@ export default async function NewStoresPage({ searchParams }: PageProps<"/yeni">
               <option value="score">Mağaza puanı</option>
               <option value="new">En yeni</option>
               <option value="products">En az ürün (tek ürün)</option>
-              <option value="ads">En çok reklam</option>
+              <option value="ads">En güçlü reklam kanıtı</option>
               <option value="copies">Aynı ürünü satan en çok mağaza</option>
               <option value="moving">En çok stok hareketi</option>
             </select>
@@ -155,7 +156,7 @@ export default async function NewStoresPage({ searchParams }: PageProps<"/yeni">
                       {ageLabel(s.first_product_at) ?? "?"} önce açıldı
                     </OverlayBadge>
                     {s.stock_drops > 0 && <span className="badge bg-rose-500 text-white shadow-sm">📉 {s.stock_drops} stok azalması</span>}
-                    {(s.ads_active ?? 0) > 0 && <span className="badge bg-emerald-500 text-white shadow-sm">Reklam veriyor</span>}
+                    {ad && ad.total_ads > 0 && ad.ad_stage !== "none" && <AdStageBadge stage={ad.ad_stage} score={Number(ad.ad_score)} />}
                     {s.copy_count > 0 && !s.copy_same_seller && <span className="badge bg-violet-500 text-white shadow-sm">{s.copy_count} rakip</span>}
                   </div>
                   <ScoreRing

@@ -1,5 +1,6 @@
 // Reklam sinyalinin veritabanı katmanı (yalnızca cron).
 import { AD_RECHECK_DAYS, NEW_STORE_MAX_AGE_DAYS } from "../config/limits.ts";
+import type { AdAnalysis, AdScoreParts, AdStage, AdvertisedProduct, CreativeGroup } from "../dtc/adAnalysis.ts";
 import type { AdSummary } from "../dtc/adLibrary.ts";
 import { db } from "./db.ts";
 
@@ -17,6 +18,15 @@ async function inChunks<T>(values: string[], run: (chunk: string[]) => Promise<T
  * Reklamı aranacak alan adları, öncelik sırasıyla: doğrulanmış ürünlerin markaları, sonra yeni mağazalar (puana göre).
  * Hiç aranmamış ya da yeniden arama zamanı gelmiş olanlar.
  */
+/** Reklamı daha önce bulunmuş alan adları (yeniden analiz için, zamanı gelmemiş olsa da). */
+export async function knownAdvertisers(limit: number): Promise<AdTarget[]> {
+  const { data, error } = await db().from("ad_signals").select("domain, page_id").gt("total_ads", 0).order("ad_score", { ascending: false }).limit(limit);
+  if (error) throw new Error(`ad_signals okunamadı: ${error.message}`);
+  const { data: shops } = await db().from("stores").select("domain, shop_name").in("domain", data.map((d) => d.domain as string));
+  const names = new Map((shops ?? []).map((s) => [s.domain as string, s.shop_name as string | null]));
+  return data.map((d) => ({ domain: d.domain as string, pageId: d.page_id as string | null, shopName: names.get(d.domain as string) ?? null }));
+}
+
 export async function adTargets(limit: number, minStoreScore: number): Promise<AdTarget[]> {
   const since = new Date(Date.now() - NEW_STORE_MAX_AGE_DAYS * DAY).toISOString();
   const [verified, stores] = await Promise.all([
@@ -51,9 +61,15 @@ export async function adTargets(limit: number, minStoreScore: number): Promise<A
     .map((domain) => ({ domain, shopName: shopNames.get(domain) ?? null, pageId: state.get(domain)?.page_id ?? null }));
 }
 
-export async function saveAdSignal(t: AdTarget, s: AdSummary, points: number): Promise<void> {
+/** Reklam kanıt skorundan mağaza/marka puanına eklenen reklam puanı (0–25). */
+export const adPointsFromScore = (score: number) => Math.round((25 * score) / 100);
+
+export async function saveAdSignal(t: AdTarget, s: AdSummary, a: AdAnalysis): Promise<void> {
   const now = new Date();
-  const next = new Date(now.getTime() + (s.totalAds > 0 ? AD_RECHECK_DAYS.found : AD_RECHECK_DAYS.none) * DAY);
+  const points = adPointsFromScore(a.score);
+  // Ölçeklenen/kanıtlanmış reklamcılar her gün izlenir (bütçe artışı ve yeni ülkeler günler içinde görünsün).
+  const days = a.stage === "proven" || a.stage === "scaling" ? 20 / 24 : s.totalAds > 0 ? AD_RECHECK_DAYS.found : AD_RECHECK_DAYS.none;
+  const next = new Date(now.getTime() + days * DAY);
   const { error } = await db().from("ad_signals").upsert(
     {
       domain: t.domain,
@@ -69,6 +85,16 @@ export async function saveAdSignal(t: AdTarget, s: AdSummary, points: number): P
       platforms: s.platforms,
       samples: s.samples,
       ad_points: points,
+      ad_score: a.score,
+      ad_stage: a.stage,
+      ad_parts: a.parts,
+      creatives: a.creatives,
+      countries: a.countries,
+      active_7d: a.active7d,
+      active_14d: a.active14d,
+      spend_low: a.spend?.low ?? null,
+      spend_high: a.spend?.high ?? null,
+      top_products: a.products,
       checked_at: now.toISOString(),
       next_check_at: next.toISOString(),
     },
@@ -78,7 +104,7 @@ export async function saveAdSignal(t: AdTarget, s: AdSummary, points: number): P
   const { error: hErr } = await db()
     .from("ad_history")
     .upsert(
-      { domain: t.domain, day: now.toISOString().slice(0, 10), active_ads: s.activeAds, total_ads: s.totalAds, eu_reach: s.euReach },
+      { domain: t.domain, day: now.toISOString().slice(0, 10), active_ads: s.activeAds, total_ads: s.totalAds, eu_reach: s.euReach, ad_score: a.score },
       { onConflict: "domain,day" },
     );
   if (hErr) throw new Error(`ad_history yazılamadı: ${hErr.message}`);
@@ -103,6 +129,16 @@ export type AdSignalRow = {
   samples: { id: string; url: string; title: string | null; body: string | null; start: string | null; active: boolean }[];
   ad_points: number;
   checked_at: string;
+  ad_score: number;
+  ad_stage: AdStage;
+  ad_parts: AdScoreParts | null;
+  creatives: CreativeGroup[];
+  countries: string[];
+  active_7d: number;
+  active_14d: number;
+  spend_low: number | null;
+  spend_high: number | null;
+  top_products: AdvertisedProduct[];
 };
 
 /** Arayüz: verilen alan adlarının reklam özeti. */
@@ -111,7 +147,9 @@ export async function adSignalsFor(domains: string[]): Promise<Map<string, AdSig
   const rows = await inChunks(unique, async (chunk) => {
     const { data, error } = await db()
       .from("ad_signals")
-      .select("domain, page_id, page_name, active_ads, total_ads, new_ads_14d, first_ad_at, longest_active_days, eu_reach, platforms, samples, ad_points, checked_at")
+      .select(
+        "domain, page_id, page_name, active_ads, total_ads, new_ads_14d, first_ad_at, longest_active_days, eu_reach, platforms, samples, ad_points, checked_at, ad_score, ad_stage, ad_parts, creatives, countries, active_7d, active_14d, spend_low, spend_high, top_products",
+      )
       .in("domain", chunk);
     if (error) throw new Error(`ad_signals okunamadı: ${error.message}`);
     return data as AdSignalRow[];
@@ -119,10 +157,12 @@ export async function adSignalsFor(domains: string[]): Promise<Map<string, AdSig
   return new Map(rows.map((r) => [r.domain, r]));
 }
 
-export async function adHistory(domain: string): Promise<{ day: string; active_ads: number }[]> {
-  const { data, error } = await db().from("ad_history").select("day, active_ads").eq("domain", domain).order("day");
+export type AdHistoryPoint = { day: string; active_ads: number; eu_reach: number | null; ad_score: number | null };
+
+export async function adHistory(domain: string): Promise<AdHistoryPoint[]> {
+  const { data, error } = await db().from("ad_history").select("day, active_ads, eu_reach, ad_score").eq("domain", domain).order("day");
   if (error) throw new Error(`ad_history okunamadı: ${error.message}`);
-  return data as { day: string; active_ads: number }[];
+  return data as AdHistoryPoint[];
 }
 
 /** Winner/yükseliş skorları için: alan adı → reklam puanı ve son 14 günde açılan reklam sayısı. */
@@ -130,4 +170,14 @@ export async function adPointsByDomain(): Promise<Map<string, { points: number; 
   const { data, error } = await db().from("ad_signals").select("domain, ad_points, new_ads_14d").gt("total_ads", 0);
   if (error) throw new Error(`ad_signals okunamadı: ${error.message}`);
   return new Map(data.map((r) => [r.domain as string, { points: Number(r.ad_points), newAds14d: r.new_ads_14d as number }]));
+}
+
+export type AdStoreContext = { shop_name: string | null; hero_handle: string | null; first_product_at: string | null; products: { h: string; t: string; img: string | null; c: string | null }[] };
+
+/** Reklamı bulunan mağazanın ürün listesi (reklamı verilen ürünü bulmak için) ve öne çıkan ürünü. */
+export async function adStoreContext(domain: string): Promise<AdStoreContext | null> {
+  const { data, error } = await db().from("stores").select("shop_name, hero_handle, first_product_at, products_snapshot").eq("domain", domain).maybeSingle();
+  if (error || !data) return null;
+  const snap = (data.products_snapshot as { h: string; t: string; img: string | null; c: string | null }[] | null) ?? [];
+  return { shop_name: data.shop_name, hero_handle: data.hero_handle, first_product_at: data.first_product_at, products: snap.map(({ h, t, img, c }) => ({ h, t, img, c })) };
 }

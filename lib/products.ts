@@ -1,6 +1,6 @@
 // Arayüz için ürün sorguları (yalnızca sunucu).
 import { IMAGE_MATCH_MAX } from "../config/limits.ts";
-import { adHistory, adSignalsFor, type AdSignalRow } from "./ads.ts";
+import { adHistory, adSignalsFor, type AdHistoryPoint, type AdSignalRow } from "./ads.ts";
 import { db } from "./db.ts";
 import type { ScoreBreakdown } from "./score.ts";
 import type { WinnerBreakdown } from "./winner.ts";
@@ -233,7 +233,7 @@ export async function getProduct(
   ranks: { day: string; rank: number | null }[];
   suppliers: SupplierRow[];
   ads: AdSignalRow | null;
-  adHistory: { day: string; active_ads: number }[];
+  adHistory: AdHistoryPoint[];
   /** Ürün adı İngilizce değilse saklanan çevirisi (toptancı/pazaryeri araması için yapılmış). */
   nameEn: string | null;
 } | null> {

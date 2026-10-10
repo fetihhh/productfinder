@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Filters } from "@/components/Filters";
 import { ProductCard } from "@/components/ProductCard";
+import { adSignalsFor } from "@/lib/ads";
 import { facets, listProducts, newToday, parseFilters } from "@/lib/products";
 
 const QUICK = [
@@ -14,6 +15,7 @@ const QUICK = [
 export default async function Home({ searchParams }: PageProps<"/">) {
   const f = parseFilters(await searchParams);
   const [{ rows, error }, { categories, platforms, countries }, today] = await Promise.all([listProducts(f), facets(), newToday()]);
+  const ads = await adSignalsFor(rows.map((r) => r.brand_domain));
 
   return (
     <main className="page">
@@ -63,7 +65,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
       <div className="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {rows.map((p) => (
-          <ProductCard key={p.id} p={p} />
+          <ProductCard key={p.id} p={p} ad={ads.has(p.brand_domain) ? { stage: ads.get(p.brand_domain)!.ad_stage, score: Number(ads.get(p.brand_domain)!.ad_score) } : null} />
         ))}
       </div>
     </main>

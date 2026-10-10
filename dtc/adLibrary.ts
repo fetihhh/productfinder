@@ -18,6 +18,8 @@ export type ArchivedAd = {
   ad_creative_link_descriptions?: string[];
   publisher_platforms?: string[];
   eu_total_reach?: number;
+  /** AB reklamları: ülke bazında erişim dökümü (hangi ülkelerde gösterildi). */
+  age_country_gender_reach_breakdown?: { country?: string }[];
 };
 
 export type AdSample = { id: string; url: string; title: string | null; body: string | null; start: string | null; active: boolean };
@@ -37,7 +39,8 @@ export type AdSummary = {
   samples: AdSample[];
 };
 
-export type AdQuery = { domain: string; pageId: string | null };
+/** activeOnly: yalnızca yayındaki reklamlar (tek sayfa 100 ile sınırlı olduğu için doğru sayım ve en eski reklam için). */
+export type AdQuery = { domain: string; pageId: string | null; activeOnly?: boolean };
 export type AdSearchResult = { ok: true; ads: ArchivedAd[] } | { ok: false; fatal: boolean; reason: string };
 export type AdSearch = (q: AdQuery) => Promise<AdSearchResult>;
 
@@ -54,6 +57,7 @@ const FIELDS = [
   "ad_creative_link_descriptions",
   "publisher_platforms",
   "eu_total_reach",
+  "age_country_gender_reach_breakdown",
 ].join(",");
 
 /** Herkese açık Reklam Kütüphanesi sayfası (giriş gerektirmez). */
@@ -68,7 +72,7 @@ export function adLibraryPageUrl(pageId: string | null, domain: string): string 
 export function adSearchUrl(q: AdQuery, countries: string[], version: string, now = Date.now()): string {
   const params = new URLSearchParams({
     ad_type: "ALL",
-    ad_active_status: "ALL",
+    ad_active_status: q.activeOnly ? "ACTIVE" : "ALL",
     ad_reached_countries: JSON.stringify(countries),
     ad_delivery_date_min: new Date(now - 150 * DAY).toISOString().slice(0, 10),
     fields: FIELDS,
@@ -205,16 +209,4 @@ export function summarizeAds(ads: ArchivedAd[], now = Date.now()): AdSummary {
       active: isActive(a, now),
     })),
   };
-}
-
-/**
- * Reklam puanı (0–25): yayındaki reklam sayısı (1 → 8, ≥3 → 12, ≥10 → 16) + en eski yayındaki reklamın yaşı
- * (≥14 gün → 5, ≥30 gün → 9). Yayında reklam yok ama son 150 günde reklam verilmişse 3.
- */
-export function adPoints(s: Pick<AdSummary, "activeAds" | "totalAds" | "longestActiveDays">): number {
-  if (s.activeAds === 0) return s.totalAds > 0 ? 3 : 0;
-  const count = s.activeAds >= 10 ? 16 : s.activeAds >= 3 ? 12 : 8;
-  const days = s.longestActiveDays ?? 0;
-  const age = days >= 30 ? 9 : days >= 14 ? 5 : 0;
-  return Math.min(25, count + age);
 }

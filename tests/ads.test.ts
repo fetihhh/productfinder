@@ -4,7 +4,6 @@ import {
   adLibraryClient,
   adLibraryPageUrl,
   adMatches,
-  adPoints,
   adSearchUrl,
   classifyGraphError,
   summarizeAds,
@@ -69,14 +68,6 @@ test("summarizeAds: yayındaki reklamlar, en eski reklamın yaşı, yeni reklaml
 
   const empty = summarizeAds([], NOW);
   assert.deepEqual([empty.activeAds, empty.totalAds, empty.longestActiveDays, empty.euReach, empty.pageId], [0, 0, null, null, null]);
-});
-
-test("adPoints: reklam sayısı + en eski yayındaki reklamın yaşı, en fazla 25", () => {
-  assert.equal(adPoints({ activeAds: 0, totalAds: 0, longestActiveDays: null }), 0);
-  assert.equal(adPoints({ activeAds: 0, totalAds: 4, longestActiveDays: null }), 3);
-  assert.equal(adPoints({ activeAds: 1, totalAds: 1, longestActiveDays: 3 }), 8);
-  assert.equal(adPoints({ activeAds: 3, totalAds: 5, longestActiveDays: 20 }), 17);
-  assert.equal(adPoints({ activeAds: 12, totalAds: 30, longestActiveDays: 45 }), 25);
 });
 
 test("classifyGraphError: anahtar, hız sınırı ve yetki hataları aramaları durdurur", () => {

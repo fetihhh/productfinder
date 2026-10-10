@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { Kpi } from "@/components/DetailSections";
+import { AdStageBadge, Kpi } from "@/components/DetailSections";
 import { ageLabel, formatPrice } from "@/lib/format";
 import { getSummary, type SummaryProduct, type SummaryStore } from "@/lib/summary";
 
@@ -166,31 +166,40 @@ export default async function SummaryPage() {
           )}
         </Section>
 
-        <Section title="Reklamı artan mağazalar" note="Son 14 günde yeni reklam açan mağazalar ve markalar (Meta Reklam Kütüphanesi).">
+        <Section title="Reklamla kanıtlanan winner'lar" note="Reklam kanıt skoruna göre: haftalardır yayında kalan, kopyalanıp yeni kitlelere ve ülkelere açılan reklamlar ürünün kazandırdığını gösterir." href="/yeni?sort=ads">
           {s.adsRising.length === 0 ? (
-            <Empty text="Henüz veri yok: Meta anahtarı eklendikten sonra dolacak (README → Reklam sinyali)." />
+            <Empty text="Henüz yayında reklamı olan mağaza yok." />
           ) : (
             <ul className="space-y-1">
               {s.adsRising.map((a) => (
                 <Row
                   key={a.domain}
-                  href={`/?q=${encodeURIComponent(a.domain)}&status=all`}
-                  image={null}
-                  title={a.page_name ?? a.domain}
-                  sub={`${a.domain}${a.longest_active_days !== null ? ` · en eski reklam ${a.longest_active_days} gün` : ""}`}
+                  href={`/m/${a.domain}`}
+                  image={a.hero_image}
+                  title={a.top_products[0]?.title ?? a.hero_title ?? a.page_name ?? a.domain}
+                  sub={
+                    <span className="inline-flex items-center gap-1.5">
+                      <AdStageBadge stage={a.ad_stage} />
+                      <span>
+                        {a.domain}
+                        {a.longest_active_days !== null ? ` · en eski ${a.longest_active_days} gün` : ""}
+                      </span>
+                    </span>
+                  }
                   right={
                     <span>
-                      <strong>+{a.new_ads_14d}</strong> yeni
+                      <strong className="text-base">{Math.round(Number(a.ad_score))}</strong>
                       <br />
-                      <span className="text-muted">{a.active_ads} yayında</span>
+                      <span className="text-muted">
+                        {a.active_ads} yayında{a.new_ads_14d ? ` · +${a.new_ads_14d}` : ""}
+                      </span>
                     </span>
                   }
                 />
               ))}
             </ul>
           )}
-        </Section>
-      </div>
+        </Section>      </div>
     </main>
   );
 }

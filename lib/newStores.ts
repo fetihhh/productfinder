@@ -1,7 +1,7 @@
 // "Yeni mağazalar" sayfasının sorguları (yalnızca sunucu).
 import type { StoreScoreParts } from "../dtc/storeProbe.ts";
 import type { SnapItem } from "../dtc/storeSnapshot.ts";
-import { adHistory, adSignalsFor, type AdSignalRow } from "./ads.ts";
+import { adHistory, adSignalsFor, type AdHistoryPoint, type AdSignalRow } from "./ads.ts";
 import { db } from "./db.ts";
 
 export type StoreFilters = {
@@ -91,7 +91,7 @@ export async function listNewStores(f: StoreFilters): Promise<{ rows: NewStoreRo
   else if (f.sort === "products") query = query.order("product_count", { ascending: true });
   else if (f.sort === "moving") query = query.order("stock_drops", { ascending: false }).order("total_score", { ascending: false });
   else if (f.sort === "copies") query = query.order("copy_count", { ascending: false }).order("total_score", { ascending: false });
-  else if (f.sort === "ads") query = query.order("ads_active", { ascending: false, nullsFirst: false }).order("total_score", { ascending: false });
+  else if (f.sort === "ads") query = query.order("ad_points", { ascending: false }).order("ads_active", { ascending: false, nullsFirst: false });
   else query = query.order("total_score", { ascending: false }).order("first_product_at", { ascending: false });
   const { data, error } = await query.limit(120);
   if (error) return { rows: [], error: error.message };
@@ -156,7 +156,7 @@ export async function getStoreDetail(domain: string): Promise<{
   s: StoreDetail;
   checks: StoreCheckPoint[];
   ads: AdSignalRow | null;
-  adHistory: { day: string; active_ads: number }[];
+  adHistory: AdHistoryPoint[];
   copies: CopyMember[];
 } | null> {
   if (!/^[a-z0-9.-]{3,100}$/.test(domain)) return null;

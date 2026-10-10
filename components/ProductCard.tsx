@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { quickTrack } from "@/app/actions";
 import { TrackingForm } from "@/components/TrackingForm";
+import { AdStageBadge } from "@/components/DetailSections";
 import { ScoreRing, Stat } from "@/components/ui";
+import type { AdStage } from "@/dtc/adAnalysis";
 import { WIDE_PENDING } from "@/dtc/verify";
 import { ageLabel, availabilityLabel, countryLabel, formatPrice, launchLabel, rangeLabel } from "@/lib/format";
 import type { ProductRow } from "@/lib/products";
@@ -111,7 +113,7 @@ function SalesFacts({ p }: { p: ProductRow }) {
   );
 }
 
-export function ProductCard({ p }: { p: ProductRow }) {
+export function ProductCard({ p, ad }: { p: ProductRow; ad?: { stage: AdStage; score: number } | null }) {
   const href = p.product_url ?? `https://${p.brand_domain}`;
   const b = p.score_breakdown;
   const w = p.winner_breakdown?.parts;
@@ -154,6 +156,7 @@ export function ProductCard({ p }: { p: ProductRow }) {
                 Kısmi kontrol
               </span>
             )}
+            {ad && ad.stage !== "none" && <AdStageBadge stage={ad.stage} score={ad.score} />}
             {Number(p.momentum_score) >= RISING_BADGE && (
               <span className="badge bg-rose-500 text-white shadow-sm">↗ Yükselişte {Number(p.momentum_score).toFixed(0)}</span>
             )}

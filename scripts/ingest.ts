@@ -5,6 +5,7 @@
 //             npm run ingest -- recheck (ayrıca tüm "verified" ürünleri tarihe bakmadan yeniden kontrol eder)
 //             npm run ingest -- no-stores (yeni mağaza keşfi ve kontrolleri atlanır)
 //             npm run ingest -- resupply  (toptancı aramasını tüm doğrulanmış/takip edilen ürünler için hemen yeniler)
+//             npm run ingest -- ads       (yalnızca reklam analizi; reklamı bilinen mağazalar yeniden aranır)
 import {
   BIG_BRAND_MAX_RANK,
   SNAPSHOT_PER_RUN,
@@ -294,6 +295,14 @@ async function writeJobSummary(seconds: number): Promise<void> {
 
 async function main() {
   const started = Date.now();
+  // Yalnızca reklam analizi: reklamı bilinen mağazalar yeniden aranır, skorlar güncellenir (~5 dk).
+  if (process.argv.includes("ads")) {
+    const ok = await adSignals(true);
+    console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
+    await writeJobSummary((Date.now() - started) / 1000);
+    if (!ok) process.exitCode = 1;
+    return;
+  }
   const onlyVerify = process.argv.includes("verify") || process.argv.includes("recheck");
   const collected = onlyVerify ? true : await collect();
   // Yeni mağazalar: keşif (yeni kayıtlı alan adları) → kontrol → puanı yüksek olanların öne çıkan ürünü aday olur.

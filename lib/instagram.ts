@@ -17,6 +17,7 @@ export async function igTargets(limit: number): Promise<IgTarget[]> {
     .from("stores")
     .select("domain, instagram, total_score, ad_points")
     .not("instagram", "is", null)
+    .neq("instagram", "")
     .in("status", ["live", "old"])
     .order("ad_points", { ascending: false })
     .order("total_score", { ascending: false })
@@ -96,6 +97,27 @@ export async function saveIgAccount(t: IgTarget, acc: IgAccount, posts: RankedPo
   const keep = rows.map((r) => r.id);
   const { error: e3 } = await db().from("ig_posts").delete().eq("username", t.username).not("id", "in", `(${keep.map((k) => `"${k}"`).join(",")})`);
   if (e3) throw new Error(`ig_posts temizlenemedi: ${e3.message}`);
+}
+
+/** Instagram hesabı henüz aranmamış, reklam veren ya da puanı yüksek açık mağazalar (önce reklam verenler). */
+export async function storesWithoutInstagram(limit: number, minScore: number): Promise<string[]> {
+  const { data, error } = await db()
+    .from("stores")
+    .select("domain")
+    .is("instagram", null)
+    .eq("status", "live")
+    .or(`ad_points.gt.0,total_score.gte.${minScore}`)
+    .order("ad_points", { ascending: false })
+    .order("total_score", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`stores okunamadı: ${error.message}`);
+  return (data ?? []).map((d) => d.domain as string);
+}
+
+/** "" = ana sayfada Instagram bağlantısı yok (yeniden aranmaz; mağaza kontrolünde güncellenir). */
+export async function setStoreInstagram(domain: string, handle: string): Promise<void> {
+  const { error } = await db().from("stores").update({ instagram: handle }).eq("domain", domain);
+  if (error) throw new Error(`stores güncellenemedi: ${error.message}`);
 }
 
 // ---- Arayüz ----

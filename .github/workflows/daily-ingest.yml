@@ -12,6 +12,7 @@ on:
         options:
           - full # tam günlük iş
           - ads # yalnızca reklam analizi (~5 dk)
+          - instagram # Instagram hesaplarını bul + çok tutan gönderiler (~5 dk)
           - verify # toplama hariç hepsi
           - resupply # toptancı aramasını hemen yenile
 

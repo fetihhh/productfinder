@@ -6,6 +6,7 @@
 //             npm run ingest -- no-stores (yeni mağaza keşfi ve kontrolleri atlanır)
 //             npm run ingest -- resupply  (toptancı aramasını tüm doğrulanmış/takip edilen ürünler için hemen yeniler)
 //             npm run ingest -- ads       (yalnızca reklam analizi; reklamı bilinen mağazalar yeniden aranır)
+//             npm run ingest -- instagram (Instagram hesabı bilinmeyen mağazaların ana sayfası + çok tutan gönderiler)
 import {
   BIG_BRAND_MAX_RANK,
   SNAPSHOT_PER_RUN,
@@ -55,7 +56,7 @@ import { setJobState } from "../lib/stores.ts";
 import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranco.ts";
 import { enabledAdapters } from "../sources/index.ts";
 import { adSignals } from "./ads.ts";
-import { instagramPosts } from "./instagram.ts";
+import { findInstagramHandles, instagramPosts } from "./instagram.ts";
 import { brandAges, checkStores, copyClusters, discoverStores, promoteMovers, promoteStores } from "./stores.ts";
 
 async function collect(): Promise<boolean> {
@@ -308,6 +309,13 @@ async function timing(): Promise<void> {
 async function main() {
   const started = Date.now();
   // Yalnızca reklam analizi: reklamı bilinen mağazalar yeniden aranır, skorlar güncellenir (~5 dk).
+  // Yalnızca Instagram: hesabı bilinmeyen mağazaların ana sayfası + çok tutan gönderiler (~5 dk).
+  if (process.argv.includes("instagram")) {
+    await findInstagramHandles();
+    await instagramPosts();
+    await writeJobSummary((Date.now() - started) / 1000);
+    return;
+  }
   if (process.argv.includes("ads")) {
     const ok = await adSignals(true);
     await instagramPosts();

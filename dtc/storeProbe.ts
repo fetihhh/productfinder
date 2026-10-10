@@ -51,7 +51,7 @@ export type LiveStore = {
   currency: string | null;
   shipsToTr: boolean | null;
   hero: StoreProduct | null;
-  /** Ana sayfadaki Instagram hesabı (ana sayfa okunmadıysa undefined: kayıttaki değer korunur). */
+  /** Ana sayfadaki Instagram hesabı ("" = ana sayfada yok; ana sayfa okunmadıysa undefined: kayıttaki değer korunur). */
   instagram?: string | null;
 };
 
@@ -180,7 +180,7 @@ export async function probeStore(domain: string, fetchPage: FetchPage): Promise<
     currency: meta?.currency ?? null,
     shipsToTr: meta?.shipsTo ? meta.shipsTo.includes("TR") : null,
     hero: pickHero(products, home?.ok ? home.text : null),
-    instagram: home?.ok ? instagramHandle(home.text) : undefined,
+    instagram: home?.ok ? (instagramHandle(home.text) ?? "") : undefined,
   };
 }
 

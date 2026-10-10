@@ -21,7 +21,7 @@ export function IgPostCard({ p, showStore = true }: { p: IgPostRow; showStore?: 
           {video ? (p.product_type === "REELS" ? "▶ Reels" : "▶ Video") : p.media_type === "CAROUSEL_ALBUM" ? "▦ Albüm" : "◻ Görsel"}
         </span>
         {isGiveaway(p.caption) && (
-          <span className="absolute bottom-2 left-2 badge bg-violet-600 text-white shadow-sm" title="Çekiliş: yorumlar katılım koşulu, gerçek ilgiyi abartır">
+          <span className="absolute top-10 left-2 badge bg-violet-600 text-white shadow-sm" title="Çekiliş: yorumlar katılım koşulu, gerçek ilgiyi abartır">
             🎁 Çekiliş
           </span>
         )}

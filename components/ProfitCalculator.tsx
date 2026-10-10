@@ -96,7 +96,9 @@ export function ProfitCalculator({
     vatIncluded: !abroad && vatIncluded,
     vatPct: 0.2,
   });
-  const good = r.profit > 0;
+  // Alış fiyatı girilmeden kâr gösterilirse yanıltıcı olur (maliyet 0 sayılır).
+  const missingCost = !(unitCostUsd > 0);
+  const good = r.profit > 0 && !missingCost;
 
   return (
     <section className="mt-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
@@ -166,10 +168,16 @@ export function ProfitCalculator({
 
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            <div className={`rounded-lg border p-3 ${good ? "border-emerald-300 dark:border-emerald-800" : "border-red-300 dark:border-red-800"}`}>
+            <div className={`rounded-lg border p-3 ${missingCost ? "border-amber-300 dark:border-amber-800" : good ? "border-emerald-300 dark:border-emerald-800" : "border-red-300 dark:border-red-800"}`}>
               <div className="text-xs text-zinc-500">Adet başı net kâr</div>
-              <div className={`text-xl font-semibold tabular-nums ${good ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{money(r.profit, cur)}</div>
-              <div className="text-xs text-zinc-500">satışın %{r.marginPct.toLocaleString("tr-TR")}&apos;i</div>
+              {missingCost ? (
+                <div className="text-sm font-medium text-amber-700 dark:text-amber-400">Önce toptan fiyatı girin</div>
+              ) : (
+                <>
+                  <div className={`text-xl font-semibold tabular-nums ${good ? "text-emerald-700 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>{money(r.profit, cur)}</div>
+                  <div className="text-xs text-zinc-500">satışın %{r.marginPct.toLocaleString("tr-TR")}&apos;i</div>
+                </>
+              )}
             </div>
             <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800" title="Reklam hariç tüm maliyetler düşüldükten sonra kalan: satış başına reklama bundan fazlası harcanırsa zarar edilir">
               <div className="text-xs text-zinc-500">Reklama en fazla (başabaş)</div>

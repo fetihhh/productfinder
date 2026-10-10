@@ -62,7 +62,7 @@ export async function saveCandidate(c: Candidate): Promise<{ productId: string; 
   if (productId) {
     const { error } = await db()
       .from("products")
-      .update({ last_seen_at: now, ...marketplaceEvidence })
+      .update({ last_seen_at: now, ...marketplaceEvidence, ...(c.priority !== undefined ? { verify_priority: c.priority } : {}) })
       .eq("id", productId);
     if (error) throw new Error(`products güncellenemedi: ${error.message}`);
   } else {
@@ -77,6 +77,7 @@ export async function saveCandidate(c: Candidate): Promise<{ productId: string; 
           image_url: c.imageUrl,
           category: c.category,
           last_seen_at: now,
+          verify_priority: c.priority ?? 50,
           ...marketplaceEvidence,
         },
         { onConflict: "brand_domain,normalized_name" },
@@ -131,6 +132,7 @@ export async function productsToVerify(limit: number, recheckAll = false): Promi
     .select("id, name, brand_domain, product_url, dtc_status, brands(marketplace_status, marketplace_evidence, marketplace_checked_at, tranco_rank), mentions(source)")
     .or(`dtc_checked_at.is.null,and(dtc_status.eq.verified,dtc_checked_at.lt.${stale})`)
     .order("dtc_checked_at", { ascending: true, nullsFirst: true })
+    .order("verify_priority", { ascending: false })
     .order("first_seen_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(`products okunamadı: ${error.message}`);

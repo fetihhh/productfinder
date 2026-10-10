@@ -173,6 +173,7 @@ export async function promoteStores(): Promise<boolean> {
         category: null,
         postedAt: new Date(s.first_product_at ?? Date.now()),
         engagement: 0,
+        priority: Number(s.store_score),
         comments: 0,
         marketplaceLinks: [],
       });
@@ -215,6 +216,7 @@ export async function promoteMovers(): Promise<boolean> {
           engagement: i.so,
           comments: 0,
           marketplaceLinks: [],
+          priority: Math.min(100, 70 + 5 * i.so),
         });
         if (r.created) {
           created++;

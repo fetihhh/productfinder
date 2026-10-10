@@ -29,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0016`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0017`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -161,6 +161,8 @@ Bir dropshipping mağazası bir ürüne haftalarca reklam veriyorsa ürün büy�
 
 **Yenileme (~60 günde bir):** 3–5. adımları tekrarlayın. `/yeni` sayfası son 10 günde uyarır; anahtar geçersizse günlük iş başarısız görünür ve sayfada kırmızı uyarı çıkar.
 ## DTC doğrulama (`dtc/verify.ts`)
+
+**Sıra:** her çalıştırmada önce hiç kontrol edilmemiş ürünler, aralarında **doğrulama önceliği** yüksek olan önce (günlük arama kotası en umut verici adaylara harcanır): stoğu tekrar tekrar azalan mağaza ürünü 70 + 5 × stok azalması, yeni mağazanın öne çıkan ürünü mağaza toplam puanı, blog ürünleri 50.
 
 Her ürün sırayla şu adımlardan geçer; ilk başarısız adımda durur ve gerekçe `products.dtc_reason`'a yazılır:
 

@@ -13,6 +13,8 @@ export type Candidate = {
   comments: number;
   /** Yazının aynı ürün için verdiği pazaryeri linkleri (varsa ürün pazaryerinde satılıyor demektir). */
   marketplaceLinks: string[];
+  /** Doğrulama önceliği (0–100, varsayılan 50): kota en umut verici adaylara harcanır. */
+  priority?: number;
 };
 
 export type SourceStats = {

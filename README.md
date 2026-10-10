@@ -29,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0019`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0020`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -59,6 +59,7 @@ cp .env.example .env.local   # değerleri doldurun
 | `npm run ingest -- verify` | Toplama hariç hepsi |
 | `npm run ingest -- no-stores` | Yeni mağaza keşfi ve kontrolleri atlanır |
 | `npm run ingest -- recheck` | Ayrıca tüm `verified` ürünleri tarihe bakmadan yeniden kontrol eder (doğrulama kuralları değişince) |
+| `npm run ingest -- ads` | Yalnızca reklam analizi: reklamı bilinen mağazalar zamanını beklemeden yeniden aranır (~5 dk). GitHub'da: Actions → Run workflow → tür `ads` |
 | `npm run ingest -- resupply` | Toptancı aramasını 7 günlük süreyi beklemeden tüm doğrulanmış/takip edilen ürünler için yeniler |
 
 ## Ücretsiz katman limitleri
@@ -148,7 +149,16 @@ Bir dropshipping mağazası bir ürüne haftalarca reklam veriyorsa ürün büy�
 - **Kimler aranır:** doğrulanmış ürünlerin markaları, sonra puanı ≥ 35 olan açık yeni mağazalar (puana göre). Günde en fazla 150 alan adı, saniyede 1 istek. Reklamı bulunan alan adı 3 günde, bulunmayan 10 günde bir yeniden aranır.
 - **Nasıl eşleşir:** önce alan adıyla aranır; reklamın bağlantı başlığında/metninde alan adı geçmeli ya da reklamı veren sayfanın adı mağaza adıyla aynı olmalı. Sayfa bir kez bulununca sonraki aramalar o sayfanın tüm reklamlarını getirir.
 - **Kapsam:** tüm konulardaki (ticari) reklamlar yalnızca **AB/İngiltere'de gösterilenler** için arşivlenir; arama AB ülkeleriyle yapılır. Yalnızca ABD'ye reklam veren mağaza görünmez.
-- **Reklam puanı (0–25):** yayındaki reklam 1 → 8, ≥ 3 → 12, ≥ 10 → 16; hâlâ yayında olan en eski reklam ≥ 14 gün → +5, ≥ 30 gün → +9. Yayında reklam yok ama son 150 günde reklam verilmişse 3. Mağaza puanına eklenir (aday seçimi), winner skoruna 15 üzerinden, yükseliş skoruna "son 14 günde açılan reklam" olarak girer.
+- **Reklam kanıt skoru (0–100)** (`dtc/adAnalysis.ts`): kârsız reklam birkaç günde kapatılır; kazandıran reklam haftalarca yayında kalır, kopyalanıp yeni kitlelere ve ülkelere açılır.
+  | Bileşen | Puan | Ölçüt |
+  |---|---|---|
+  | Süreklilik | 35 | Hâlâ yayındaki en eski reklam ≥ 30 gün 35, ≥ 21 → 30, ≥ 14 → 25, ≥ 7 → 15, ≥ 3 → 6; ya da 7+ gündür yayında reklam ≥ 5 → 30, ≥ 3 → 22 |
+  | Ölçeklenme | 25 | Son 14 günde açılan reklam ≥ 30 → 25, ≥ 15 → 20, ≥ 8 → 14, ≥ 3 → 8, ≥ 1 → 3 |
+  | Kopya reklam | 15 | Aynı reklam metninin yayındaki kopyası ≥ 5 → 15, ≥ 3 → 10, ≥ 2 → 5 (rakam/emoji farkları yok sayılır) |
+  | Erişim | 15 | AB'de toplam erişim ≥ 200 B → 15, ≥ 50 B → 11, ≥ 10 B → 7, ≥ 1 B → 3 |
+  | Ülke genişlemesi | 10 | Gösterildiği AB ülkesi ≥ 8 → 10, ≥ 4 → 7, ≥ 2 → 4 |
+
+  Yayında reklam kalmadıysa en fazla 15. **Aşama:** 🏆 Kanıtlanmış winner (süreklilik ≥ 25 ve ≥ 2 reklam yayında), 🚀 Ölçekleniyor (ölçeklenme ≥ 14 ya da kopya ≥ 10), 🧪 Test aşamasında, ⏸ Durmuş. Mağaza puanına `25 × skor / 100`, winner skoruna `15 × skor / 100` eklenir. Ölçeklenen ve kanıtlanmış reklamcılar her gün yeniden aranır. Reklam bulunduysa yayındaki reklamlar ayrıca istenir (tek sayfa 100 reklamla sınırlıdır). Ayrıca: **tahmini harcama** (AB erişimi × 1,6 gösterim × 5–12 € CPM; yalnızca büyüklük fikri), **ülkeler**, **en çok tekrarlanan reklam metinleri** ve **reklamı verilen ürün** (reklam başlığı/metni ↔ mağazanın ürünleri). Reklamı verilen ürün öne çıkan ürün değilse ve en az 2 reklamı varsa o da aday olur.
 - **Gösterim:** ürün sayfasında reklam bölümü (yayındaki reklam sayısı, en eski reklamın yaşı, son 14 günde açılanlar, AB erişimi, örnek reklamlar ve geçmiş grafiği), yeni mağaza kartlarında "Reklam" satırı, iki listede de **Reklam verenler** filtresi.
 - Erişim anahtarı URL'ye değil `Authorization` başlığına konur. API'nin döndürdüğü `ad_snapshot_url` anahtarı içerdiği için saklanmaz; bağlantılar herkese açık `facebook.com/ads/library/?id=…` sayfasına gider.
 

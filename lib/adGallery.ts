@@ -28,13 +28,10 @@ export type GalleryAd = {
 
 type Snap = { h: string; t: string; img: string | null };
 
-export async function galleryAds(opts: { niche: string; activeOnly: boolean; limit: number }): Promise<GalleryAd[]> {
-  const { data: sigs, error } = await db()
-    .from("ad_signals")
-    .select("domain, ad_stage, ad_score, creatives, top_products, active_ads")
-    .gt("total_ads", 0)
-    .order("ad_score", { ascending: false })
-    .limit(300);
+export async function galleryAds(opts: { niche: string; activeOnly: boolean; limit: number; domain?: string; perStore?: number }): Promise<GalleryAd[]> {
+  let q = db().from("ad_signals").select("domain, ad_stage, ad_score, creatives, top_products, active_ads").gt("total_ads", 0);
+  if (opts.domain) q = q.eq("domain", opts.domain);
+  const { data: sigs, error } = await q.order("ad_score", { ascending: false }).limit(300);
   if (error) throw new Error(`ad_signals okunamadı: ${error.message}`);
   const domains = (sigs ?? []).map((s) => s.domain as string);
   if (domains.length === 0) return [];
@@ -84,7 +81,7 @@ export async function galleryAds(opts: { niche: string; activeOnly: boolean; lim
     .filter((a) => {
       const n = (perStore.get(a.domain) ?? 0) + 1;
       perStore.set(a.domain, n);
-      return n <= 2;
+      return n <= (opts.perStore ?? 2);
     })
     .slice(0, opts.limit);
 }

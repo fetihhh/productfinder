@@ -29,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0022`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0024`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -292,6 +292,15 @@ Toplam en fazla 100.
 | Hacim | `30 × min(m30, 5) / 5` | m30 = son 30 gündeki bahsedilme sayısı |
 
 Örnek: tek blogda bu hafta bir kez anılan ürün → 13.3 + 10 + 6 = **29.3**. Üç farklı blogda bu hafta anılan ürün → 40 + 30 + 18 = **88**.
+
+## Türkiye lansman kiti (`dtc/audience.ts`, `dtc/adCopy.ts`, `components/LaunchKit.tsx`)
+
+Reklamı olan her ürün ve mağaza sayfasında:
+- **Kazanan reklamların kitlesi:** Meta Reklam Kütüphanesi AB reklamları için yaş × cinsiyet × ülke erişim dökümü verir (`age_country_gender_reach_breakdown`). Kadın/erkek payı, yaş dağılımı, erişimin ≥ %70'ini kapsayan en dar yaş aralığı, platformlar (reklamların kaçında Instagram/Facebook seçili) ve en çok erişilen ülkeler.
+- **Reklam Yöneticisi ayarları (öneri):** konum Türkiye; yaş = çekirdek yaş aralığı (en az 18); cinsiyet ≥ %70 tek cinsiyetse o cinsiyet, değilse tümü; yerleşim platform paylarından; geniş hedeflemeyle başlama notları.
+- **Kazanan reklamın Türkçesi:** kanıtlanmış/ölçeklenen/test aşamasındaki reklamcıların en çok tutan 2 reklam metni MyMemory ile Türkçeye çevrilir (dil metinden tahmin edilir; günde en fazla 8 metin, önbellekli).
+- **Türkçe reklam metni taslakları:** kazanan reklamlarda kullanılan açı (sorun→çözüm, hediye, önce/sonra, sosyal kanıt, yenilik; çok dilli anahtar kelimelerle) önce gelir; teklif satırları rakibin reklam ve ürün sayfası tekliflerinden (indirim, ücretsiz kargo, paket, garanti), yoksa kapıda ödeme/hızlı kargo. Her taslakta ilk 3 saniye kancası, ana metin ve başlık; kopyalama düğmeleri. Ücretli yapay zekâ kullanılmaz; [köşeli] yerler elle doldurulur.
+- **Bu mağazanın çok tutan reklamları:** mağazanın en çok tutan 6 reklam metni (yayındaki kopya, süre, erişim, Reklamı aç).
 
 ## Reklam galerisi ve Instagram (`/reklamlar`, `dtc/instagram.ts`, `scripts/instagram.ts`)
 

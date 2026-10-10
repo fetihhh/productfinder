@@ -12,6 +12,8 @@ import { getFx } from "@/lib/fx";
 import { copiesOf, offerComparison, storeExists } from "@/lib/newStores";
 import { InstagramSection } from "@/components/IgPostCard";
 import { igPostsFor } from "@/lib/instagram";
+import { LaunchKit } from "@/components/LaunchKit";
+import { galleryAds } from "@/lib/adGallery";
 import { ProfitCalculator } from "@/components/ProfitCalculator";
 
 function Panel({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
@@ -29,11 +31,12 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
   const [data, fx] = await Promise.all([getProduct(id), getFx()]);
   if (!data) notFound();
   const { p, history, ranks, suppliers, ads, adHistory, nameEn } = data;
-  const [copies, isStore, offers, ig] = await Promise.all([
+  const [copies, isStore, offers, ig, topAds] = await Promise.all([
     copiesOf(p.brand_domain),
     storeExists(p.brand_domain),
     offerComparison(p.brand_domain),
     igPostsFor(p.brand_domain),
+    galleryAds({ domain: p.brand_domain, niche: "", activeOnly: false, limit: 6, perStore: 6 }),
   ]);
   const w = p.winner_breakdown;
   const brand = p.brands;
@@ -219,6 +222,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
       />
 
       <AdsSection domain={p.brand_domain} ads={ads} history={adHistory} />
+      <LaunchKit ads={ads} product={nameEn ?? p.name} storeOffer={offers.find((o) => o.self)?.offer ?? null} topAds={topAds} />
       <InstagramSection data={ig} />
 
       {copies.length > 1 && <CopiesSection self={p.brand_domain} members={copies} />}

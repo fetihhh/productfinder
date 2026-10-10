@@ -1,13 +1,10 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { CopyButton } from "@/components/CopyButton";
-import { AdStageBadge } from "@/components/DetailSections";
+import { AdCard } from "@/components/AdCard";
 import { IgPostCard } from "@/components/IgPostCard";
-import { TimingBadge, Toggle } from "@/components/ui";
-import { NICHES, nicheLabel } from "@/dtc/niche";
-import { adLibraryAdUrl } from "@/dtc/adLibrary";
+import { Toggle } from "@/components/ui";
+import { NICHES } from "@/dtc/niche";
 import { galleryAds } from "@/lib/adGallery";
-import { compact } from "@/lib/format";
 import { topIgPosts, type InstagramState } from "@/lib/instagram";
 import { getJobState } from "@/lib/stores";
 import { db } from "@/lib/db";
@@ -16,7 +13,6 @@ export const metadata = { title: "Reklamlar" };
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 
-const PLATFORM: Record<string, string> = { facebook: "Facebook", instagram: "Instagram", messenger: "Messenger", audience_network: "Audience Network", threads: "Threads", whatsapp: "WhatsApp" };
 
 function IgNotice({ state, empty }: { state: InstagramState | null; empty: boolean }) {
   if (state?.status === "ok" && !empty) return null;
@@ -135,60 +131,7 @@ export default async function AdsGalleryPage({ searchParams }: PageProps<"/rekla
           ) : (
             <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {ads.map((a, i) => (
-                <article key={`${a.domain}-${a.adId ?? i}`} className="card flex flex-col overflow-hidden">
-                  <div className="flex gap-3 border-b border-line p-3.5">
-                    <span className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-surface-muted ring-1 ring-line">
-                      {a.image && <img src={a.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <Link href={`/m/${a.domain}`} className="block truncate text-sm font-semibold hover:underline">
-                        {a.productTitle ?? a.shopName ?? a.domain}
-                      </Link>
-                      <div className="truncate text-xs text-muted">
-                        {a.domain}
-                        {a.niche && a.niche !== "other" ? ` · ${nicheLabel(a.niche)}` : ""}
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        <AdStageBadge stage={a.stage} score={a.adScore} />
-                        <TimingBadge timing={a.timing} hideUnproven />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-1 flex-col p-3.5">
-                    <div className="grid grid-cols-3 gap-1.5 text-center">
-                      <div className="rounded-xl bg-surface-muted px-2 py-1.5" title="Bu metinle yayında olan reklam (kopya) sayısı">
-                        <div className="text-[10px] tracking-wide text-muted uppercase">Yayında</div>
-                        <div className="text-sm font-semibold tabular-nums">
-                          {a.active}/{a.count}
-                        </div>
-                      </div>
-                      <div className="rounded-xl bg-surface-muted px-2 py-1.5" title="Bu metnin ilk yayına girdiğinden beri geçen süre">
-                        <div className="text-[10px] tracking-wide text-muted uppercase">Süre</div>
-                        <div className="text-sm font-semibold tabular-nums">{a.days !== null ? `${a.days} gün` : "—"}</div>
-                      </div>
-                      <div className="rounded-xl bg-surface-muted px-2 py-1.5" title="AB'deki toplam erişim">
-                        <div className="text-[10px] tracking-wide text-muted uppercase">Erişim</div>
-                        <div className="text-sm font-semibold tabular-nums">{a.reach ? compact(a.reach) : "—"}</div>
-                      </div>
-                    </div>
-                    {a.title && <p className="mt-3 text-sm font-semibold">{a.title}</p>}
-                    <p className="mt-1 line-clamp-5 text-sm whitespace-pre-line">{a.text}</p>
-                    {a.platforms.length > 0 && <p className="mt-2 text-xs text-muted">{a.platforms.map((p) => PLATFORM[p] ?? p).join(" · ")}</p>}
-                    <div className="mt-auto flex flex-wrap gap-1.5 pt-3">
-                      {a.adId && (
-                        <a href={adLibraryAdUrl(a.adId)} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary">
-                          Reklamı aç ↗
-                        </a>
-                      )}
-                      <CopyButton text={[a.title, a.text].filter(Boolean).join("\n\n")} />
-                      {a.productUrl && (
-                        <a href={a.productUrl} target="_blank" rel="noopener noreferrer" className="btn btn-sm">
-                          Ürün sayfası ↗
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                </article>
+                <AdCard key={`${a.domain}-${a.adId ?? i}`} a={a} />
               ))}
             </div>
           )}

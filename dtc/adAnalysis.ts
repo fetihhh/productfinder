@@ -4,6 +4,7 @@
 import { normalizeName } from "../lib/productName.ts";
 import { clip } from "../lib/text.ts";
 import type { ArchivedAd } from "./adLibrary.ts";
+import { audienceOf, type Audience } from "./audience.ts";
 import { adOffers, type AdOffers } from "./offers.ts";
 
 const DAY = 86_400_000;
@@ -49,6 +50,8 @@ export type AdAnalysis = {
   products: AdvertisedProduct[];
   /** Reklam metinlerinde öne çıkan teklifler (indirim %, ücretsiz kargo, paket, aciliyet, garanti). */
   offers: AdOffers;
+  /** Yaş × cinsiyet erişim dökümünden gerçek kitle (döküm yoksa null). */
+  audience: Audience | null;
 };
 
 const isActive = (ad: ArchivedAd, now: number) => !ad.ad_delivery_stop_time || Date.parse(ad.ad_delivery_stop_time) > now;
@@ -158,5 +161,5 @@ export function analyzeAds(all: ArchivedAd[], activeAds: ArchivedAd[] | null, no
             : "testing";
 
   const texts = ads.map((a) => [...(a.ad_creative_link_titles ?? []), ...(a.ad_creative_bodies ?? []), ...(a.ad_creative_link_descriptions ?? [])].join(" "));
-  return { score, stage, parts, creatives, countries, active7d, active14d, spend, products: advertisedProducts(ads, products), offers: adOffers(texts) };
+  return { score, stage, parts, creatives, countries, active7d, active14d, spend, products: advertisedProducts(ads, products), offers: adOffers(texts), audience: audienceOf(ads) };
 }

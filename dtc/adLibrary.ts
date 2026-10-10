@@ -19,7 +19,10 @@ export type ArchivedAd = {
   publisher_platforms?: string[];
   eu_total_reach?: number;
   /** AB reklamları: ülke bazında erişim dökümü (hangi ülkelerde gösterildi). */
-  age_country_gender_reach_breakdown?: { country?: string }[];
+  age_country_gender_reach_breakdown?: {
+    country?: string;
+    age_gender_breakdowns?: { age_range?: string; male?: number | null; female?: number | null; unknown?: number | null }[];
+  }[];
 };
 
 export type AdSample = { id: string; url: string; title: string | null; body: string | null; start: string | null; active: boolean };

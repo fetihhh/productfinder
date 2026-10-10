@@ -2,6 +2,8 @@
 import { AD_RECHECK_DAYS, NEW_STORE_MAX_AGE_DAYS } from "../config/limits.ts";
 import type { AdAnalysis, AdScoreParts, AdStage, AdvertisedProduct, CreativeGroup } from "../dtc/adAnalysis.ts";
 import type { AdOffers } from "../dtc/offers.ts";
+import type { Audience } from "../dtc/audience.ts";
+import { guessLang } from "../dtc/adCopy.ts";
 import type { AdSummary } from "../dtc/adLibrary.ts";
 import { db } from "./db.ts";
 
@@ -97,6 +99,7 @@ export async function saveAdSignal(t: AdTarget, s: AdSummary, a: AdAnalysis): Pr
       spend_high: a.spend?.high ?? null,
       top_products: a.products,
       ad_offers: a.offers,
+      audience: a.audience,
       checked_at: now.toISOString(),
       next_check_at: next.toISOString(),
     },
@@ -142,7 +145,12 @@ export type AdSignalRow = {
   spend_high: number | null;
   top_products: AdvertisedProduct[];
   ad_offers: Partial<AdOffers>;
+  audience: Audience | null;
+  /** En çok tutan reklam metinlerinin Türkçesi. */
+  copy_tr: CopyTr[];
 };
+
+export type CopyTr = { adId: string | null; text: string; tr: string; lang: string };
 
 /** Arayüz: verilen alan adlarının reklam özeti. */
 export async function adSignalsFor(domains: string[]): Promise<Map<string, AdSignalRow>> {
@@ -151,7 +159,7 @@ export async function adSignalsFor(domains: string[]): Promise<Map<string, AdSig
     const { data, error } = await db()
       .from("ad_signals")
       .select(
-        "domain, page_id, page_name, active_ads, total_ads, new_ads_14d, first_ad_at, longest_active_days, eu_reach, platforms, samples, ad_points, checked_at, ad_score, ad_stage, ad_parts, creatives, countries, active_7d, active_14d, spend_low, spend_high, top_products, ad_offers",
+        "domain, page_id, page_name, active_ads, total_ads, new_ads_14d, first_ad_at, longest_active_days, eu_reach, platforms, samples, ad_points, checked_at, ad_score, ad_stage, ad_parts, creatives, countries, active_7d, active_14d, spend_low, spend_high, top_products, ad_offers, audience, copy_tr",
       )
       .in("domain", chunk);
     if (error) throw new Error(`ad_signals okunamadı: ${error.message}`);
@@ -183,4 +191,30 @@ export async function adStoreContext(domain: string): Promise<AdStoreContext | n
   if (error || !data) return null;
   const snap = (data.products_snapshot as { h: string; t: string; img: string | null; c: string | null }[] | null) ?? [];
   return { shop_name: data.shop_name, hero_handle: data.hero_handle, first_product_at: data.first_product_at, products: snap.map(({ h, t, img, c }) => ({ h, t, img, c })) };
+}
+/**
+ * Reklamcının en çok tutan 2 reklam metnini Türkçeye çevirir (daha önce çevrilenler atlanır). Dil metinden tahmin edilir;
+ * tahmin edilemezse İngilizce varsayılır. Çeviri kotası bitince sessizce durur.
+ */
+export async function translateTopCreatives(
+  domain: string,
+  creatives: CreativeGroup[],
+  translate: (text: string, from: string) => Promise<string | null>,
+): Promise<number> {
+  const { data } = await db().from("ad_signals").select("copy_tr").eq("domain", domain).maybeSingle();
+  const existing = ((data?.copy_tr as CopyTr[] | null) ?? []).filter((c) => creatives.some((g) => g.text === c.text));
+  let added = 0;
+  for (const g of creatives.slice(0, 2)) {
+    if (!g.text || g.text.length < 20 || existing.some((c) => c.text === g.text)) continue;
+    const lang = guessLang(g.text) ?? "en";
+    const tr = await translate(g.text, lang);
+    if (!tr) break;
+    existing.push({ adId: g.adId ?? null, text: g.text, tr, lang });
+    added++;
+  }
+  if (added) {
+    const { error } = await db().from("ad_signals").update({ copy_tr: existing.slice(-3) }).eq("domain", domain);
+    if (error) throw new Error(`ad_signals yazılamadı: ${error.message}`);
+  }
+  return added;
 }

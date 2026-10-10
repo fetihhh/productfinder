@@ -2,13 +2,20 @@
 import { AD_CHECKS_PER_RUN, AD_COUNTRIES, AD_MIN_STORE_SCORE, GRAPH_API_VERSION } from "../config/limits.ts";
 import { analyzeAds, STAGE_LABELS } from "../dtc/adAnalysis.ts";
 import { adLibraryClient, adMatches, summarizeAds, tokenExpiry } from "../dtc/adLibrary.ts";
-import { adStoreContext, adTargets, knownAdvertisers, saveAdSignal } from "../lib/ads.ts";
+import { adStoreContext, adTargets, knownAdvertisers, saveAdSignal, translateTopCreatives } from "../lib/ads.ts";
+import { politeFetch } from "../lib/http.ts";
+import { tryConsumeQuota } from "../lib/repo.ts";
+import { translateText } from "../lib/translate.ts";
 import { registrableDomain } from "../lib/domain.ts";
 import type { MetaAdsState } from "../lib/newStores.ts";
 import { saveCandidate } from "../lib/repo.ts";
 import { setJobState } from "../lib/stores.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// Reklam metni çevirisi (MyMemory, anahtarsız ~5.000 karakter/gün): günde en fazla 8 metin (≈ 3.600 karakter).
+const AD_TRANSLATE_DAILY = 8;
+const trQuota = () => tryConsumeQuota("mymemory_ads", AD_TRANSLATE_DAILY, AD_TRANSLATE_DAILY * 31);
+const toTurkish = (text: string, from: string) => translateText(text, from, "tr", politeFetch, trQuota);
 
 /** reanalyze: reklamı bilinen mağazalar zamanını beklemeden yeniden aranır (analiz kuralları değişince). */
 export async function adSignals(reanalyze = false): Promise<boolean> {
@@ -66,6 +73,21 @@ export async function adSignals(reanalyze = false): Promise<boolean> {
     const analysis = analyzeAds(matched, active, Date.now(), ctx?.products ?? []);
     await saveAdSignal(t, summary, analysis);
     checked++;
+    // Kazanan reklamların metni Türkçeye (Türkiye reklamı için taslak); yalnızca kanıtlanmış/ölçeklenen/test reklamcılar.
+    if (analysis.stage !== "none" && analysis.stage !== "stopped") {
+      try {
+        await translateTopCreatives(t.domain, analysis.creatives, toTurkish);
+      } catch (err) {
+        console.error(`  ! ${t.domain} çeviri: ${(err as Error).message}`);
+      }
+    }
+    if (analysis.audience && summary.totalAds > 0) {
+      const a = analysis.audience;
+      const known = a.female + a.male;
+      console.log(
+        `     ${t.domain} kitle: %${known ? Math.round((a.female / known) * 100) : "?"} kadın · çekirdek yaş ${a.core ? `${a.core.min}–${a.core.max ?? "65+"}` : "?"} · ${a.platforms.map((p) => `${p.name} %${Math.round(p.share * 100)}`).join(", ")}`,
+      );
+    }
     if (summary.totalAds > 0) {
       found++;
       console.log(

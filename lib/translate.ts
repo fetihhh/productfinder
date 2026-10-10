@@ -36,6 +36,30 @@ export function parseMyMemory(text: string, original: string): string | null {
 }
 
 /**
+ * Herhangi iki dil arasında çevirir (ör. reklam metni → Türkçe). Önbellek anahtarı "kaynak>hedef". MyMemory tek istekte
+ * en fazla 500 bayt kabul eder; metin 450 karaktere kırpılır.
+ */
+export async function translateText(
+  text: string,
+  from: string,
+  to: string,
+  fetchPage: FetchPage,
+  consumeQuota: () => Promise<boolean>,
+): Promise<string | null> {
+  const q = clip(text.trim(), 450);
+  if (!q || from === to) return null;
+  const key = `${from}>${to}`;
+  const { data: cached } = await db().from("translations").select("translated").eq("source_lang", key).eq("text", q).maybeSingle();
+  if (cached?.translated) return cached.translated as string;
+  if (!(await consumeQuota())) return null;
+  const res = await fetchPage(`https://api.mymemory.translated.net/get?${new URLSearchParams({ q, langpair: `${from}|${to}` })}`, "application/json");
+  if (!res.ok) return null;
+  const translated = parseMyMemory(res.text, q);
+  if (translated) await db().from("translations").upsert({ source_lang: key, text: q, translated: clip(translated, 900) }, { onConflict: "source_lang,text" });
+  return translated;
+}
+
+/**
  * İngilizceye çevirir (önbellekli). consumeQuota çevirmeden önce günlük kotayı düşer; false dönerse çevrilmez.
  * Hata ya da kota bittiğinde null: çağıran özgün adla devam eder.
  */

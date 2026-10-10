@@ -96,6 +96,9 @@ function quotaGuardedSearch(): SearchFn | null {
   };
 }
 
+/** Çeviri kotası (MyMemory anahtarsız kullanım sınırının altında kalmak için). */
+const translateQuota = () => tryConsumeQuota("mymemory", TRANSLATE_DAILY_LIMIT, TRANSLATE_MONTHLY_LIMIT);
+
 async function verify(): Promise<boolean> {
   const products = await productsToVerify(VERIFY_PER_RUN, process.argv.includes("recheck"));
   console.log(`\n▶ DTC doğrulama: ${products.length} ürün`);
@@ -120,10 +123,15 @@ async function verify(): Promise<boolean> {
           : null);
       // Yeni mağaza keşfinden gelen ürünlerin adı markayla başlamaz (marka = mağaza adı).
       const fromStore = p.mentions.length > 0 && p.mentions.every((m) => m.source === "yenimagaza");
+      // İngilizce olmayan mağaza ürünü pazaryerlerinde (Amazon.com) İngilizce adıyla aranır.
+      const lang = fromStore ? sourceLang(p.brands?.country) : null;
+      const english = lang ? await translateToEnglish(p.name, lang, politeFetch, translateQuota) : null;
       const r = await verifyProduct(
-        { brandDomain: p.brand_domain, productUrl: p.product_url, productName: p.name, brand, nameStartsWithBrand: !fromStore },
+        { brandDomain: p.brand_domain, productUrl: p.product_url, productName: english ?? p.name, brand, nameStartsWithBrand: !fromStore },
         deps,
       );
+      // Çevrilen ad ekranda gösterilmez: ürünün adı mağazadaki özgün adı kalır.
+      if (english && r.name === english) r.name = p.name;
       await saveVerification(p, r);
       if (r.brandCheck) {
         brandCache.set(p.brand_domain, {
@@ -206,7 +214,7 @@ async function suppliers(): Promise<boolean> {
     try {
       // İngilizce olmayan mağazanın ürün adı toptancıda İngilizce aranır.
       const lang = sourceLang(p.country);
-      const english = lang ? await translateToEnglish(p.name, lang, politeFetch, () => tryConsumeQuota("mymemory", TRANSLATE_DAILY_LIMIT, TRANSLATE_MONTHLY_LIMIT)) : null;
+      const english = lang ? await translateToEnglish(p.name, lang, politeFetch, translateQuota) : null;
       const images = await productImageUrls(p.image_url, p.product_url, politeFetch);
       const imageHashes = (await Promise.all(images.map(hashImage))).filter((h): h is bigint => h !== null);
       const r = await findSuppliers(

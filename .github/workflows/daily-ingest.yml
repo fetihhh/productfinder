@@ -29,4 +29,5 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          # Gizli ayar yanlışlıkla "META_ACCES_TOKEN" adıyla kaydedildiyse o da okunur.
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN || secrets.META_ACCES_TOKEN }}

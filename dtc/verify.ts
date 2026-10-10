@@ -9,7 +9,7 @@ import type { FetchResult } from "../lib/http.ts";
 import { visitsFromRank } from "../lib/winner.ts";
 import { buildBrandQuery, buildQuery, findBrandListing, findMarketplaceListing, type SearchFn } from "./marketplaceSearch.ts";
 import { directQuery } from "./directSearch.ts";
-import { modelCoverage, modelTokens } from "./match.ts";
+import { modelCoverage, modelTokens, tokens } from "./match.ts";
 import { readRating } from "./sales.ts";
 import {
   countryFromTld,
@@ -305,6 +305,8 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
     input.nameStartsWithBrand === false
       ? [...new Set([normalizeName(input.brandDomain.split(".")[0]).replace(/\s+/g, ""), compactName].filter((w) => w.length >= 3))]
       : undefined;
+  // Yeni mağaza ürünlerinde marka düzeyi eşleşme için üründen bir kelime de gerekir (mağaza adları başka markalarla çakışır).
+  const productWords = brandWords ? tokens(input.productName).filter((t) => t.length >= 4 && !brandWords.includes(t)) : undefined;
   let directComplete = false;
   if (deps.directSearch) {
     const d = await deps.directSearch(directQuery(brandName, input.productName));
@@ -319,7 +321,7 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
       if (STRICT_BRAND_CHECK) {
         const b = await deps.directSearch(directQuery(brandName, ""));
         if (b.ok) {
-          const brandListing = findBrandListing(b.results, brandName, input.brandDomain, input.productName);
+          const brandListing = findBrandListing(b.results, brandName, input.brandDomain, input.productName, productWords);
           if (brandListing) {
             r.brandCheck = { status: "found", evidence: `${brandListing.why}: ${brandListing.url}` };
             return done("rejected_marketplace", `${brandListing.why} (doğrudan arama): ${brandListing.url}`);
@@ -365,7 +367,7 @@ export async function verifyProduct(input: VerifyInput, deps: VerifyDeps): Promi
     if (brandOutcome.quota && directComplete && VERIFY_WITH_DIRECT_ONLY) return done("verified", WIDE_PENDING, true);
     return done("unverified", `${QUOTA_PREFIX} (marka araması): ${brandOutcome.reason}`, true);
   }
-  const brandListing = findBrandListing(brandOutcome.results, brandName, input.brandDomain, input.productName);
+  const brandListing = findBrandListing(brandOutcome.results, brandName, input.brandDomain, input.productName, productWords);
   if (brandListing) {
     r.brandCheck = { status: "found", evidence: `${brandListing.why}: ${brandListing.url}` };
     return done("rejected_marketplace", `${brandListing.why}: ${brandListing.url}`);

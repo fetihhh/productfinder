@@ -3,6 +3,7 @@ import { COPY_MIN_STORE_SCORE, NEW_STORE_MAX_AGE_DAYS } from "../config/limits.t
 import { nextCheck, storeActivity, storeScore, storeScoreParts, type StoreProbe } from "../dtc/storeProbe.ts";
 import { mergeSnapshot, type SnapItem } from "../dtc/storeSnapshot.ts";
 import { db } from "./db.ts";
+import { clip } from "./text.ts";
 
 const DAY = 86_400_000;
 
@@ -76,7 +77,7 @@ export async function saveStoreCheck(s: StoreToCheck, probe: StoreProbe): Promis
   const update: Record<string, unknown> = { status, next_check_at: next, last_checked_at: new Date().toISOString() };
   if (probe.state === "live") {
     Object.assign(update, {
-      shop_name: probe.shopName,
+      shop_name: probe.shopName ? clip(probe.shopName, 120) : null,
       country: probe.country,
       ships_to_tr: probe.shipsToTr,
       currency: probe.currency,
@@ -92,7 +93,7 @@ export async function saveStoreCheck(s: StoreToCheck, probe: StoreProbe): Promis
       first_product_at: probe.firstProductAt,
       last_product_at: probe.lastProductAt,
       hero_handle: probe.hero?.handle ?? null,
-      hero_title: probe.hero?.title?.slice(0, 200) ?? null,
+      hero_title: probe.hero?.title ? clip(probe.hero.title, 200) : null,
       hero_image: probe.hero?.image ?? null,
       hero_price: probe.hero?.price ?? null,
       store_score: score,

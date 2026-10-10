@@ -7,6 +7,7 @@ import type { Candidate, SeenItem } from "../sources/types.ts";
 import { adPointsByDomain } from "./ads.ts";
 import { db } from "./db.ts";
 import { normalizeName } from "./productName.ts";
+import { clip } from "./text.ts";
 import { trendScore, type MentionLite } from "./score.ts";
 import { soldPerWeek, supplierEconomics, winnerScore } from "./winner.ts";
 
@@ -380,7 +381,7 @@ export async function saveSuppliers(p: ProductToSource, r: SupplierResult): Prom
         product_id: p.id,
         url: o.url,
         source: o.source,
-        title: o.title.slice(0, 300),
+        title: clip(o.title, 300),
         image_url: o.imageUrl,
         price_min: o.priceMin,
         price_max: o.priceMax,

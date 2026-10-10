@@ -1,6 +1,7 @@
 // Mağazanın ürün listesinin anlık görüntüsü ve ürün bazında hareket: hangi üründe stok azalıyor, hangisinin fiyatı
 // değişti, hangisi yeni eklendi. Mağaza toplamı yerine mağazanın asıl sattığı ürünü bulmak için.
 // Anlık görüntü yalnızca puanı belirli bir seviyenin üstündeki mağazalarda tutulur (veritabanı boyutu).
+import { clip } from "../lib/text.ts";
 import type { StoreProduct } from "./storeProbe.ts";
 
 /** Kısa anahtarlar: mağaza başına en fazla 60 ürün jsonb'de saklanır. */
@@ -37,7 +38,7 @@ export function mergeSnapshot(prev: SnapItem[] | null, products: StoreProduct[],
     const o = old.get(p.handle);
     const base: SnapItem = {
       h: p.handle,
-      t: p.title.slice(0, 160),
+      t: clip(p.title, 160),
       img: p.image,
       p: p.price,
       cp: p.compareAt,

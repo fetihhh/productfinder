@@ -4,6 +4,8 @@
 // Anahtar URL'ye değil Authorization başlığına konur ve hiçbir yerde yazdırılmaz. API'nin döndürdüğü
 // ad_snapshot_url anahtarı içerdiği için saklanmaz; yerine herkese açık Reklam Kütüphanesi bağlantısı kullanılır.
 
+import { clip } from "../lib/text.ts";
+
 export type ArchivedAd = {
   id: string;
   page_id?: string;
@@ -157,6 +159,8 @@ export function adMatches(ad: ArchivedAd, domain: string, shopName: string | nul
   return shop.length >= 4 && norm(ad.page_name ?? "") === shop;
 }
 
+const clipOrNull = (s: string | undefined, n: number) => (s ? clip(s, n) : null);
+
 const isActive = (ad: ArchivedAd, now: number) => !ad.ad_delivery_stop_time || Date.parse(ad.ad_delivery_stop_time) > now;
 
 export function summarizeAds(ads: ArchivedAd[], now = Date.now()): AdSummary {
@@ -194,8 +198,8 @@ export function summarizeAds(ads: ArchivedAd[], now = Date.now()): AdSummary {
     samples: ordered.slice(0, 3).map((a) => ({
       id: a.id,
       url: adLibraryAdUrl(a.id),
-      title: a.ad_creative_link_titles?.find(Boolean)?.slice(0, 120) ?? null,
-      body: a.ad_creative_bodies?.find(Boolean)?.slice(0, 280) ?? null,
+      title: clipOrNull(a.ad_creative_link_titles?.find(Boolean), 120),
+      body: clipOrNull(a.ad_creative_bodies?.find(Boolean), 280),
       start: a.ad_delivery_start_time ?? null,
       active: isActive(a, now),
     })),

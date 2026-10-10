@@ -82,6 +82,11 @@ export function isSearchPage(url: URL): boolean {
 
 export type MarketplaceMatch = { url: string; why: string };
 
+/** Amazon kitap ilanı: ASIN yerine ISBN-10 (rakamla başlar, ör. /dp/2100888005). Kitap fiziksel ürün rakibi değildir. */
+export function isBookListing(url: URL): boolean {
+  return /amazon\./.test(url.hostname) && /\/(?:dp|gp\/product)\/\d{9}[\dX](?:[/?]|$)/i.test(url.pathname);
+}
+
 /**
  * Bir arama sonucunun aynı ürünün pazaryeri ilanı olup olmadığına karar verir:
  *  - arama sayfaları ve (Facebook gibi) pazaryeri bölümü dışındaki sayfalar sayılmaz,
@@ -109,7 +114,7 @@ export function findMarketplaceListing(
       continue;
     }
     if (marketplace.listingPath && !marketplace.listingPath.test(url.pathname)) continue;
-    if (isSearchPage(url)) continue;
+    if (isSearchPage(url) || isBookListing(url)) continue;
 
     const title = ` ${normalizeName(r.title)} `;
     if (!brands.some((b) => title.includes(` ${b} `))) continue;
@@ -130,12 +135,15 @@ export function findMarketplaceListing(
  * Marka düzeyi kontrol: markanın herhangi bir pazaryerinde/büyük perakendecide satılıp satılmadığı.
  * Sonuç başlığında marka adı (tam ifade olarak) ya da alan adının birleşik hali geçmeli; arama sayfaları sayılmaz.
  * 5 harften kısa marka adlarında ürünün model kelimelerinden biri de başlık/açıklamada geçmelidir.
+ * productWords verilirse (yeni mağaza ürünleri: mağaza adı çoğu zaman uydurma bir kelimedir ve başka bir markayla çakışır —
+ * "Cosmora" projektör mağazası ↔ "Cosmora" klozet kapağı) bu kelimelerden biri de ilanda geçmelidir.
  */
 export function findBrandListing(
   results: SearchResult[],
   brandName: string,
   brandDomain: string,
   productName = "",
+  productWords?: string[],
 ): MarketplaceMatch | null {
   const phrase = normalizeName(brandName.replace(/[®™]/g, ""));
   const label = normalizeName(brandDomain.split(".")[0]).replace(/\s+/g, "");
@@ -151,7 +159,7 @@ export function findBrandListing(
       continue;
     }
     if (marketplace.listingPath && !marketplace.listingPath.test(url.pathname)) continue;
-    if (isSearchPage(url)) continue;
+    if (isSearchPage(url) || isBookListing(url)) continue;
     const title = ` ${normalizeName(r.title)} `;
     const hasPhrase = phrase.length >= 3 && title.includes(` ${phrase} `);
     const hasLabel = label.length >= 5 && joinsToLabel(title.trim().split(" "), label);
@@ -160,6 +168,7 @@ export function findBrandListing(
     // Kısa marka adları (TDM, ACE…) başka ürünlerin model kodlarıyla karışır: ek olarak ürünle ilgili bir kelime gerekir.
     const distinctive = hasLabel || phrase.replace(/\s+/g, "").length >= 5;
     if (!distinctive && modelCoverage(model, `${r.title} ${r.content}`) === 0) continue;
+    if (productWords?.length && modelCoverage(productWords, `${r.title} ${r.content}`) === 0) continue;
     const kind = marketplace.storePath?.test(url.pathname) ? "mağazası" : "ilanı";
     return { url: r.url, why: `Marka ${marketplace.name}'da satıyor (${kind})` };
   }

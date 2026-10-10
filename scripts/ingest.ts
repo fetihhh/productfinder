@@ -49,6 +49,7 @@ import {
 import { appendFileSync } from "node:fs";
 import { parseTcmb, TCMB_URL } from "../lib/fx.ts";
 import { getSummary } from "../lib/summary.ts";
+import { updateTiming } from "../lib/timing.ts";
 import { sourceLang, translateToEnglish } from "../lib/translate.ts";
 import { setJobState } from "../lib/stores.ts";
 import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranco.ts";
@@ -293,11 +294,22 @@ async function writeJobSummary(seconds: number): Promise<void> {
   }
 }
 
+/** Zamanlama etiketi: erken / zirvede / doymuş / sönüyor (rakip mağazalar + reklamlar + stok hareketi). */
+async function timing(): Promise<void> {
+  try {
+    const r = await updateTiming();
+    console.log(`\n▶ Zamanlama: ${r.stores} mağaza, ${r.products} ürün güncellendi`);
+  } catch (err) {
+    console.error(`\n▶ Zamanlama hesaplanamadı: ${(err as Error).message}`);
+  }
+}
+
 async function main() {
   const started = Date.now();
   // Yalnızca reklam analizi: reklamı bilinen mağazalar yeniden aranır, skorlar güncellenir (~5 dk).
   if (process.argv.includes("ads")) {
     const ok = await adSignals(true);
+    await timing();
     console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
     await writeJobSummary((Date.now() - started) / 1000);
     if (!ok) process.exitCode = 1;
@@ -332,6 +344,7 @@ async function main() {
   const aged = await brandAges();
   const scores = await updateTrendScores();
   console.log(`\n▶ Trend skoru: ${scores.total} ürün, ${scores.updated} değişti`);
+  await timing();
   console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
   console.log(`\nBitti: ${((Date.now() - started) / 1000).toFixed(1)} sn`);
   await writeJobSummary((Date.now() - started) / 1000);

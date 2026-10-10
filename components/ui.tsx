@@ -51,3 +51,22 @@ export function OverlayBadge({ children, className = "", title }: { children: Re
     </span>
   );
 }
+
+const TIMING_STYLE: Record<string, { label: string; icon: string; cls: string }> = {
+  early: { label: "Erken", icon: "🌱", cls: "bg-emerald-600 text-white" },
+  peak: { label: "Zirvede", icon: "🔥", cls: "bg-amber-500 text-white" },
+  saturated: { label: "Doymuş", icon: "🧱", cls: "bg-red-600 text-white" },
+  fading: { label: "Sönüyor", icon: "📉", cls: "bg-zinc-600 text-white" },
+  unproven: { label: "Henüz kanıt yok", icon: "·", cls: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300" },
+};
+
+/** Zamanlama: şimdi bu ürüne girmek için erken mi, zirvede mi, doymuş mu? */
+export function TimingBadge({ timing, reason, hideUnproven = false }: { timing: string | null | undefined; reason?: string | null; hideUnproven?: boolean }) {
+  if (!timing || (hideUnproven && timing === "unproven")) return null;
+  const t = TIMING_STYLE[timing] ?? TIMING_STYLE.unproven;
+  return (
+    <span title={reason ?? undefined} className={`badge cursor-help shadow-sm ${t.cls}`}>
+      {t.icon} {t.label}
+    </span>
+  );
+}

@@ -2,14 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LineChart, ScoreBars } from "@/components/Charts";
 import { SOURCE_NAMES, STATUS } from "@/components/ProductCard";
-import { AdsSection, CopiesSection, Kpi } from "@/components/DetailSections";
+import { AdsSection, CompetitorOffers, CopiesSection, Kpi, TimingCard } from "@/components/DetailSections";
 import { TrackingForm } from "@/components/TrackingForm";
 import { availabilityLabel, compact, countryLabel, dayLabel, formatPrice, launchLabel, moneyRange, rangeLabel } from "@/lib/format";
 import { getProduct, sameImage } from "@/lib/products";
 import { SOURCE_NAMES as SUPPLIER_SOURCES } from "@/dtc/suppliers";
 import { REVIEW_TO_SALES, toUsd, visitsFromRank } from "@/lib/winner";
 import { getFx } from "@/lib/fx";
-import { copiesOf, storeExists } from "@/lib/newStores";
+import { copiesOf, offerComparison, storeExists } from "@/lib/newStores";
 import { ProfitCalculator } from "@/components/ProfitCalculator";
 
 function Panel({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
@@ -27,7 +27,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
   const [data, fx] = await Promise.all([getProduct(id), getFx()]);
   if (!data) notFound();
   const { p, history, ranks, suppliers, ads, adHistory, nameEn } = data;
-  const [copies, isStore] = await Promise.all([copiesOf(p.brand_domain), storeExists(p.brand_domain)]);
+  const [copies, isStore, offers] = await Promise.all([copiesOf(p.brand_domain), storeExists(p.brand_domain), offerComparison(p.brand_domain)]);
   const w = p.winner_breakdown;
   const brand = p.brands;
   const href = p.product_url ?? `https://${p.brand_domain}`;
@@ -121,6 +121,12 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
         />
       </div>
 
+      {p.timing && (
+        <div className="mt-5">
+          <TimingCard timing={p.timing} reason={p.timing_reason} />
+        </div>
+      )}
+
       <section className="card mt-5 p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="card-title">Toptancı adayları</h2>
@@ -194,6 +200,8 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
           </div>
         )}
       </section>
+
+      <CompetitorOffers rows={offers} />
 
       <ProfitCalculator
         competitorUsd={toUsd(p.price, currency)}

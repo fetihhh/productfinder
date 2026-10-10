@@ -52,6 +52,7 @@ test("parseStoreProducts ve pickHero: ana sayfadaki ilk ürün, yoksa en yeni fi
   assert.deepEqual(products[0], {
     handle: "posture-corrector", title: "Posture Corrector Pro", image: "https://cdn.shopify.com/a.jpg", price: 29.99, compareAt: 69.99,
     createdAt: "2026-09-20T10:00:00Z", physical: true, productType: "Health", availableVariants: 1, totalVariants: 2, aliImageId: null, dropship: true, apparel: false,
+    offer: { discountPct: 57, freeShipping: false, guaranteeDays: null, bundle: false },
   });
   assert.equal(products[1].physical, false);
   assert.equal(pickHero(products, '<a href="/collections/all/products/posture-corrector?variant=1">')?.handle, "posture-corrector");

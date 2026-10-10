@@ -2,7 +2,7 @@ import Link from "next/link";
 import { quickTrack } from "@/app/actions";
 import { TrackingForm } from "@/components/TrackingForm";
 import { AdStageBadge } from "@/components/DetailSections";
-import { ScoreRing, Stat } from "@/components/ui";
+import { ScoreRing, Stat, TimingBadge } from "@/components/ui";
 import type { AdStage } from "@/dtc/adAnalysis";
 import { WIDE_PENDING } from "@/dtc/verify";
 import { ageLabel, availabilityLabel, countryLabel, formatPrice, launchLabel, rangeLabel } from "@/lib/format";
@@ -157,6 +157,7 @@ export function ProductCard({ p, ad }: { p: ProductRow; ad?: { stage: AdStage; s
               </span>
             )}
             {ad && ad.stage !== "none" && <AdStageBadge stage={ad.stage} score={ad.score} />}
+            <TimingBadge timing={p.timing} reason={p.timing_reason} hideUnproven />
             {Number(p.momentum_score) >= RISING_BADGE && (
               <span className="badge bg-rose-500 text-white shadow-sm">↗ Yükselişte {Number(p.momentum_score).toFixed(0)}</span>
             )}

@@ -8,6 +8,7 @@ const ITEMS = [
   { href: "/ozet", label: "Özet", match: (p: string) => p === "/ozet" },
   { href: "/", label: "Ürünler", match: (p: string) => p === "/" || p.startsWith("/p/") },
   { href: "/yeni", label: "Yeni mağazalar", match: (p: string) => p === "/yeni" || p.startsWith("/m/") },
+  { href: "/nisler", label: "Nişler", match: (p: string) => p === "/nisler" },
   { href: "/?sort=rising", label: "Yükselenler", match: () => false },
   { href: "/siteler", label: "Siteler", match: (p: string) => p === "/siteler" },
 ];

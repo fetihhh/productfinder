@@ -1,4 +1,5 @@
 // "Yeni mağazalar" sayfasının sorguları (yalnızca sunucu).
+import type { ProductOffer } from "../dtc/offers.ts";
 import type { StoreScoreParts } from "../dtc/storeProbe.ts";
 import type { SnapItem } from "../dtc/storeSnapshot.ts";
 import { adHistory, adSignalsFor, type AdHistoryPoint, type AdSignalRow } from "./ads.ts";
@@ -14,6 +15,8 @@ export type StoreFilters = {
   /** Yalnızca AliExpress görseli kullanan (kesin dropshipping) / stok hareketi olan mağazalar. */
   ali: boolean;
   moving: boolean;
+  /** Yalnızca bu nişteki mağazalar (boş = hepsi). */
+  niche: string;
   /** Yalnızca bu kümedeki (aynı ürünü satan) mağazalar. */
   group: string;
 };
@@ -46,6 +49,10 @@ export type NewStoreRow = {
   ali_image_count: number | null;
   stock_drops: number;
   moving_products: number;
+  niche: string | null;
+  timing: string | null;
+  timing_reason: string | null;
+  offer: ProductOffer | null;
   checks: number;
   product_id: string | null;
   products: { dtc_status: string; margin_ratio: number | null; supplier_min_usd: number | null } | null;
@@ -67,6 +74,7 @@ export function parseStoreFilters(sp: Record<string, string | string[] | undefin
     ads: one(sp.ads) === "1",
     ali: one(sp.ali) === "1",
     moving: one(sp.moving) === "1",
+    niche: one(sp.niche).replace(/[^a-z]/g, "").slice(0, 20),
     group: one(sp.group).toLowerCase().replace(/[^a-z0-9.-]/g, "").slice(0, 100),
   };
 }
@@ -76,7 +84,7 @@ export async function listNewStores(f: StoreFilters): Promise<{ rows: NewStoreRo
   let query = db()
     .from("stores")
     .select(
-      "domain, shop_name, country, ships_to_tr, product_count, discounted_count, dropship_count, apparel_count, min_price, max_price, currency, first_product_at, registered_on, hero_handle, hero_title, hero_image, hero_price, store_score, ad_points, ads_active, total_score, copy_group, copy_count, copy_same_seller, ali_image_count, stock_drops, moving_products, checks, product_id, products(dtc_status, margin_ratio, supplier_min_usd)",
+      "domain, shop_name, country, ships_to_tr, product_count, discounted_count, dropship_count, apparel_count, min_price, max_price, currency, first_product_at, registered_on, hero_handle, hero_title, hero_image, hero_price, store_score, ad_points, ads_active, total_score, copy_group, copy_count, copy_same_seller, ali_image_count, stock_drops, moving_products, niche, timing, timing_reason, offer, checks, product_id, products(dtc_status, margin_ratio, supplier_min_usd)",
     )
     .eq("status", "live")
     .gte("first_product_at", since);
@@ -85,6 +93,7 @@ export async function listNewStores(f: StoreFilters): Promise<{ rows: NewStoreRo
   if (f.group) query = query.eq("copy_group", f.group);
   if (f.ali) query = query.gte("ali_image_count", 1);
   if (f.moving) query = query.gte("stock_drops", 1);
+  if (f.niche) query = query.eq("niche", f.niche);
   if (f.tr) query = query.eq("ships_to_tr", true);
   if (f.q) query = query.or(`domain.ilike.*${f.q}*,shop_name.ilike.*${f.q}*,hero_title.ilike.*${f.q}*`);
   if (f.sort === "new") query = query.order("first_product_at", { ascending: false });
@@ -140,6 +149,10 @@ export type StoreDetail = NewStoreRow & {
   score_parts: StoreScoreParts | null;
   stock_drops: number;
   moving_products: number;
+  niche: string | null;
+  timing: string | null;
+  timing_reason: string | null;
+  offer: ProductOffer | null;
   copy_points: number;
 };
 
@@ -163,7 +176,7 @@ export async function getStoreDetail(domain: string): Promise<{
   const { data, error } = await db()
     .from("stores")
     .select(
-      "domain, source, status, discovered_at, last_checked_at, next_check_at, shop_name, country, ships_to_tr, product_count, physical_count, discounted_count, dropship_count, apparel_count, ali_image_count, min_price, max_price, currency, first_product_at, last_product_at, registered_on, hero_handle, hero_title, hero_image, hero_price, store_score, ad_points, ads_active, copy_points, total_score, copy_group, copy_count, copy_same_seller, checks, product_id, products_snapshot, score_parts, stock_drops, moving_products, products(dtc_status, margin_ratio, supplier_min_usd)",
+      "domain, source, status, discovered_at, last_checked_at, next_check_at, shop_name, country, ships_to_tr, product_count, physical_count, discounted_count, dropship_count, apparel_count, ali_image_count, min_price, max_price, currency, first_product_at, last_product_at, registered_on, hero_handle, hero_title, hero_image, hero_price, store_score, ad_points, ads_active, copy_points, total_score, copy_group, copy_count, copy_same_seller, checks, product_id, products_snapshot, score_parts, stock_drops, moving_products, niche, timing, timing_reason, offer, products(dtc_status, margin_ratio, supplier_min_usd)",
     )
     .eq("domain", domain)
     .maybeSingle();
@@ -177,6 +190,58 @@ export async function getStoreDetail(domain: string): Promise<{
   ]);
   if (checks.error) throw new Error(checks.error.message);
   return { s: data as unknown as StoreDetail, checks: checks.data as StoreCheckPoint[], ads: ads.get(domain) ?? null, adHistory: adHist, copies };
+}
+
+export type OfferRow = {
+  domain: string;
+  shop_name: string | null;
+  hero_title: string | null;
+  hero_handle: string | null;
+  hero_price: number | null;
+  currency: string | null;
+  first_product_at: string | null;
+  offer: ProductOffer | null;
+  timing: string | null;
+  self: boolean;
+  ad_stage: AdSignalRow["ad_stage"] | null;
+  active_ads: number;
+  ad_offers: AdSignalRow["ad_offers"] | null;
+};
+
+/**
+ * Rakip teklif karşılaştırması: aynı ürünü satan mağazalar (kopya kümesi; yoksa yalnızca bu mağaza) — fiyat, indirim,
+ * ücretsiz kargo, garanti, paket ve reklamlarında öne çıkan teklifler.
+ */
+export async function offerComparison(domain: string): Promise<OfferRow[]> {
+  const cols = "domain, shop_name, hero_title, hero_handle, hero_price, currency, first_product_at, offer, timing, copy_group, copy_same_seller";
+  const { data: self } = await db().from("stores").select(cols).eq("domain", domain).maybeSingle();
+  if (!self) return [];
+  let rows = [self];
+  if (self.copy_group && !self.copy_same_seller) {
+    const { data } = await db().from("stores").select(cols).eq("copy_group", self.copy_group).limit(30);
+    if (data?.length) rows = data;
+  }
+  const ads = await adSignalsFor(rows.map((r) => r.domain as string));
+  return rows
+    .map((r) => {
+      const a = ads.get(r.domain as string);
+      return {
+        domain: r.domain as string,
+        shop_name: r.shop_name as string | null,
+        hero_title: r.hero_title as string | null,
+        hero_handle: r.hero_handle as string | null,
+        hero_price: r.hero_price === null ? null : Number(r.hero_price),
+        currency: r.currency as string | null,
+        first_product_at: r.first_product_at as string | null,
+        offer: r.offer as ProductOffer | null,
+        timing: r.timing as string | null,
+        self: r.domain === domain,
+        ad_stage: a?.ad_stage ?? null,
+        active_ads: a?.active_ads ?? 0,
+        ad_offers: a?.ad_offers ?? null,
+      };
+    })
+    .sort((x, y) => (x.first_product_at ?? "9").localeCompare(y.first_product_at ?? "9"));
 }
 
 export type MetaAdsState = {

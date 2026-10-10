@@ -3,6 +3,7 @@
 // metni yeni kitlelere kopyalanır, yeni reklamlar ve yeni ülkeler eklenir (ölçekleme).
 import { normalizeName } from "../lib/productName.ts";
 import type { ArchivedAd } from "./adLibrary.ts";
+import { adOffers, type AdOffers } from "./offers.ts";
 
 const DAY = 86_400_000;
 
@@ -35,6 +36,8 @@ export type AdAnalysis = {
   spend: { low: number; high: number } | null;
   /** Reklamı verilen ürünler (reklam başlığı/metni ↔ mağaza ürünleri). */
   products: AdvertisedProduct[];
+  /** Reklam metinlerinde öne çıkan teklifler (indirim %, ücretsiz kargo, paket, aciliyet, garanti). */
+  offers: AdOffers;
 };
 
 const isActive = (ad: ArchivedAd, now: number) => !ad.ad_delivery_stop_time || Date.parse(ad.ad_delivery_stop_time) > now;
@@ -128,5 +131,6 @@ export function analyzeAds(all: ArchivedAd[], activeAds: ArchivedAd[] | null, no
             ? "scaling"
             : "testing";
 
-  return { score, stage, parts, creatives, countries, active7d, active14d, spend, products: advertisedProducts(ads, products) };
+  const texts = ads.map((a) => [...(a.ad_creative_link_titles ?? []), ...(a.ad_creative_bodies ?? []), ...(a.ad_creative_link_descriptions ?? [])].join(" "));
+  return { score, stage, parts, creatives, countries, active7d, active14d, spend, products: advertisedProducts(ads, products), offers: adOffers(texts) };
 }

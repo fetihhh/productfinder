@@ -29,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0020`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0021`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -291,6 +291,17 @@ Toplam en fazla 100.
 | Hacim | `30 × min(m30, 5) / 5` | m30 = son 30 gündeki bahsedilme sayısı |
 
 Örnek: tek blogda bu hafta bir kez anılan ürün → 13.3 + 10 + 6 = **29.3**. Üç farklı blogda bu hafta anılan ürün → 40 + 30 + 18 = **88**.
+
+## Zamanlama, rakip teklifleri ve niş trendleri
+
+- **Zamanlama** (`dtc/timing.ts`, `lib/timing.ts`; her günlük işte ve `ads` modunda yeniden hesaplanır, yalnızca veritabanı): aynı ürünü satan bağımsız mağazalar (kopya kümesi; aynı satıcının ağı tek sayılır) + reklamları + stok hareketi.
+  - 🧱 **Doymuş**: ≥ 8 mağaza ya da ≥ 5 reklamcı.
+  - 📉 **Sönüyor**: reklam verilmiş ama yayında reklam yok ve stok hareketi yok.
+  - 🔥 **Zirvede**: ≥ 4 mağaza, ≥ 3 reklamcı ya da kanıtlanmış reklam + ≥ 2 mağaza + ≥ 30 gün.
+  - 🌱 **Erken**: talep kanıtı (reklam ya da stok hareketi) var, ürün ≤ 60 günlük ve rakip az.
+  - Kanıt yoksa "Henüz kanıt yok". Kartlarda rozet, ürün ve mağaza sayfasında gerekçe ve öneriyle kart.
+- **Rakip teklifleri** (`dtc/offers.ts`): mağaza kontrolünde öne çıkan ürünün sayfasından indirim % (karşılaştırma fiyatı), ücretsiz kargo, garanti (gün) ve paket/çoklu alım okunur (çok dilli). Reklam analizinde reklam metinlerinden indirim yüzdeleri, ücretsiz kargo, paket/2x1, aciliyet ve garanti sayılır. Ürün ve mağaza sayfasında aynı ürünü satan mağazaların tablosu, medyan fiyat ve öneri. Mağaza teklifleri bir sonraki mağaza kontrolünde, reklam teklifleri bir sonraki reklam aramasında dolar.
+- **Niş trendleri** (`dtc/niche.ts`, `lib/niches.ts`, `/nisler`): öne çıkan ürün adından 14 nişten biri (çok dilli anahtar kelime; eşleşmezse "Diğer"). Son 5 ayda açılan mağazalar için niş başına bu hafta / geçen hafta açılan, 8 haftalık çizgi, reklamcı, ölçeklenen, stok hareketi, erken ürün ve **ısınma** puanı (yeni mağaza + artış + 3×reklamcı + 6×ölçeklenen + 2×hareket + 4×erken). `/yeni` sayfasında niş filtresi.
 
 ## Arayüz
 

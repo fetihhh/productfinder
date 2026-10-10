@@ -63,6 +63,9 @@ export type ProductRow = {
   /** Asıl toptan ilanın toplam satışı ve haftalık satış hızı. */
   supplier_sold: number | null;
   supplier_sold_per_week: number | null;
+  /** Zamanlama: early | peak | saturated | fading | unproven (ve gerekçesi). */
+  timing: string | null;
+  timing_reason: string | null;
   brands: {
     platform: string | null;
     country: string | null;
@@ -131,7 +134,7 @@ export async function listProducts(f: Filters): Promise<{ rows: ProductRow[]; er
   const brandFilter = Boolean(f.platform || f.country || f.shipsTr || f.age || f.ads);
   const select = [
     "id, name, brand_domain, product_url, image_url, category, dtc_status, dtc_reason, trend_score, score_breakdown, winner_score, winner_breakdown, momentum_score, first_seen_at",
-    "price, currency, review_count, rating, availability, launched_at, variant_count, product_type, supplier_count, supplier_min_usd, margin_ratio, supplier_checked_at, supplier_image_match, copy_count, supplier_sold, supplier_sold_per_week",
+    "price, currency, review_count, rating, availability, launched_at, variant_count, product_type, supplier_count, supplier_min_usd, margin_ratio, supplier_checked_at, supplier_image_match, copy_count, supplier_sold, supplier_sold_per_week, timing, timing_reason",
     `brands${brandFilter ? "!inner" : ""}(platform, country, ships_to_tr, tranco_rank, registered_at, first_product_at, ads_active, ad_points)`,
     "mentions(source, url, title, posted_at)",
     `tracking${f.track !== "all" ? "!inner" : ""}(status, note, tr_competitor, tr_est_cost, tr_note)`,
@@ -243,7 +246,7 @@ export async function getProduct(
     .select(
       [
         "id, name, brand_domain, product_url, image_url, category, dtc_status, dtc_reason, trend_score, score_breakdown, winner_score, winner_breakdown, momentum_score, first_seen_at",
-        "price, currency, review_count, rating, availability, launched_at, variant_count, product_type, supplier_count, supplier_min_usd, margin_ratio, supplier_checked_at, supplier_image_match, copy_count, supplier_sold, supplier_sold_per_week",
+        "price, currency, review_count, rating, availability, launched_at, variant_count, product_type, supplier_count, supplier_min_usd, margin_ratio, supplier_checked_at, supplier_image_match, copy_count, supplier_sold, supplier_sold_per_week, timing, timing_reason",
         "brands(platform, country, ships_to_tr, tranco_rank, tranco_day, marketplace_evidence, registered_at, first_product_at, ads_active, ad_points)",
         "mentions(source, url, title, posted_at)",
         "tracking(status, note, tr_competitor, tr_est_cost, tr_note)",

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { STATUS } from "@/components/ProductCard";
 import { AdStageBadge } from "@/components/DetailSections";
-import { OverlayBadge, ScoreRing, Stat, Toggle } from "@/components/ui";
+import { OverlayBadge, ScoreRing, Stat, TimingBadge, Toggle } from "@/components/ui";
+import { NICHES, nicheLabel } from "@/dtc/niche";
 import { adLibraryPageUrl } from "@/dtc/adLibrary";
 import { adSignalsFor } from "@/lib/ads";
 import { ageLabel, compact, countryLabel, formatPrice } from "@/lib/format";
@@ -94,6 +95,15 @@ export default async function NewStoresPage({ searchParams }: PageProps<"/yeni">
               <option value="150">≤ 5 ay</option>
             </select>
             <input type="number" name="min" min={0} max={100} defaultValue={f.minScore || ""} placeholder="Min puan" className="field sm:w-28" aria-label="Minimum puan" />
+            <select name="niche" defaultValue={f.niche} className="field sm:w-48" aria-label="Niş">
+              <option value="">Tüm nişler</option>
+              {NICHES.map((n) => (
+                <option key={n.key} value={n.key}>
+                  {n.label}
+                </option>
+              ))}
+              <option value="other">Diğer</option>
+            </select>
             <select name="sort" defaultValue={f.sort} className="field col-span-2 sm:w-56" aria-label="Sıralama">
               <option value="score">Mağaza puanı</option>
               <option value="new">En yeni</option>
@@ -157,6 +167,7 @@ export default async function NewStoresPage({ searchParams }: PageProps<"/yeni">
                     </OverlayBadge>
                     {s.stock_drops > 0 && <span className="badge bg-rose-500 text-white shadow-sm">📉 {s.stock_drops} stok azalması</span>}
                     {ad && ad.total_ads > 0 && ad.ad_stage !== "none" && <AdStageBadge stage={ad.ad_stage} score={Number(ad.ad_score)} />}
+                    <TimingBadge timing={s.timing} reason={s.timing_reason} hideUnproven />
                     {s.copy_count > 0 && !s.copy_same_seller && <span className="badge bg-violet-500 text-white shadow-sm">{s.copy_count} rakip</span>}
                   </div>
                   <ScoreRing
@@ -205,6 +216,16 @@ export default async function NewStoresPage({ searchParams }: PageProps<"/yeni">
                 </div>
 
                 <dl className="facts">
+                  {s.niche && s.niche !== "other" && (
+                    <>
+                      <dt>Niş</dt>
+                      <dd>
+                        <Link href={`/yeni?niche=${s.niche}`} className="hover:underline">
+                          {nicheLabel(s.niche)}
+                        </Link>
+                      </dd>
+                    </>
+                  )}
                   {s.country && (
                     <>
                       <dt>Ülke</dt>

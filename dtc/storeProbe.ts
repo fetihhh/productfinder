@@ -3,6 +3,7 @@
 // Uç noktalar Shopify'ın herkese açık JSON'ları: /products.json ve /meta.json. Şifreli mağazaya girilmez.
 import { STORE_DAILY_MIN_SCORE } from "../config/limits.ts";
 import type { FetchResult } from "../lib/http.ts";
+import { productOffer, type ProductOffer } from "./offers.ts";
 import { parseShopifyMeta } from "./signals.ts";
 
 type FetchPage = (url: string, accept?: string) => Promise<FetchResult>;
@@ -25,6 +26,8 @@ export type StoreProduct = {
   apparel: boolean;
   /** Görselin dosya adı AliExpress görsel kimliği (ör. S4f799d…edi.avif): fotoğraf AliExpress'ten alınmış. */
   aliImageId: string | null;
+  /** Ürün sayfasındaki teklif: indirim, ücretsiz kargo, garanti, paket. */
+  offer: ProductOffer;
 };
 
 export type LiveStore = {
@@ -107,6 +110,12 @@ export function parseStoreProducts(text: string): StoreProduct[] | null {
       aliImageId: images.map((im) => aliImageId(typeof im.src === "string" ? im.src : null)).find(Boolean) ?? null,
       dropship: (typeof p.body_html === "string" && hasDropshipSignal(p.body_html)) || images.some((im) => aliImageId(typeof im.src === "string" ? im.src : null)),
       apparel: APPAREL.test(`${p.title} ${typeof p.product_type === "string" ? p.product_type : ""}`),
+      offer: productOffer(
+        typeof p.body_html === "string" ? p.body_html : null,
+        variants.map((v) => (typeof v.title === "string" ? v.title : "")),
+        price,
+        compareAt !== null && price !== null && compareAt > price ? compareAt : null,
+      ),
     }];
   });
 }

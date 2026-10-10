@@ -1,6 +1,7 @@
 // Reklam sinyalinin veritabanı katmanı (yalnızca cron).
 import { AD_RECHECK_DAYS, NEW_STORE_MAX_AGE_DAYS } from "../config/limits.ts";
 import type { AdAnalysis, AdScoreParts, AdStage, AdvertisedProduct, CreativeGroup } from "../dtc/adAnalysis.ts";
+import type { AdOffers } from "../dtc/offers.ts";
 import type { AdSummary } from "../dtc/adLibrary.ts";
 import { db } from "./db.ts";
 
@@ -95,6 +96,7 @@ export async function saveAdSignal(t: AdTarget, s: AdSummary, a: AdAnalysis): Pr
       spend_low: a.spend?.low ?? null,
       spend_high: a.spend?.high ?? null,
       top_products: a.products,
+      ad_offers: a.offers,
       checked_at: now.toISOString(),
       next_check_at: next.toISOString(),
     },
@@ -139,6 +141,7 @@ export type AdSignalRow = {
   spend_low: number | null;
   spend_high: number | null;
   top_products: AdvertisedProduct[];
+  ad_offers: Partial<AdOffers>;
 };
 
 /** Arayüz: verilen alan adlarının reklam özeti. */
@@ -148,7 +151,7 @@ export async function adSignalsFor(domains: string[]): Promise<Map<string, AdSig
     const { data, error } = await db()
       .from("ad_signals")
       .select(
-        "domain, page_id, page_name, active_ads, total_ads, new_ads_14d, first_ad_at, longest_active_days, eu_reach, platforms, samples, ad_points, checked_at, ad_score, ad_stage, ad_parts, creatives, countries, active_7d, active_14d, spend_low, spend_high, top_products",
+        "domain, page_id, page_name, active_ads, total_ads, new_ads_14d, first_ad_at, longest_active_days, eu_reach, platforms, samples, ad_points, checked_at, ad_score, ad_stage, ad_parts, creatives, countries, active_7d, active_14d, spend_low, spend_high, top_products, ad_offers",
       )
       .in("domain", chunk);
     if (error) throw new Error(`ad_signals okunamadı: ${error.message}`);

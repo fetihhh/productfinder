@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LineChart, ScoreBars } from "@/components/Charts";
-import { AdsSection, CopiesSection, Kpi } from "@/components/DetailSections";
+import { AdsSection, CompetitorOffers, CopiesSection, Kpi, TimingCard } from "@/components/DetailSections";
 import { STATUS } from "@/components/ProductCard";
 import { movementOrder } from "@/dtc/storeSnapshot";
 import { ageLabel, countryLabel, dayLabel, formatPrice } from "@/lib/format";
-import { getStoreDetail } from "@/lib/newStores";
+import { getStoreDetail, offerComparison } from "@/lib/newStores";
+import { nicheLabel } from "@/dtc/niche";
 
 const STORE_STATUS: Record<string, string> = { live: "Açık", closed: "Şifreli / boş", pending: "Kontrol bekliyor", dead: "Kapanmış", old: "150 günü geçti" };
 
@@ -24,6 +25,7 @@ export default async function StorePage({ params }: PageProps<"/m/[domain]">) {
   const data = await getStoreDetail(decodeURIComponent(domain).toLowerCase());
   if (!data) notFound();
   const { s, checks, ads, adHistory, copies } = data;
+  const offers = await offerComparison(s.domain);
   const live = checks.filter((c) => c.status === "live");
   const stockPct = s.products_snapshot?.length
     ? Math.round((s.products_snapshot.reduce((n, i) => n + i.a, 0) / Math.max(1, s.products_snapshot.reduce((n, i) => n + i.v, 0))) * 100)
@@ -55,6 +57,11 @@ export default async function StorePage({ params }: PageProps<"/m/[domain]">) {
               <span className="badge bg-orange-500/12 text-orange-700 ring-1 ring-orange-500/25 dark:text-orange-300">
                 AliExpress görseli: {s.ali_image_count} ürün
               </span>
+            )}
+            {s.niche && s.niche !== "other" && (
+              <Link href={`/yeni?niche=${s.niche}`} className="chip py-0 hover:border-amber-500/60">
+                {nicheLabel(s.niche)}
+              </Link>
             )}
             {s.country && <span className="text-muted">{countryLabel(s.country)}</span>}
             {s.ships_to_tr !== null && <span className={s.ships_to_tr ? "text-emerald-700 dark:text-emerald-400" : "text-muted"}>· Türkiye&apos;ye {s.ships_to_tr ? "gönderim var" : "gönderim yok"}</span>}
@@ -91,6 +98,12 @@ export default async function StorePage({ params }: PageProps<"/m/[domain]">) {
         <Kpi label="Reklam" value={ads ? String(ads.active_ads) : "—"} sub={ads ? "yayında" : "aranmadı"} />
         <Kpi label="Rakip" value={String(s.copy_count)} sub={s.copy_same_seller ? "aynı satıcı ağı olabilir" : "aynı ürünü satan mağaza"} />
       </div>
+
+      {s.timing && (
+        <div className="mt-5">
+          <TimingCard timing={s.timing} reason={s.timing_reason} />
+        </div>
+      )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Panel title="Mağaza puanı nasıl oluştu?" note="Her çubuk kendi azami puanına göre dolar. Merch (baskılı giyim) eksi puandır.">
@@ -174,6 +187,7 @@ export default async function StorePage({ params }: PageProps<"/m/[domain]">) {
         )}
       </section>
 
+      <CompetitorOffers rows={offers} />
       <AdsSection domain={s.domain} ads={ads} history={adHistory} />
       {copies.length > 1 && <CopiesSection self={s.domain} members={copies} />}
     </main>

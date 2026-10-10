@@ -17,6 +17,7 @@ const product = (handle: string, over: Partial<StoreProduct> = {}): StoreProduct
   dropship: false,
   apparel: false,
   aliImageId: null,
+  offer: { discountPct: null, freeShipping: false, guaranteeDays: null, bundle: false },
   ...over,
 });
 

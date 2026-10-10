@@ -1,6 +1,7 @@
 // Yeni mağaza keşfinin veritabanı katmanı (yalnızca cron).
 import { COPY_MIN_STORE_SCORE, NEW_STORE_MAX_AGE_DAYS } from "../config/limits.ts";
 import { nextCheck, storeActivity, storeScore, storeScoreParts, type StoreProbe } from "../dtc/storeProbe.ts";
+import { nicheOf } from "../dtc/niche.ts";
 import { mergeSnapshot, type SnapItem } from "../dtc/storeSnapshot.ts";
 import { db } from "./db.ts";
 import { clip } from "./text.ts";
@@ -94,6 +95,8 @@ export async function saveStoreCheck(s: StoreToCheck, probe: StoreProbe): Promis
       last_product_at: probe.lastProductAt,
       hero_handle: probe.hero?.handle ?? null,
       hero_title: probe.hero?.title ? clip(probe.hero.title, 200) : null,
+      niche: nicheOf(probe.hero?.title ?? null, probe.hero?.productType ?? null),
+      offer: probe.hero?.offer ?? null,
       hero_image: probe.hero?.image ?? null,
       hero_price: probe.hero?.price ?? null,
       store_score: score,

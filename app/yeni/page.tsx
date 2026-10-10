@@ -85,6 +85,12 @@ export default async function NewStoresPage({ searchParams }: PageProps<"/yeni">
         <label className="flex items-center gap-1.5 text-sm">
           <input type="checkbox" name="ads" value="1" defaultChecked={f.ads} className="h-4 w-4" /> Reklam verenler
         </label>
+        <label className="flex items-center gap-1.5 text-sm" title="Ürün görselinin dosya adı AliExpress görsel kimliği: fotoğraf AliExpress'ten alınmış">
+          <input type="checkbox" name="ali" value="1" defaultChecked={f.ali} className="h-4 w-4" /> AliExpress görseli
+        </label>
+        <label className="flex items-center gap-1.5 text-sm" title="Kontroller arasında stokta olan varyant sayısı azalan mağazalar">
+          <input type="checkbox" name="moving" value="1" defaultChecked={f.moving} className="h-4 w-4" /> Satış hareketi
+        </label>
         <button className="rounded bg-zinc-900 px-4 py-1.5 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900">Filtrele</button>
       </form>
 

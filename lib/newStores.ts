@@ -11,6 +11,9 @@ export type StoreFilters = {
   q: string;
   tr: boolean;
   ads: boolean;
+  /** Yalnızca AliExpress görseli kullanan (kesin dropshipping) / stok hareketi olan mağazalar. */
+  ali: boolean;
+  moving: boolean;
   /** Yalnızca bu kümedeki (aynı ürünü satan) mağazalar. */
   group: string;
 };
@@ -62,6 +65,8 @@ export function parseStoreFilters(sp: Record<string, string | string[] | undefin
     q: one(sp.q).replace(/[%_*,()\\"']/g, " ").trim().slice(0, 60),
     tr: one(sp.tr) === "1",
     ads: one(sp.ads) === "1",
+    ali: one(sp.ali) === "1",
+    moving: one(sp.moving) === "1",
     group: one(sp.group).toLowerCase().replace(/[^a-z0-9.-]/g, "").slice(0, 100),
   };
 }
@@ -78,6 +83,8 @@ export async function listNewStores(f: StoreFilters): Promise<{ rows: NewStoreRo
   if (f.minScore > 0) query = query.gte("total_score", f.minScore);
   if (f.ads) query = query.gte("ads_active", 1);
   if (f.group) query = query.eq("copy_group", f.group);
+  if (f.ali) query = query.gte("ali_image_count", 1);
+  if (f.moving) query = query.gte("stock_drops", 1);
   if (f.tr) query = query.eq("ships_to_tr", true);
   if (f.q) query = query.or(`domain.ilike.*${f.q}*,shop_name.ilike.*${f.q}*,hero_title.ilike.*${f.q}*`);
   if (f.sort === "new") query = query.order("first_product_at", { ascending: false });

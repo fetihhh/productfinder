@@ -1,9 +1,9 @@
-import { AdCard } from "@/components/AdCard";
+import { AdList } from "@/components/AdList";
 import { CopyButton } from "@/components/CopyButton";
 import { ANGLE_LABELS, anglesOf, turkishDrafts } from "@/dtc/adCopy";
 import { turkeyTargeting } from "@/dtc/audience";
 import type { ProductOffer } from "@/dtc/offers";
-import type { GalleryAd } from "@/lib/adGallery";
+import type { AdItemView } from "@/dtc/adItems";
 import type { AdSignalRow } from "@/lib/ads";
 import { countryLabel } from "@/lib/format";
 
@@ -91,8 +91,8 @@ function Targeting({ ads }: { ads: AdSignalRow }) {
   );
 }
 
-/** Ürün/mağaza sayfası: Türkiye lansman kiti (hedefleme + Türkçe reklam metinleri) ve mağazanın çok tutan reklamları. */
-export function LaunchKit({ ads, product, storeOffer, topAds }: { ads: AdSignalRow | null; product: string; storeOffer: ProductOffer | null; topAds: GalleryAd[] }) {
+/** Ürün/mağaza sayfası: Türkiye lansman kiti (hedefleme + Türkçe reklam metinleri). */
+export function LaunchKit({ ads, product, storeOffer }: { ads: AdSignalRow | null; product: string; storeOffer: ProductOffer | null }) {
   if (!ads || ads.total_ads === 0) return null;
   const texts = (ads.creatives ?? []).map((c) => [c.title, c.text].filter(Boolean).join(" "));
   const angles = anglesOf(texts);
@@ -154,19 +154,26 @@ export function LaunchKit({ ads, product, storeOffer, topAds }: { ads: AdSignalR
         </div>
       </section>
 
-      {topAds.length > 0 && (
-        <section className="card mt-5 p-5">
-          <h2 className="card-title">Bu mağazanın çok tutan reklamları</h2>
-          <p className="card-note mb-4">
-            Yayındaki kopya sayısı ve yayında kalma süresine göre. &quot;Reklamı aç&quot; reklamın görselini/videosunu Meta Reklam Kütüphanesi&apos;nde gösterir.
-          </p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {topAds.map((a, i) => (
-              <AdCard key={`${a.adId ?? i}`} a={a} />
-            ))}
-          </div>
-        </section>
-      )}
     </>
+  );
+}
+
+/** Sitenin tüm Meta reklamları (sıralanabilir liste). */
+export function AdItemsSection({ items, libraryUrl }: { items: AdItemView[]; libraryUrl: string }) {
+  if (items.length === 0) return null;
+  return (
+    <section className="card mt-5 p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="card-title">Bu sitenin reklamları ({items.length})</h2>
+        <a href={libraryUrl} target="_blank" rel="noopener noreferrer" className="link text-sm">
+          Tümü Reklam Kütüphanesi&apos;nde ↗
+        </a>
+      </div>
+      <p className="card-note mb-4">
+        Son 150 günde AB&apos;de yayınlanan reklamlar. &quot;En çok tutan&quot; sırası: yayında olan reklam önce, yayında kalma süresi (kârsız reklam birkaç günde
+        kapatılır), aynı metnin yayındaki kopya sayısı (ölçekleme) ve erişim. Görsel ve videoyu &quot;Reklamı aç&quot; ile görün.
+      </p>
+      <AdList items={items} />
+    </section>
   );
 }

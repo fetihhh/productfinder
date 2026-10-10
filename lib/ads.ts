@@ -4,7 +4,8 @@ import type { AdAnalysis, AdScoreParts, AdStage, AdvertisedProduct, CreativeGrou
 import type { AdOffers } from "../dtc/offers.ts";
 import type { Audience } from "../dtc/audience.ts";
 import { guessLang } from "../dtc/adCopy.ts";
-import type { AdSummary } from "../dtc/adLibrary.ts";
+import { adItemRow, viewAdItems, type AdItem, type AdItemView } from "../dtc/adItems.ts";
+import type { AdSummary, ArchivedAd } from "../dtc/adLibrary.ts";
 import { db } from "./db.ts";
 
 const DAY = 86_400_000;
@@ -217,4 +218,30 @@ export async function translateTopCreatives(
     if (error) throw new Error(`ad_signals yazılamadı: ${error.message}`);
   }
   return added;
+}
+
+/** Mağazanın tek tek reklamlarını kaydeder; arşivden düşenleri (bu aramada gelmeyenleri) siler. */
+export async function saveAdItems(domain: string, ads: ArchivedAd[]): Promise<void> {
+  const rows = ads.map((a) => ({ ...adItemRow(a, domain), checked_at: new Date().toISOString() }));
+  for (let i = 0; i < rows.length; i += 200) {
+    const { error } = await db().from("ad_items").upsert(rows.slice(i, i + 200), { onConflict: "id" });
+    if (error) throw new Error(`ad_items yazılamadı: ${error.message}`);
+  }
+  let del = db().from("ad_items").delete().eq("domain", domain);
+  if (rows.length) del = del.not("id", "in", `(${rows.map((r) => `"${r.id}"`).join(",")})`);
+  const { error } = await del;
+  if (error) throw new Error(`ad_items temizlenemedi: ${error.message}`);
+}
+
+/** Ürün/mağaza sayfası: mağazanın tüm reklamları (önerilen sırada). */
+export async function adItemsFor(domain: string): Promise<AdItemView[]> {
+  const { data, error } = await db()
+    .from("ad_items")
+    .select("id, domain, page_id, page_name, start_at, stop_at, title, body, description, platforms, eu_reach, countries, female_share, top_age, creative_key")
+    .eq("domain", domain)
+    .limit(400);
+  if (error) throw new Error(`ad_items okunamadı: ${error.message}`);
+  return viewAdItems(
+    ((data ?? []) as AdItem[]).map((r) => ({ ...r, eu_reach: r.eu_reach === null ? null : Number(r.eu_reach), female_share: r.female_share === null ? null : Number(r.female_share) })),
+  );
 }

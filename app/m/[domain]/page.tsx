@@ -9,8 +9,9 @@ import { getStoreDetail, offerComparison } from "@/lib/newStores";
 import { nicheLabel } from "@/dtc/niche";
 import { InstagramSection } from "@/components/IgPostCard";
 import { igPostsFor } from "@/lib/instagram";
-import { LaunchKit } from "@/components/LaunchKit";
-import { galleryAds } from "@/lib/adGallery";
+import { AdItemsSection, LaunchKit } from "@/components/LaunchKit";
+import { adItemsFor } from "@/lib/ads";
+import { adLibraryPageUrl } from "@/dtc/adLibrary";
 
 const STORE_STATUS: Record<string, string> = { live: "Açık", closed: "Şifreli / boş", pending: "Kontrol bekliyor", dead: "Kapanmış", old: "150 günü geçti" };
 
@@ -29,10 +30,10 @@ export default async function StorePage({ params }: PageProps<"/m/[domain]">) {
   const data = await getStoreDetail(decodeURIComponent(domain).toLowerCase());
   if (!data) notFound();
   const { s, checks, ads, adHistory, copies } = data;
-  const [offers, ig, topAds] = await Promise.all([
+  const [offers, ig, adItems] = await Promise.all([
     offerComparison(s.domain),
     igPostsFor(s.domain),
-    galleryAds({ domain: s.domain, niche: "", activeOnly: false, limit: 6, perStore: 6 }),
+    adItemsFor(s.domain),
   ]);
   const live = checks.filter((c) => c.status === "live");
   const stockPct = s.products_snapshot?.length
@@ -197,7 +198,8 @@ export default async function StorePage({ params }: PageProps<"/m/[domain]">) {
 
       <CompetitorOffers rows={offers} />
       <AdsSection domain={s.domain} ads={ads} history={adHistory} />
-      <LaunchKit ads={ads} product={s.hero_title ?? s.shop_name ?? s.domain} storeOffer={s.offer} topAds={topAds} />
+      <AdItemsSection items={adItems} libraryUrl={adLibraryPageUrl(ads?.page_id ?? null, s.domain)} />
+      <LaunchKit ads={ads} product={s.hero_title ?? s.shop_name ?? s.domain} storeOffer={s.offer} />
       <InstagramSection data={ig} />
       {copies.length > 1 && <CopiesSection self={s.domain} members={copies} />}
     </main>

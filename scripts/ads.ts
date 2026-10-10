@@ -2,7 +2,7 @@
 import { AD_CHECKS_PER_RUN, AD_COUNTRIES, AD_MIN_STORE_SCORE, GRAPH_API_VERSION } from "../config/limits.ts";
 import { analyzeAds, STAGE_LABELS } from "../dtc/adAnalysis.ts";
 import { adLibraryClient, adMatches, summarizeAds, tokenExpiry } from "../dtc/adLibrary.ts";
-import { adStoreContext, adTargets, knownAdvertisers, saveAdSignal, translateTopCreatives } from "../lib/ads.ts";
+import { adStoreContext, adTargets, knownAdvertisers, saveAdItems, saveAdSignal, translateTopCreatives } from "../lib/ads.ts";
 import { politeFetch } from "../lib/http.ts";
 import { tryConsumeQuota } from "../lib/repo.ts";
 import { translateText } from "../lib/translate.ts";
@@ -73,6 +73,11 @@ export async function adSignals(reanalyze = false): Promise<boolean> {
     const analysis = analyzeAds(matched, active, Date.now(), ctx?.products ?? []);
     await saveAdSignal(t, summary, analysis);
     checked++;
+    try {
+      await saveAdItems(t.domain, merged);
+    } catch (err) {
+      console.error(`  ! ${t.domain} reklamlar: ${(err as Error).message}`);
+    }
     // Kazanan reklamların metni Türkçeye (Türkiye reklamı için taslak); yalnızca kanıtlanmış/ölçeklenen/test reklamcılar.
     if (analysis.stage !== "none" && analysis.stage !== "stopped") {
       try {

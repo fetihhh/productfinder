@@ -29,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0024`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0025`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -300,7 +300,7 @@ Reklamı olan her ürün ve mağaza sayfasında:
 - **Reklam Yöneticisi ayarları (öneri):** konum Türkiye; yaş = çekirdek yaş aralığı (en az 18); cinsiyet ≥ %70 tek cinsiyetse o cinsiyet, değilse tümü; yerleşim platform paylarından; geniş hedeflemeyle başlama notları.
 - **Kazanan reklamın Türkçesi:** kanıtlanmış/ölçeklenen/test aşamasındaki reklamcıların en çok tutan 2 reklam metni MyMemory ile Türkçeye çevrilir (dil metinden tahmin edilir; günde en fazla 8 metin, önbellekli).
 - **Türkçe reklam metni taslakları:** kazanan reklamlarda kullanılan açı (sorun→çözüm, hediye, önce/sonra, sosyal kanıt, yenilik; çok dilli anahtar kelimelerle) önce gelir; teklif satırları rakibin reklam ve ürün sayfası tekliflerinden (indirim, ücretsiz kargo, paket, garanti), yoksa kapıda ödeme/hızlı kargo. Her taslakta ilk 3 saniye kancası, ana metin ve başlık; kopyalama düğmeleri. Ücretli yapay zekâ kullanılmaz; [köşeli] yerler elle doldurulur.
-- **Bu mağazanın çok tutan reklamları:** mağazanın en çok tutan 6 reklam metni (yayındaki kopya, süre, erişim, Reklamı aç).
+- **Bu sitenin reklamları** (`ad_items`, `dtc/adItems.ts`, `components/AdList.tsx`): her reklam aramasında gelen tüm reklamlar (son 150 gün, en fazla 100 + yayındaki 100) tek tek saklanır; arşivden düşenler silinir. Ürün ve mağaza sayfasında sıralanabilir liste: en çok tutan (yayında olan önce; yayında kalma süresi, aynı metnin yayındaki kopya sayısı ve erişimden puan), en uzun yayında, en yeni, en çok erişim, en çok kopyalanan; yalnızca yayındakiler, aynı metni birleştir, metinde arama. Her reklamda durum, tarih aralığı, gün, kopya, AB erişimi, cinsiyet ve en büyük yaş dilimi, platformlar, ülkeler, Reklamı aç ve Metni kopyala.
 
 ## Reklam galerisi ve Instagram (`/reklamlar`, `dtc/instagram.ts`, `scripts/instagram.ts`)
 

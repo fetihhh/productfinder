@@ -29,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0015`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0016`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -190,7 +190,8 @@ Doğrulanmış ürünler ile favori/incelenecek listesindeki ürünler için 7 g
 2. Üç toptancının arama sayfası aranır (robots.txt izinli yollar, site başına 1 istek/sn): **AliExpress** (adet fiyatı, satış adedi; İngilizce/USD tercihiyle), **Alibaba showroom** (toptan fiyat aralığı, MOQ, tedarikçi), **Made-in-China** (fiyat aralığı, MOQ, üretici). Sonuç çıkmazsa son iki sözcükle yeniden denenir. Bot doğrulama sayfası gelirse atlatılmaz, site "okunamadı" sayılır (Alibaba sık sık bunu yapıyor). DHgate (403), CJdropshipping (robots yasak), 1688 (giriş/JS) kullanılamıyor.
 3. **Benzerlik:** tarif sözcüklerinin ilan başlığında geçme oranı; sözcükler aynı sonuç sayfasındaki sıklıklarına göre ağırlıklanır (ayırt edici "cork" ağır, her başlıkta geçen "wallet" hafif). ≥ %70 olanlar listelenir. "Case for X / X için kılıf" gibi aksesuarlar, büyük marka ürünleri (DJI, GoPro, Samsung…) ve ikinci el ilanlar atlanır.
 4. **Görsel eşleştirme** (`dtc/imageHash.ts`): ürünün ana görseli ve Shopify ürününün ilk 4 görseli, her kaynaktaki metin benzerliği ≥ %30 olan en benzer 8 ilanın fotoğrafıyla karşılaştırılır. Karşılaştırma algısal özetle (dHash, 256 bit) yapılır: kenarlardaki düz arka plan kırpılır, görsel 17×16 gri tonlamaya küçültülür; aynı fotoğraf farklı boyut/sıkıştırma/kenar boşluğuyla da eşleşir (ölçülen fark 0–10), farklı ürünler 60+ fark verir (aynı boş tişörtün farklı baskılı fotoğrafı 84). Fark ≤ 40 → **"📷 Aynı fotoğraf"**: dropshipping mağazaları çoğunlukla tedarikçinin fotoğrafını kullandığı için bu ilan büyük ihtimalle mağazanın tedarikçisidir; metin benzerliği düşük olsa da listelenir ve en üstte gösterilir. Görseller `lib/http.ts` üzerinden (robots.txt, alan adı başına 1 istek/sn) indirilir, Shopify görselleri 300 px istenir; görseller saklanmaz, yalnızca fark kaydedilir. Görsel işleme `sharp` (açık kaynak, ücretsiz) ile yapılır.
-5. **Marj** = perakende fiyat / en düşük birim fiyat (yaklaşık kurlarla USD). Fotoğrafla eşleşen fiyatlı ilan varsa yalnızca onlar, yoksa benzerliği ≥ %70 ilanlar kullanılır. Kargo, gümrük ve vergi **hariç**tir; bunlar için ürün sayfasındaki **kâr hesabı**na bakın.
+5. **Toptancı satış hızı:** her aramada ilanların satış adedi (AliExpress "N sold") `supplier_history` tablosuna yazılır. Asıl ilanın (fotoğrafla eşleşenlerden en çok satan, yoksa en benzer) en az 6 gün arayla iki ölçümünden **haftalık satış** hesaplanır: ürünü satan tüm dropshipping mağazaları aynı tedarikçiden aldığı için bu, ürünün toplam talebidir. AliExpress büyük sayıları yuvarlar ("5,000+"), artış bir sonraki eşikte görünür.
+6. **Marj** = perakende fiyat / en düşük birim fiyat (yaklaşık kurlarla USD). Fotoğrafla eşleşen fiyatlı ilan varsa yalnızca onlar, yoksa benzerliği ≥ %70 ilanlar kullanılır. Kargo, gümrük ve vergi **hariç**tir; bunlar için ürün sayfasındaki **kâr hesabı**na bakın.
 
 Toptan platformları (AliExpress, Alibaba, DHgate, Made-in-China) **eleme sebebi değildir**: ürünün buralarda bulunması tedarik edilebildiğini gösterir. Amazon, eBay, Walmart, Trendyol, Hepsiburada gibi perakende pazaryerleri ise eleme sebebidir.
 
@@ -239,8 +240,8 @@ Günlük iş doğrulanmış ürünlerin (ve favori/incelenecek listesindekilerin
 
 | Bileşen | Puan | Formül |
 |---|---|---|
-| Talep | 25 | `25 × min(1, log10(1 + yorum) / 3)` × puan katsayısı (★ ≥ 4,5 → 1; 4–4,5 → 0,85; < 4 → 0,6). 1.000 yorum = tam puan |
-| İvme | 20 | `20 × min(1, aylık yeni yorum / 30)` (en az 7 günlük ölçüm) |
+| Talep | 25 | `25 × min(1, log10(1 + yorum) / 3)` × puan katsayısı (★ ≥ 4,5 → 1; 4–4,5 → 0,85; < 4 → 0,6). 1.000 yorum = tam puan. Yorumu olmayan ürünlerde **toptancı satışı**: `15 × min(1, log10(1 + satış) / 4)` (10.000 satış = 15; ilan fotoğrafla eşleşmediyse ×0,5) |
+| İvme | 20 | `20 × min(1, aylık yeni yorum / 30)` (en az 7 günlük ölçüm). Yorum ölçümü yoksa **toptancı satış hızı**: `20 × min(1, haftalık satış / 100)` (fotoğrafla eşleşmediyse ×0,5) |
 | Trafik | 15 | `12 × sıra puanı` (1 Mn → 0,1, ≤ 150 B → 1, logaritmik) `+ 3 × min(1, (eski sıra / yeni sıra − 1) / 0,2)` (30 günde %20 iyileşme = tam) |
 | Gündem | 10 | `10 × trend skoru / 100` |
 | Fiyat | 10 | 25–150 $ → 10; 15–25 $ veya 150–300 $ → 5; diğer → 0 (yaklaşık sabit kurlarla dolara çevrilir) |

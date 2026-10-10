@@ -132,6 +132,12 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
                     {" "}· perakende/toptan <strong className={Number(p.margin_ratio) >= 3 ? "text-emerald-700 dark:text-emerald-400" : ""}>≈ {Number(p.margin_ratio).toLocaleString("tr-TR")}×</strong>
                   </>
                 )}
+                {p.supplier_sold !== null && (
+                  <>
+                    {" "}· tedarikçi satışı <strong>{p.supplier_sold.toLocaleString("tr-TR")}</strong>
+                    {p.supplier_sold_per_week !== null && <strong className="text-emerald-700 dark:text-emerald-400"> (+{Number(p.supplier_sold_per_week).toLocaleString("tr-TR")}/hafta)</strong>}
+                  </>
+                )}
               </>
             )}
           </p>

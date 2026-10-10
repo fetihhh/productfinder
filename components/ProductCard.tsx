@@ -62,6 +62,13 @@ function SalesFacts({ p }: { p: ProductRow }) {
         : ["Toptan", p.supplier_count ? `${p.supplier_count} benzer ilan (fiyat yok)` : "benzeri bulunamadı", "Toptancı araması"],
     );
   }
+  if (p.supplier_sold) {
+    facts.push([
+      "Tedarikçi",
+      `${p.supplier_sold.toLocaleString("tr-TR")} satış${p.supplier_sold_per_week ? ` · +${Number(p.supplier_sold_per_week).toLocaleString("tr-TR")}/hafta` : ""}`,
+      "Asıl toptan ilanın (AliExpress) toplam satışı ve haftalık artışı: ürünü satan tüm mağazaların talebi",
+    ]);
+  }
   if (p.copy_count > 0) facts.push(["Rakip", `${p.copy_count} yeni mağaza daha satıyor`, "Aynı ürün fotoğrafı ya da AliExpress görseliyle satan diğer yeni mağazalar"]);
   const ads = p.brands?.ads_active;
   if (ads) facts.push(["Reklam", `${ads} reklam yayında`, "Meta Reklam Kütüphanesi (Facebook/Instagram, AB'de gösterilen reklamlar)"]);

@@ -4,7 +4,7 @@ import { crc32, deflateRawSync } from "node:zlib";
 import { readSales } from "../dtc/sales.ts";
 import type { FetchResult } from "../lib/http.ts";
 import { ranksFor, unzipFirst } from "../lib/tranco.ts";
-import { momentumScore, pricePoints, rankChange, rankPoints, reviewsPerMonth, toUsd, visitsFromRank, winnerScore } from "../lib/winner.ts";
+import { momentumScore, pricePoints, rankChange, rankPoints, reviewsPerMonth, soldPerWeek, toUsd, visitsFromRank, winnerScore } from "../lib/winner.ts";
 
 /** Tek dosyalık, deflate ile sıkıştırılmış en küçük zip. */
 function makeZip(name: string, content: string, dosDate: number): Buffer {
@@ -146,4 +146,21 @@ test("momentumScore: büyüklükten bağımsız hız ölçer", () => {
   assert.ok(momentumScore(5000, 15, null, 0).score < 1);
   // ayda 3'ten az yeni yorum gürültü sayılır; trafik kötüleşmesi eksi puan vermez
   assert.deepEqual(momentumScore(10, 2, 0.8, 1), { score: 10, parts: { yorum: 0, trafik: 0, gundem: 10, reklam: 0 }, reviewGrowth: null });
+});
+
+test("soldPerWeek ve toptancı satışı: yorumu olmayan ürünlerde talep ve ivme", () => {
+  assert.equal(soldPerWeek([{ day: "2026-10-01", sold: 1000 }]), null);
+  assert.equal(soldPerWeek([{ day: "2026-10-01", sold: 1000 }, { day: "2026-10-04", sold: 1100 }]), null); // < 6 gün
+  assert.equal(soldPerWeek([{ day: "2026-10-01", sold: 1000 }, { day: "2026-10-08", sold: 1350 }, { day: "2026-10-15", sold: 1700 }]), 350);
+  assert.equal(soldPerWeek([{ day: "2026-10-01", sold: 500 }, { day: "2026-10-08", sold: 400 }]), 0); // düşüş (yuvarlama) eksi değil
+
+  const base = { reviewCount: null, rating: null, price: null, currency: null, trendScore: 0, ranks: [], snapshots: [] };
+  const exact = winnerScore({ ...base, supplierSold: 9999, supplierSoldPerWeek: 50, supplierByImage: true }).breakdown.parts;
+  assert.equal(exact.talep, 15);
+  assert.equal(exact.ivme, 10);
+  const textOnly = winnerScore({ ...base, supplierSold: 9999, supplierSoldPerWeek: 50, supplierByImage: false }).breakdown.parts;
+  assert.equal(textOnly.talep, 7.5);
+  assert.equal(textOnly.ivme, 5);
+  // Yorum varsa yorum tabanlı talep/ivme önceliklidir (toptancı satışı yalnızca daha yüksekse talebe girer).
+  assert.equal(winnerScore({ ...base, reviewCount: 999, supplierSold: 10 }).breakdown.parts.talep, 25);
 });

@@ -7,7 +7,9 @@
 //
 // Winner skoru:
 //   talep   25 × min(1, log10(1 + yorum) / 3) × puan katsayısı   (1000 yorum = tam; ★<4 → ×0,6, ★4–4,5 → ×0,85)
+//           yorum yoksa toptancı satışı: 15 × min(1, log10(1 + satış) / 4) (10.000 satış = 15; ilan fotoğrafla eşleşmediyse ×0,5)
 //   ivme    20 × min(1, aylık yeni yorum / 30)                      (en az 7 günlük ölçüm gerekir)
+//           yorum ölçümü yoksa toptancı satış hızı: 20 × min(1, haftalık satış / 100)
 //   trafik  12 × sıra puanı + 3 × sıra iyileşmesi                   (1 M → 0,1; ≤150 B → 1; 30 günde %20 iyileşme = 3)
 //   gündem  10 × trend skoru / 100                                  (bloglarda anılma)
 //   fiyat   10 → 25–150 $, 5 → 15–25 $ veya 150–300 $, 0 → diğer   (yeniden satış için uygun fiyat bandı)
@@ -48,6 +50,10 @@ export type WinnerInput = {
   /** Ürünün mağazasında toplam stok azalması ve aynı ürünü satan bağımsız mağaza sayısı (yeni mağaza keşfi). */
   stockDrops?: number;
   independentCopies?: number;
+  /** Asıl toptan ilanın toplam satışı ve haftalık satış hızı (AliExpress "N sold"); ilan fotoğrafla mı eşleşti. */
+  supplierSold?: number | null;
+  supplierSoldPerWeek?: number | null;
+  supplierByImage?: boolean;
 };
 
 export type Momentum = {
@@ -139,6 +145,20 @@ export function rankPoints(rank: number | null): number {
 }
 
 /** Tedarik puanı: toptancıda benzer ürün bulunduysa 8, üstüne kâr marjına göre en fazla 12. */
+/**
+ * Toptan ilanın satış hızı (haftalık): son ≤ 60 gündeki en eski ve en yeni ölçüm arasındaki satış artışı, en az 6 gün arayla.
+ * AliExpress büyük sayıları yuvarlar ("5,000+ sold"); artış ancak bir sonraki eşik aşılınca görünür.
+ */
+export function soldPerWeek(points: { day: string; sold: number | null }[]): number | null {
+  const valid = points.filter((p) => p.sold !== null).sort((a, b) => a.day.localeCompare(b.day));
+  if (valid.length < 2) return null;
+  const last = valid[valid.length - 1];
+  const first = valid.find((p) => Date.parse(last.day) - Date.parse(p.day) <= 60 * DAY)!;
+  const days = (Date.parse(last.day) - Date.parse(first.day)) / DAY;
+  if (days < 6) return null;
+  return Math.round((Math.max(0, last.sold! - first.sold!) / days) * 7 * 10) / 10;
+}
+
 export function supplyPoints(supplierMinUsd: number | null, margin: number | null): number {
   if (supplierMinUsd === null) return 0;
   const m = margin ?? 0;
@@ -187,8 +207,11 @@ export function winnerScore(input: WinnerInput): { score: number; breakdown: Win
   const rpm = reviewsPerMonth(input.snapshots);
   const priceUsd = toUsd(input.price, input.currency);
 
-  const talep = reviews ? 25 * clamp01(Math.log10(1 + reviews) / 3) * ratingFactor(input.rating) : 0;
-  const ivme = rpm === null ? 0 : 20 * clamp01(rpm / 30);
+  const reviewTalep = reviews ? 25 * clamp01(Math.log10(1 + reviews) / 3) * ratingFactor(input.rating) : 0;
+  const supplierTalep = input.supplierSold ? 15 * clamp01(Math.log10(1 + input.supplierSold) / 4) * (input.supplierByImage ? 1 : 0.5) : 0;
+  const talep = Math.max(reviewTalep, supplierTalep);
+  const perWeek = input.supplierSoldPerWeek ?? null;
+  const ivme = rpm !== null ? 20 * clamp01(rpm / 30) : perWeek !== null ? 20 * clamp01(perWeek / 100) * (input.supplierByImage ? 1 : 0.5) : 0;
   const trafik = 12 * rankPoints(latestRank) + (change === null ? 0 : 3 * clamp01((change - 1) / 0.2));
   const gundem = 10 * clamp01(Number(input.trendScore) / 100);
   const fiyat = pricePoints(priceUsd);

@@ -8,7 +8,7 @@ import { adPointsByDomain } from "./ads.ts";
 import { db } from "./db.ts";
 import { normalizeName } from "./productName.ts";
 import { trendScore, type MentionLite } from "./score.ts";
-import { supplierEconomics, winnerScore } from "./winner.ts";
+import { soldPerWeek, supplierEconomics, winnerScore } from "./winner.ts";
 
 export async function filterNewItemIds(source: string, ids: string[]): Promise<Set<string>> {
   const fresh = new Set(ids);
@@ -259,7 +259,9 @@ export async function saveTrafficRanks(day: string, domains: string[], ranks: Ma
 export async function updateWinnerScores(): Promise<number> {
   const since = new Date(Date.now() - 45 * 86_400_000).toISOString().slice(0, 10);
   const [products, snaps, ranks, ads, stores] = await Promise.all([
-    db().from("products").select("id, brand_domain, review_count, rating, price, currency, trend_score, score_breakdown, supplier_min_usd, margin_ratio"),
+    db()
+      .from("products")
+      .select("id, brand_domain, review_count, rating, price, currency, trend_score, score_breakdown, supplier_min_usd, margin_ratio, supplier_sold, supplier_sold_per_week, supplier_image_match"),
     db().from("product_snapshots").select("product_id, day, review_count").gte("day", since),
     db().from("traffic_ranks").select("domain, day, rank").gte("day", since),
     adPointsByDomain(),
@@ -290,6 +292,9 @@ export async function updateWinnerScores(): Promise<number> {
       adPoints: ads.get(p.brand_domain)?.points ?? 0,
       newAds14d: ads.get(p.brand_domain)?.newAds14d ?? 0,
       stockDrops: storeBy.get(p.brand_domain)?.stock_drops ?? 0,
+      supplierSold: p.supplier_sold,
+      supplierSoldPerWeek: p.supplier_sold_per_week === null ? null : Number(p.supplier_sold_per_week),
+      supplierByImage: p.supplier_image_match,
       independentCopies: storeBy.get(p.brand_domain)?.copy_same_seller ? 0 : (storeBy.get(p.brand_domain)?.copy_count ?? 0),
     });
     const { error } = await db().from("products").update({ winner_score: score, winner_breakdown: breakdown, momentum_score: breakdown.momentum.score }).eq("id", p.id);
@@ -389,6 +394,23 @@ export async function saveSuppliers(p: ProductToSource, r: SupplierResult): Prom
     if (error) throw new Error(`suppliers yazılamadı: ${error.message}`);
   }
   const { minUsd, margin } = supplierEconomics(r.offers, p.price === null ? null : Number(p.price), p.currency);
+  // Satış adedi geçmişi (haftalık satış hızı için). Asıl ilan: fotoğrafla eşleşenlerden en çok satan, yoksa en benzer.
+  const day = new Date().toISOString().slice(0, 10);
+  const withSold = r.offers.filter((o) => o.sold !== null);
+  if (withSold.length) {
+    const { error: hErr } = await db()
+      .from("supplier_history")
+      .upsert(withSold.map((o) => ({ product_id: p.id, url: o.url, day, sold: o.sold, price_min: o.priceMin })), { onConflict: "product_id,url,day" });
+    if (hErr) throw new Error(`supplier_history yazılamadı: ${hErr.message}`);
+  }
+  const byImage = withSold.filter(isImageMatch).sort((a, b) => (b.sold ?? 0) - (a.sold ?? 0));
+  const primary = byImage[0] ?? [...withSold].sort((a, b) => b.similarity - a.similarity || (b.sold ?? 0) - (a.sold ?? 0))[0] ?? null;
+  let perWeek: number | null = null;
+  if (primary) {
+    const { data: hist, error: qErr } = await db().from("supplier_history").select("day, sold").eq("product_id", p.id).eq("url", primary.url);
+    if (qErr) throw new Error(`supplier_history okunamadı: ${qErr.message}`);
+    perWeek = soldPerWeek(hist as { day: string; sold: number | null }[]);
+  }
   const { error } = await db()
     .from("products")
     .update({
@@ -397,6 +419,8 @@ export async function saveSuppliers(p: ProductToSource, r: SupplierResult): Prom
       supplier_min_usd: minUsd,
       margin_ratio: margin,
       supplier_image_match: r.offers.some(isImageMatch),
+      supplier_sold: primary?.sold ?? null,
+      supplier_sold_per_week: perWeek,
     })
     .eq("id", p.id);
   if (error) throw new Error(`products güncellenemedi: ${error.message}`);

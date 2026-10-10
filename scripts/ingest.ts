@@ -45,7 +45,9 @@ import {
   updateTrendScores,
   updateWinnerScores,
 } from "../lib/repo.ts";
+import { appendFileSync } from "node:fs";
 import { parseTcmb, TCMB_URL } from "../lib/fx.ts";
+import { getSummary } from "../lib/summary.ts";
 import { sourceLang, translateToEnglish } from "../lib/translate.ts";
 import { setJobState } from "../lib/stores.ts";
 import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranco.ts";
@@ -261,6 +263,35 @@ async function exchangeRates(): Promise<boolean> {
   return true;
 }
 
+/** GitHub Actions'ta çalışırken iş özeti sayfasına günün sonuçlarını yazar (Actions → çalıştırma → Summary). */
+async function writeJobSummary(seconds: number): Promise<void> {
+  const file = process.env.GITHUB_STEP_SUMMARY;
+  if (!file) return;
+  try {
+    const s = await getSummary();
+    const site = process.env.APP_URL ?? "https://productfinder-phi.vercel.app";
+    const lines = [
+      `## Product Finder — ${today()}`,
+      "",
+      `| Son 24 saatte bulunan mağaza | Son 7 günde açılan | Açık yeni mağaza | Son 24 saatte aday ürün | Süre |`,
+      `|---|---|---|---|---|`,
+      `| ${s.counts.storesFound24h} | ${s.counts.storesOpened7d} | ${s.counts.liveNew} | ${s.counts.candidates24h} | ${Math.round(seconds / 60)} dk |`,
+      "",
+      "### En yüksek winner skorlu ürünler",
+      ...s.winners.slice(0, 5).map((p) => `- **${Math.round(Number(p.winner_score))}** · [${p.name.replace(/[[\]|]/g, " ")}](${site}/p/${p.id}) · ${p.brand_domain}${p.margin_ratio !== null ? ` · marj ≈ ${p.margin_ratio}×` : ""}`),
+      "",
+      "### En çok satış hareketi olan yeni mağazalar",
+      ...(s.movers.length ? s.movers.slice(0, 5).map((m) => `- 📉 ${m.stock_drops} · [${m.shop_name ?? m.domain}](${site}/m/${m.domain}) · ${m.moving_products} ürün`) : ["- Henüz yok"]),
+      "",
+      `[Özet sayfası](${site}/ozet)`,
+      "",
+    ];
+    appendFileSync(file, lines.join("\n"));
+  } catch (err) {
+    console.error(`  ! iş özeti yazılamadı: ${(err as Error).message}`);
+  }
+}
+
 async function main() {
   const started = Date.now();
   const onlyVerify = process.argv.includes("verify") || process.argv.includes("recheck");
@@ -294,6 +325,7 @@ async function main() {
   console.log(`\n▶ Trend skoru: ${scores.total} ürün, ${scores.updated} değişti`);
   console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
   console.log(`\nBitti: ${((Date.now() - started) / 1000).toFixed(1)} sn`);
+  await writeJobSummary((Date.now() - started) / 1000);
   if (![collected, discovered, checked, copied, advertised, promoted, verified, ranked, measured, fx, sourced, aged].every(Boolean)) process.exitCode = 1;
 }
 

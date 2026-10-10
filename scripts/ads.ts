@@ -39,7 +39,10 @@ export async function adSignals(reanalyze = false): Promise<boolean> {
   let stopped: string | null = null;
   for (const t of targets) {
     if (checked > 0) await sleep(1000); // tek alan adı (graph.facebook.com): saniyede en fazla 1 istek
-    const r = await search(t);
+    // Her zaman alan adıyla aranır: dropshipping mağazaları reklamlarını çoğu zaman birden çok Facebook sayfasından yayınlar;
+    // tek sayfayla aramak diğer sayfalardaki reklamları kaçırır. Sayfa kimliği yalnızca Reklam Kütüphanesi bağlantısı içindir.
+    const q = { domain: t.domain, pageId: null };
+    const r = await search(q);
     if (!r.ok) {
       if (r.fatal) {
         stopped = r.reason;
@@ -49,13 +52,13 @@ export async function adSignals(reanalyze = false): Promise<boolean> {
       if (errors <= 5) console.log(`  ? ${t.domain}: ${r.reason}`);
       continue;
     }
-    const matched = r.ads.filter((a) => adMatches(a, t.domain, t.shopName, t.pageId));
+    const matched = r.ads.filter((a) => adMatches(a, t.domain, t.shopName, null));
     // Reklam bulunduysa yayındakiler ayrıca istenir: tek sayfa 100 reklamla sınırlı, yayındaki eski reklamlar dışarıda kalabilir.
     let active: typeof matched | null = null;
     if (matched.length > 0) {
       await sleep(1000);
-      const a = await search({ ...t, pageId: t.pageId ?? matched.find((m) => m.page_id)?.page_id ?? null, activeOnly: true });
-      if (a.ok) active = a.ads.filter((x) => adMatches(x, t.domain, t.shopName, t.pageId ?? matched.find((m) => m.page_id)?.page_id ?? null));
+      const a = await search({ ...q, activeOnly: true });
+      if (a.ok) active = a.ads.filter((x) => adMatches(x, t.domain, t.shopName, null));
     }
     const merged = [...matched, ...(active ?? []).filter((x) => !matched.some((m) => m.id === x.id))];
     const summary = summarizeAds(merged);

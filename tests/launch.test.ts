@@ -36,6 +36,9 @@ test("turkeyTargeting: karışık kitlede cinsiyet daraltılmaz; 65+ üst sını
   const t = turkeyTargeting(audienceOf([ad("1", [["55-64", 50, 45], ["65+", 60, 50]])])!);
   assert.equal(t.gender, "Tümü");
   assert.deepEqual([t.ageMin, t.ageMax], [55, null]);
+  // 3+ platformda birden: rakip otomatik yerleşim kullanıyor.
+  const auto = turkeyTargeting(audienceOf([ad("1", [["25-34", 10, 10]], "FR", ["facebook", "instagram", "audience_network", "threads"])])!);
+  assert.deepEqual(auto.placements, ["Advantage+ yerleşimler (rakip de otomatik yerleşim kullanıyor)"]);
 });
 
 test("guessLang ve anglesOf: çok dilli reklam metinleri", () => {

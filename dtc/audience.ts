@@ -121,8 +121,13 @@ export function turkeyTargeting(a: Audience): Targeting {
   const ageMax = a.core?.max ?? null;
   const share = (n: string) => a.platforms.find((p) => p.name === n)?.share ?? 0;
   const placements: string[] = [];
-  if (share("instagram") >= 0.5) placements.push("Instagram Reels", "Instagram Akış ve Hikâyeler");
-  if (share("facebook") >= 0.5) placements.push("Facebook Akış", "Facebook Reels");
+  // Reklamlar 3+ platformda birden yayındaysa rakip otomatik yerleşim (Advantage+) kullanıyor demektir.
+  const auto = a.platforms.filter((p) => p.share >= 0.8).length >= 3;
+  if (auto) placements.push("Advantage+ yerleşimler (rakip de otomatik yerleşim kullanıyor)");
+  else {
+    if (share("instagram") >= 0.5) placements.push("Instagram Reels", "Instagram Akış ve Hikâyeler");
+    if (share("facebook") >= 0.5) placements.push("Facebook Akış", "Facebook Reels");
+  }
   if (placements.length === 0) placements.push("Advantage+ yerleşimler (otomatik)");
   const notes = [
     "Konum: Türkiye (yalnızca \"bu konumda yaşayan kişiler\").",

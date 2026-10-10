@@ -220,7 +220,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
             empty="Fiyat okunamadı"
           />
         </Panel>
-        <Panel title="Winner skoru nasıl oluştu?" note="Her çubuk kendi azami puanına göre dolar. Ayrıntılar README'de.">
+        <Panel title="Winner skoru nasıl oluştu?" note="Her çubuk kendi azami puanına göre dolar; toplam en fazla 100. Ayrıntılar README'de.">
           {w ? (
             <ScoreBars
               parts={[
@@ -231,6 +231,8 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
                 { label: "Fiyat", value: w.parts.fiyat, max: 10, hint: "25–150 $ bandı tam puan" },
                 { label: "Tedarik", value: w.parts.tedarik ?? 0, max: 20, hint: "Toptancıda benzer ürün 8 + kâr marjı (≥4× = 12)" },
                 { label: "Reklam", value: w.parts.reklam ?? 0, max: 15, hint: "Meta'da yayındaki reklam sayısı ve en eski reklamın yaşı" },
+                { label: "Stok hareketi", value: w.parts.hareket ?? 0, max: 10, hint: "Mağazada stokta olan varyant sayısının azalması (satış işareti)" },
+                { label: "Rakip mağaza", value: w.parts.kopya ?? 0, max: 10, hint: "Aynı ürünü satan bağımsız yeni mağazalar (talep kanıtı)" },
               ]}
             />
           ) : (

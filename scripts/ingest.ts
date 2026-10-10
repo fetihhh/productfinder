@@ -10,6 +10,7 @@ import { directSearch } from "../dtc/directSearch.ts";
 import { tavilySearch, type SearchFn } from "../dtc/marketplaceSearch.ts";
 import { readSales } from "../dtc/sales.ts";
 import { imageHasher, productImageUrls } from "../dtc/imageHash.ts";
+import { aliImageId } from "../dtc/storeProbe.ts";
 import { findSuppliers, isImageMatch, SUPPLIER_SITES } from "../dtc/suppliers.ts";
 import { verifyProduct, type BrandState } from "../dtc/verify.ts";
 import { politeFetch, politeFetchBytes } from "../lib/http.ts";
@@ -195,7 +196,14 @@ async function suppliers(): Promise<boolean> {
       const images = await productImageUrls(p.image_url, p.product_url, politeFetch);
       const imageHashes = (await Promise.all(images.map(hashImage))).filter((h): h is bigint => h !== null);
       const r = await findSuppliers(
-        { name: p.name, brandDomain: p.brand_domain, productType: p.product_type, imageHashes, nameStartsWithBrand: !p.from_store },
+        {
+          name: p.name,
+          brandDomain: p.brand_domain,
+          productType: p.product_type,
+          imageHashes,
+          nameStartsWithBrand: !p.from_store,
+          aliImageIds: images.map(aliImageId).filter((id): id is string => id !== null),
+        },
         politeFetch,
         SUPPLIER_SITES,
         hashImage,

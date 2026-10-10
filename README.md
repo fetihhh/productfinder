@@ -246,6 +246,8 @@ Günlük iş doğrulanmış ürünlerin (ve favori/incelenecek listesindekilerin
 | Fiyat | 10 | 25–150 $ → 10; 15–25 $ veya 150–300 $ → 5; diğer → 0 (yaklaşık sabit kurlarla dolara çevrilir) |
 | Tedarik | 20 | Toptancıda benzer ürün (≥ %70) → 8; kâr marjı ≥ 4× → +12, ≥ 3× → +9, ≥ 2× → +5 |
 | Reklam | 15 | `15 × reklam puanı / 25` (Meta'da yayındaki reklam sayısı ve en eski reklamın yaşı; aşağıda **Reklam sinyali**) |
+| Stok hareketi | 10 | Ürünün mağazasında toplam stok azalması (yeni mağaza keşfi): 1 → 4, ≥ 2 → 7, ≥ 5 → 10 |
+| Rakip mağaza | 10 | Aynı ürünü satan bağımsız yeni mağaza: 1 → 5, 2–4 → 8, ≥ 5 → 10 (aynı satıcının ağı sayılmaz) |
 
 Toplam en fazla 100.
 

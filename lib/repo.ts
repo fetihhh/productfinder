@@ -258,13 +258,15 @@ export async function saveTrafficRanks(day: string, domains: string[], ranks: Ma
 /** Tüm ürünlerin winner skorunu satış ölçümleri, trafik sırası ve trend skorundan yeniden hesaplar. */
 export async function updateWinnerScores(): Promise<number> {
   const since = new Date(Date.now() - 45 * 86_400_000).toISOString().slice(0, 10);
-  const [products, snaps, ranks, ads] = await Promise.all([
+  const [products, snaps, ranks, ads, stores] = await Promise.all([
     db().from("products").select("id, brand_domain, review_count, rating, price, currency, trend_score, score_breakdown, supplier_min_usd, margin_ratio"),
     db().from("product_snapshots").select("product_id, day, review_count").gte("day", since),
     db().from("traffic_ranks").select("domain, day, rank").gte("day", since),
     adPointsByDomain(),
+    db().from("stores").select("domain, stock_drops, copy_count, copy_same_seller").or("stock_drops.gt.0,copy_count.gt.0"),
   ]);
-  for (const r of [products, snaps, ranks]) if (r.error) throw new Error(`winner verisi okunamadı: ${r.error.message}`);
+  for (const r of [products, snaps, ranks, stores]) if (r.error) throw new Error(`winner verisi okunamadı: ${r.error.message}`);
+  const storeBy = new Map((stores.data as { domain: string; stock_drops: number; copy_count: number; copy_same_seller: boolean }[]).map((s) => [s.domain, s]));
   const group = <T, K extends keyof T>(rows: T[], key: K) => {
     const m = new Map<T[K], T[]>();
     for (const row of rows) m.set(row[key], [...(m.get(row[key]) ?? []), row]);
@@ -287,6 +289,8 @@ export async function updateWinnerScores(): Promise<number> {
       marginRatio: p.margin_ratio === null ? null : Number(p.margin_ratio),
       adPoints: ads.get(p.brand_domain)?.points ?? 0,
       newAds14d: ads.get(p.brand_domain)?.newAds14d ?? 0,
+      stockDrops: storeBy.get(p.brand_domain)?.stock_drops ?? 0,
+      independentCopies: storeBy.get(p.brand_domain)?.copy_same_seller ? 0 : (storeBy.get(p.brand_domain)?.copy_count ?? 0),
     });
     const { error } = await db().from("products").update({ winner_score: score, winner_breakdown: breakdown, momentum_score: breakdown.momentum.score }).eq("id", p.id);
     if (error) throw new Error(`winner skoru yazılamadı: ${error.message}`);

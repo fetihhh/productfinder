@@ -100,7 +100,7 @@ test("winnerScore: bileşenler ve satış tahminleri", () => {
     supplierMinUsd: 20,
     marginRatio: 5,
   });
-  assert.deepEqual(breakdown.parts, { talep: 25, ivme: 20, trafik: 15, gundem: 4, fiyat: 10, tedarik: 20, reklam: 0 });
+  assert.deepEqual(breakdown.parts, { talep: 25, ivme: 20, trafik: 15, gundem: 4, fiyat: 10, tedarik: 20, reklam: 0, hareket: 0, kopya: 0 });
   assert.equal(score, 94);
   assert.deepEqual(breakdown.sales, { low: 9990, high: 49950 });
   assert.equal(breakdown.reviewsPerMonth, 90);

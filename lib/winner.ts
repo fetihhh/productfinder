@@ -13,6 +13,8 @@
 //   fiyat   10 → 25–150 $, 5 → 15–25 $ veya 150–300 $, 0 → diğer   (yeniden satış için uygun fiyat bandı)
 //   tedarik 20 → toptancıda benzer ürün (benzerlik ≥ %70) 8 + marj puanı (perakende / toptan ≥ 4 → 12, ≥ 3 → 9, ≥ 2 → 5)
 //   reklam  15 × reklam puanı / 25   (Meta Reklam Kütüphanesi: yayındaki reklam sayısı ve en eski reklamın yaşı)
+//   hareket 10 → mağazada stok azalması (satış işareti): 1 → 4, ≥ 2 → 7, ≥ 5 → 10   (yeni mağaza keşfinden gelen ürünler)
+//   kopya   10 → aynı ürünü satan bağımsız yeni mağaza: 1 → 5, 2–4 → 8, ≥ 5 → 10   (aynı satıcı ağı sayılmaz)
 //   Toplam en fazla 100.
 //
 // Yükseliş skoru ("Yükselenler" görünümü, 0–100): büyüklükten bağımsız, HIZ ölçer.
@@ -43,6 +45,9 @@ export type WinnerInput = {
   /** Reklam puanı (0–25) ve son 14 günde açılan reklam sayısı (Meta Reklam Kütüphanesi). */
   adPoints?: number;
   newAds14d?: number;
+  /** Ürünün mağazasında toplam stok azalması ve aynı ürünü satan bağımsız mağaza sayısı (yeni mağaza keşfi). */
+  stockDrops?: number;
+  independentCopies?: number;
 };
 
 export type Momentum = {
@@ -53,7 +58,7 @@ export type Momentum = {
 };
 
 export type WinnerBreakdown = {
-  parts: { talep: number; ivme: number; trafik: number; gundem: number; fiyat: number; tedarik: number; reklam: number };
+  parts: { talep: number; ivme: number; trafik: number; gundem: number; fiyat: number; tedarik: number; reklam: number; hareket: number; kopya: number };
   rank: number | null;
   rankChange: number | null;
   visits: Range | null;
@@ -189,12 +194,16 @@ export function winnerScore(input: WinnerInput): { score: number; breakdown: Win
   const fiyat = pricePoints(priceUsd);
   const tedarik = supplyPoints(input.supplierMinUsd ?? null, input.marginRatio ?? null);
   const reklam = 15 * clamp01((input.adPoints ?? 0) / 25);
+  const drops = input.stockDrops ?? 0;
+  const hareket = drops >= 5 ? 10 : drops >= 2 ? 7 : drops >= 1 ? 4 : 0;
+  const copies = input.independentCopies ?? 0;
+  const kopya = copies >= 5 ? 10 : copies >= 2 ? 8 : copies >= 1 ? 5 : 0;
 
   const salesPerMonth = rpm === null ? null : scale(rpm, REVIEW_TO_SALES);
   const days = new Set([...input.snapshots.map((s) => s.day), ...input.ranks.map((r) => r.day)]);
-  const parts = { talep: round1(talep), ivme: round1(ivme), trafik: round1(trafik), gundem: round1(gundem), fiyat, tedarik, reklam: round1(reklam) };
+  const parts = { talep: round1(talep), ivme: round1(ivme), trafik: round1(trafik), gundem: round1(gundem), fiyat, tedarik, reklam: round1(reklam), hareket, kopya };
   return {
-    score: round1(Math.min(100, parts.talep + parts.ivme + parts.trafik + parts.gundem + parts.fiyat + parts.tedarik + parts.reklam)),
+    score: round1(Math.min(100, parts.talep + parts.ivme + parts.trafik + parts.gundem + parts.fiyat + parts.tedarik + parts.reklam + parts.hareket + parts.kopya)),
     breakdown: {
       parts,
       rank: latestRank,

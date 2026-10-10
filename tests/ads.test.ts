@@ -107,6 +107,15 @@ test("reklam winner ve yükseliş skorlarına eklenir, toplam en fazla 100", () 
   const base = { reviewCount: null, rating: null, price: null, currency: null, trendScore: 0, ranks: [], snapshots: [] };
   assert.equal(winnerScore({ ...base, adPoints: 25 }).breakdown.parts.reklam, 15);
   assert.equal(winnerScore({ ...base, adPoints: 10 }).score, 6);
+  // Yeni mağaza sinyalleri: stok azalması ve bağımsız rakip mağazalar.
+  assert.deepEqual(
+    [1, 2, 5].map((d) => winnerScore({ ...base, stockDrops: d }).breakdown.parts.hareket),
+    [4, 7, 10],
+  );
+  assert.deepEqual(
+    [1, 3, 6].map((n) => winnerScore({ ...base, independentCopies: n }).breakdown.parts.kopya),
+    [5, 8, 10],
+  );
   const m = momentumScore(50, 15, 1.2, 2, 3);
   assert.equal(m.parts.reklam, 25);
   assert.equal(m.score, 100);

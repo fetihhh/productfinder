@@ -269,7 +269,15 @@ export const SUPPLIER_SITES: Site[] = [
  * imageHashes + hashImage verilirse en benzer ilanların fotoğrafı ürün fotoğraflarıyla karşılaştırılır.
  */
 export async function findSuppliers(
-  p: { name: string; brandDomain: string; productType: string | null; imageHashes?: bigint[]; nameStartsWithBrand?: boolean },
+  p: {
+    name: string;
+    brandDomain: string;
+    productType: string | null;
+    imageHashes?: bigint[];
+    nameStartsWithBrand?: boolean;
+    /** Ürün görsellerinin AliExpress görsel kimlikleri: ilan görsel adresinde aynen geçerse kesin eşleşme. */
+    aliImageIds?: string[];
+  },
   fetchPage: FetchPage,
   sites: Site[] = SUPPLIER_SITES,
   hashImage?: (url: string | null) => Promise<bigint | null>,
@@ -305,9 +313,17 @@ export async function findSuppliers(
         const scored: SupplierOffer[] = raw
           .map((o) => ({ ...o, similarity: similarity(query, o.title, weights), imageDistance: null }))
           .filter((o) => !isAccessoryListing(query, o.title) && !isBrandedOrUsed(o.title));
+        // Mağaza fotoğrafı AliExpress'ten indirilmişse (dosya adı görsel kimliği) aynı kimlikli ilan kesin tedarikçidir.
+        for (const o of scored) {
+          if (o.imageUrl && p.aliImageIds?.some((id) => o.imageUrl!.includes(id))) {
+            o.imageDistance = 0;
+            o.similarity = Math.max(o.similarity, 0.95);
+          }
+        }
         if (hashImage && productHashes.length) {
           const pool = scored.filter((o) => o.similarity >= IMAGE_POOL_MIN && o.imageUrl).sort((a, b) => b.similarity - a.similarity).slice(0, IMAGE_POOL);
           for (const o of pool) {
+            if (o.imageDistance === 0) continue;
             o.imageDistance = closestDistance(productHashes, await hashImage(o.imageUrl));
             if (isImageMatch(o)) o.similarity = Math.max(o.similarity, 0.95);
           }

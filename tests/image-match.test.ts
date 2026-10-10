@@ -99,3 +99,26 @@ test("findSuppliers: fotoğrafla eşleşen ilan metin benzerliği düşük olsa 
   const textOnly = await findSuppliers({ name: "Glow Moon Lamp Rechargeable Bedside Light", brandDomain: "glowshop.com", productType: null }, fetchPage, [site], hashImage);
   assert.ok(textOnly.offers.every((o) => o.imageDistance === null));
 });
+
+test("findSuppliers: mağaza görselinin AliExpress kimliği ilanın görsel adresinde geçerse kesin eşleşme (görsel indirilmez)", async () => {
+  const id = "S4f799d2afe244d7189aaf61e0b2036edi";
+  const site = {
+    source: "aliexpress" as const,
+    url: (q: string) => `https://x.test/${q}`,
+    parse: () => [
+      { source: "aliexpress" as const, url: "https://x.test/item/1", title: "Mini UV Lamp Box Phone", imageUrl: `https://ae-pic-a1.aliexpress-media.com/kf/${id}.jpg`, priceMin: 6.5, priceMax: 6.5, currency: "USD", moq: null, sold: 120, supplierName: null },
+      { source: "aliexpress" as const, url: "https://x.test/item/2", title: "Sterilizer Box Multifunctional UV", imageUrl: "https://ae-pic-a1.aliexpress-media.com/kf/Sother.jpg", priceMin: 3, priceMax: 3, currency: "USD", moq: null, sold: 5, supplierName: null },
+    ],
+  };
+  let hashed = 0;
+  const r = await findSuppliers(
+    { name: "Multifunctional UV-C Sterilizer Box", brandDomain: "aerocleantech.store", productType: null, nameStartsWithBrand: false, aliImageIds: [id] },
+    async (url) => ({ ok: true, status: 200, url, contentType: "text/html", text: "" }),
+    [site],
+    async () => (hashed++, null),
+  );
+  assert.equal(r.offers[0].url, "https://x.test/item/1");
+  assert.equal(r.offers[0].imageDistance, 0);
+  assert.ok(isImageMatch(r.offers[0]));
+  assert.equal(hashed, 0); // ürün görsel özeti verilmediği için görsel karşılaştırma yapılmaz
+});

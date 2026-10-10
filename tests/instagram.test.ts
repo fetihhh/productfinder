@@ -37,6 +37,13 @@ test("rankPosts: etkileşim = beğeni + 3 × yorum; ortancaya göre kaç kat", (
     ],
   );
   assert.deepEqual(rankPosts([]).posts, []);
+  // Çekiliş: 819 yorum "arkadaşını etiketle" koşulu, ilgi sayılmaz.
+  const g = rankPosts([
+    { id: "a", like_count: 110, comments_count: 819, caption: "🐾 THE PAW-SOME GIVEAWAY IS HERE! Tag 2 friends" },
+    { id: "b", like_count: 20, comments_count: 1 },
+    { id: "c", like_count: 25, comments_count: 2 },
+  ]);
+  assert.deepEqual(g.posts.map((p) => [p.id, p.engagement]), [["a", 274], ["c", 31], ["b", 23]]);
 });
 
 test("discoveryUrl: Business Discovery alanları, kullanıcı adı ve sınır", () => {

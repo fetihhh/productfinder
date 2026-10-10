@@ -68,6 +68,12 @@ export type IgAccount = {
   media?: { data?: IgMedia[] };
 };
 
+const GIVEAWAY =
+  /\b(giveaways?|gewinnspiel|sorteo|sorteio|concours|concorso|winactie|konkurs|çekiliş|cekilis)\b|tag\s+(?:a|your|\d+)\s+friends?|etiketle|menciona\s+a|identifie\s+\d*\s*amis?/i;
+
+/** Çekiliş gönderisi (yorumlar katılım koşulu). */
+export const isGiveaway = (caption: string | undefined | null) => Boolean(caption && GIVEAWAY.test(caption));
+
 export type RankedPost = IgMedia & { engagement: number; outlier: number };
 
 const median = (xs: number[]) => {
@@ -82,7 +88,11 @@ const median = (xs: number[]) => {
  * kaç kat (outlier): takipçisi az hesapta da hangi gönderinin patladığını gösterir. Beğenisi gizli gönderide yalnızca yorum sayılır.
  */
 export function rankPosts(media: IgMedia[]): { posts: RankedPost[]; medianEngagement: number } {
-  const withEng = media.map((m) => ({ ...m, engagement: (m.like_count ?? 0) + 3 * (m.comments_count ?? 0) }));
+  // Çekilişte yorumlar "arkadaşını etiketle" koşuludur (ilgi değil): yorumun ağırlığı düşürülür.
+  const withEng = media.map((m) => ({
+    ...m,
+    engagement: Math.round((m.like_count ?? 0) + (isGiveaway(m.caption) ? 0.2 : 3) * (m.comments_count ?? 0)),
+  }));
   const med = median(withEng.map((m) => m.engagement));
   const posts = withEng
     .map((m) => ({ ...m, outlier: med > 0 ? Math.round((m.engagement / med) * 10) / 10 : m.engagement > 0 ? 1 : 0 }))

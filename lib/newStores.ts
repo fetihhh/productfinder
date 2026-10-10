@@ -1,7 +1,16 @@
 // "Yeni mağazalar" sayfasının sorguları (yalnızca sunucu).
 import { db } from "./db.ts";
 
-export type StoreFilters = { maxAge: 30 | 60 | 90 | 150; minScore: number; sort: "score" | "new" | "products" | "ads"; q: string; tr: boolean; ads: boolean };
+export type StoreFilters = {
+  maxAge: 30 | 60 | 90 | 150;
+  minScore: number;
+  sort: "score" | "new" | "products" | "ads" | "copies";
+  q: string;
+  tr: boolean;
+  ads: boolean;
+  /** Yalnızca bu kümedeki (aynı ürünü satan) mağazalar. */
+  group: string;
+};
 
 export type NewStoreRow = {
   domain: string;
@@ -25,6 +34,10 @@ export type NewStoreRow = {
   ad_points: number;
   ads_active: number | null;
   total_score: number;
+  copy_group: string | null;
+  copy_count: number;
+  copy_same_seller: boolean;
+  ali_image_count: number | null;
   checks: number;
   product_id: string | null;
   products: { dtc_status: string; margin_ratio: number | null; supplier_min_usd: number | null } | null;
@@ -40,10 +53,11 @@ export function parseStoreFilters(sp: Record<string, string | string[] | undefin
   return {
     maxAge: ([30, 60, 90, 150] as const).find((a) => a === age) ?? 150,
     minScore: Math.min(100, Math.max(0, Number(one(sp.min)) || 0)),
-    sort: sort === "new" || sort === "products" || sort === "ads" ? sort : "score",
+    sort: sort === "new" || sort === "products" || sort === "ads" || sort === "copies" ? sort : "score",
     q: one(sp.q).replace(/[%_*,()\\"']/g, " ").trim().slice(0, 60),
     tr: one(sp.tr) === "1",
     ads: one(sp.ads) === "1",
+    group: one(sp.group).toLowerCase().replace(/[^a-z0-9.-]/g, "").slice(0, 100),
   };
 }
 
@@ -52,21 +66,53 @@ export async function listNewStores(f: StoreFilters): Promise<{ rows: NewStoreRo
   let query = db()
     .from("stores")
     .select(
-      "domain, shop_name, country, ships_to_tr, product_count, discounted_count, dropship_count, apparel_count, min_price, max_price, currency, first_product_at, registered_on, hero_handle, hero_title, hero_image, hero_price, store_score, ad_points, ads_active, total_score, checks, product_id, products(dtc_status, margin_ratio, supplier_min_usd)",
+      "domain, shop_name, country, ships_to_tr, product_count, discounted_count, dropship_count, apparel_count, min_price, max_price, currency, first_product_at, registered_on, hero_handle, hero_title, hero_image, hero_price, store_score, ad_points, ads_active, total_score, copy_group, copy_count, copy_same_seller, ali_image_count, checks, product_id, products(dtc_status, margin_ratio, supplier_min_usd)",
     )
     .eq("status", "live")
     .gte("first_product_at", since);
   if (f.minScore > 0) query = query.gte("total_score", f.minScore);
   if (f.ads) query = query.gte("ads_active", 1);
+  if (f.group) query = query.eq("copy_group", f.group);
   if (f.tr) query = query.eq("ships_to_tr", true);
   if (f.q) query = query.or(`domain.ilike.*${f.q}*,shop_name.ilike.*${f.q}*,hero_title.ilike.*${f.q}*`);
   if (f.sort === "new") query = query.order("first_product_at", { ascending: false });
   else if (f.sort === "products") query = query.order("product_count", { ascending: true });
+  else if (f.sort === "copies") query = query.order("copy_count", { ascending: false }).order("total_score", { ascending: false });
   else if (f.sort === "ads") query = query.order("ads_active", { ascending: false, nullsFirst: false }).order("total_score", { ascending: false });
   else query = query.order("total_score", { ascending: false }).order("first_product_at", { ascending: false });
   const { data, error } = await query.limit(120);
   if (error) return { rows: [], error: error.message };
   return { rows: data as unknown as NewStoreRow[], error: null };
+}
+
+export type CopyMember = {
+  domain: string;
+  shop_name: string | null;
+  status: string;
+  hero_title: string | null;
+  hero_handle: string | null;
+  hero_image: string | null;
+  hero_price: number | null;
+  currency: string | null;
+  first_product_at: string | null;
+  product_count: number | null;
+  total_score: number;
+  ads_active: number | null;
+  copy_same_seller: boolean;
+};
+
+/** Aynı ürünü satan mağazalar: alan adının kümesi (yoksa boş liste). İlk açılan önce. */
+export async function copiesOf(domain: string): Promise<CopyMember[]> {
+  const { data: self, error } = await db().from("stores").select("copy_group").eq("domain", domain).maybeSingle();
+  if (error || !self?.copy_group) return [];
+  const { data, error: mErr } = await db()
+    .from("stores")
+    .select("domain, shop_name, status, hero_title, hero_handle, hero_image, hero_price, currency, first_product_at, product_count, total_score, ads_active, copy_same_seller")
+    .eq("copy_group", self.copy_group)
+    .order("first_product_at", { ascending: true })
+    .limit(50);
+  if (mErr) return [];
+  return data as CopyMember[];
 }
 
 export type MetaAdsState = {

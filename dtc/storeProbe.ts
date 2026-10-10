@@ -1,6 +1,7 @@
 // Yeni Shopify mağazası kontrolü: açık mı (şifre sayfası/boş/kapalı), kaç ürün, ilk ürün ne zaman eklendi,
 // indirimli ürün oranı, stok durumu ve ana sayfada öne çıkan ("hero") ürün.
 // Uç noktalar Shopify'ın herkese açık JSON'ları: /products.json ve /meta.json. Şifreli mağazaya girilmez.
+import { STORE_DAILY_MIN_SCORE } from "../config/limits.ts";
 import type { FetchResult } from "../lib/http.ts";
 import { parseShopifyMeta } from "./signals.ts";
 
@@ -22,6 +23,8 @@ export type StoreProduct = {
   dropship: boolean;
   /** Baskılı giyim / merch (tişört, kapüşonlu, şapka…). */
   apparel: boolean;
+  /** Görselin dosya adı AliExpress görsel kimliği (ör. S4f799d…edi.avif): fotoğraf AliExpress'ten alınmış. */
+  aliImageId: string | null;
 };
 
 export type LiveStore = {
@@ -32,6 +35,7 @@ export type LiveStore = {
   discountedCount: number;
   dropshipCount: number;
   apparelCount: number;
+  aliImageCount: number;
   minPrice: number | null;
   maxPrice: number | null;
   firstProductAt: string | null;
@@ -55,6 +59,15 @@ const num = (v: unknown): number | null => {
 const DELIVERY_RANGE = /(\d{1,2})\s*(?:-|–|to)\s*(\d{1,2})\s*(?:business\s+|working\s+)?days/gi;
 const WORLDWIDE = /worldwide\s+shipping|ships?\s+worldwide|free\s+(?:worldwide|global|international)\s+shipping/i;
 const APPAREL = /\b(t-?shirts?|tees?|hoodies?|sweatshirts?|crewnecks?|caps?|beanies?|hats?|jerseys?|joggers?|sweatpants|apparel|clothing)\b/i;
+
+/**
+ * AliExpress görsel kimliği: "S"/"H"/"U"/"A" + 32 onaltılık + 1 harf (alicdn / aliexpress-media dosya adları). Mağaza
+ * fotoğrafı AliExpress'ten indirip yüklediğinde Shopify dosya adını korur (sonuna "_1" ya da uuid ekleyebilir).
+ */
+export function aliImageId(url: string | null): string | null {
+  const file = url?.split("?")[0].split("/").pop() ?? "";
+  return file.match(/^([SHUA][0-9a-f]{32}[a-z])(?:[_-][\w-]*)?\.(?:jpe?g|png|webp|avif|gif)$/i)?.[1] ?? null;
+}
 
 /** Teslimat aralığının üst sınırı ≥ 10 gün (Çin'den gönderim) ya da dünya geneli gönderim vurgusu. */
 export function hasDropshipSignal(html: string): boolean {
@@ -91,7 +104,8 @@ export function parseStoreProducts(text: string): StoreProduct[] | null {
       productType: typeof p.product_type === "string" && p.product_type.trim() ? p.product_type.trim() : null,
       availableVariants: variants.filter((v) => v.available === true).length,
       totalVariants: variants.length,
-      dropship: typeof p.body_html === "string" && hasDropshipSignal(p.body_html),
+      aliImageId: images.map((im) => aliImageId(typeof im.src === "string" ? im.src : null)).find(Boolean) ?? null,
+      dropship: (typeof p.body_html === "string" && hasDropshipSignal(p.body_html)) || images.some((im) => aliImageId(typeof im.src === "string" ? im.src : null)),
       apparel: APPAREL.test(`${p.title} ${typeof p.product_type === "string" ? p.product_type : ""}`),
     }];
   });
@@ -141,6 +155,7 @@ export async function probeStore(domain: string, fetchPage: FetchPage): Promise<
     discountedCount: products.filter((p) => p.compareAt !== null).length,
     dropshipCount: products.filter((p) => p.dropship).length,
     apparelCount: products.filter((p) => p.apparel).length,
+    aliImageCount: products.filter((p) => p.aliImageId).length,
     minPrice: prices.length ? Math.min(...prices) : null,
     maxPrice: prices.length ? Math.max(...prices) : null,
     firstProductAt: dates[0] ?? null,
@@ -193,14 +208,19 @@ export function storeScore(s: LiveStore, activity: StoreActivity, now = Date.now
   return Math.max(0, odak + yenilik + dropship + indirim + fiyat + hareket - merch);
 }
 
-/** Sonraki kontrol: şifreli/boş mağaza 14 günde bir (90 günü geçince bırakılır), açık mağaza haftada bir (150 güne kadar). */
+/**
+ * Sonraki kontrol: şifreli/boş mağaza 14 günde bir (90 günü geçince bırakılır), açık mağaza haftada bir (150 güne kadar);
+ * puanı yüksek açık mağaza her gün (stok tükenmesi ve yeni ürün günler içinde görünsün).
+ */
 export type StoreStatus = "pending" | "closed" | "live" | "dead" | "old";
 
-export function nextCheck(state: StoreProbe["state"], storeAgeDays: number, now = Date.now()): { status: StoreStatus; next: string } {
+export function nextCheck(state: StoreProbe["state"], storeAgeDays: number, now = Date.now(), score = 0): { status: StoreStatus; next: string } {
   const at = (days: number) => new Date(now + days * DAY).toISOString();
   if (state === "error") return { status: "pending", next: at(1) };
   // dead/old: artık kontrol edilmez (next yalnızca alan dolu kalsın diye).
   if (state === "dead") return { status: "dead", next: at(0) };
   if (state === "closed") return storeAgeDays > 90 ? { status: "dead", next: at(0) } : { status: "closed", next: at(14) };
-  return storeAgeDays > 150 ? { status: "old", next: at(0) } : { status: "live", next: at(7) };
+  if (storeAgeDays > 150) return { status: "old", next: at(0) };
+  // Günlük çalıştırma her gün aynı saatte başlar: 20 saat sonrası ertesi günün çalıştırmasına denk gelir.
+  return { status: "live", next: score >= STORE_DAILY_MIN_SCORE ? at(20 / 24) : at(7) };
 }

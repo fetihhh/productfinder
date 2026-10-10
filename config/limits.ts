@@ -51,6 +51,8 @@ export const STORE_CHECKS_PER_RUN = Number(process.env.STORE_CHECKS_PER_RUN) || 
 export const STORE_CHECK_CONCURRENCY = 12;
 export const STORE_PROMOTE_PER_RUN = 40;
 export const STORE_PROMOTE_MIN_SCORE = 55;
+/** Bu puanın üstündeki açık mağazalar haftada bir yerine her gün kontrol edilir (satış hareketi için). */
+export const STORE_DAILY_MIN_SCORE = 55;
 
 /**
  * Reklam sinyali (Meta Reklam Kütüphanesi API'si, ücretsiz; kimliği doğrulanmış bir Facebook hesabının erişim anahtarı gerekir).
@@ -70,3 +72,10 @@ export const GRAPH_API_VERSION = "v24.0";
  * Ölçüm: aynı fotoğrafın farklı boyut/sıkıştırma/kenar boşluğu 0–10, farklı ürünler 60+ (aynı boş tişörtün farklı baskısı 84).
  */
 export const IMAGE_MATCH_MAX = 40;
+
+/**
+ * Kopyalanan ürünler: öne çıkan ürün görseli özetlenen açık mağaza sayısı (çalıştırma başına; görseller cdn.shopify.com'dan
+ * saniyede 1 indirilir → 400 görsel ≈ 7 dk) ve özetlenecek mağazaların en düşük puanı.
+ */
+export const COPY_HASH_PER_RUN = Number(process.env.COPY_HASH_PER_RUN) || 400;
+export const COPY_MIN_STORE_SCORE = 35;

@@ -45,7 +45,8 @@ export default async function NewStoresPage({ searchParams }: PageProps<"/yeni">
       <h1 className="mt-3 text-xl font-semibold">Yeni mağazalar</h1>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
         Son 5 ayda açılmış küçük Shopify mağazaları. Her gün yeni kayıtlı alan adları taranır, Shopify&apos;a bağlananlar
-        bulunur ve haftalık kontrol edilir: açıldı mı, kaç ürün var, yeni ürün eklendi mi, stok tükeniyor mu.
+        bulunur ve düzenli kontrol edilir (puanı yüksek olanlar her gün): açıldı mı, kaç ürün var, yeni ürün eklendi mi, stok tükeniyor mu,
+        aynı ürünü başka mağazalar da satıyor mu.
       </p>
       <p className="mt-2 text-xs text-zinc-500">
         Bulunan {funnel.total.toLocaleString("tr-TR")} mağaza · açık {funnel.live.toLocaleString("tr-TR")} · henüz kapalı/şifreli{" "}
@@ -53,8 +54,15 @@ export default async function NewStoresPage({ searchParams }: PageProps<"/yeni">
         {funnel.dead.toLocaleString("tr-TR")} · aday ürünü eklenen {funnel.promoted.toLocaleString("tr-TR")}
       </p>
       <MetaNotice meta={meta} />
+      {f.group && (
+        <p className="mt-3 rounded border border-violet-300 px-3 py-2 text-sm text-violet-800 dark:border-violet-800 dark:text-violet-300">
+          Aynı ürünü satan mağazalar ({f.group} kümesi).{" "}
+          <Link href="/yeni" className="underline">Tüm mağazalar</Link>
+        </p>
+      )}
 
       <form className="mt-4 flex flex-wrap items-center gap-2">
+        {f.group && <input type="hidden" name="group" value={f.group} />}
         <input name="q" defaultValue={f.q} placeholder="Mağaza veya ürün ara" className={`${field} w-56`} />
         <select name="age" defaultValue={String(f.maxAge)} className={field} aria-label="Mağaza yaşı">
           <option value="30">İlk ürünü ≤ 30 gün</option>
@@ -68,6 +76,7 @@ export default async function NewStoresPage({ searchParams }: PageProps<"/yeni">
           <option value="new">En yeni</option>
           <option value="products">En az ürün (tek ürün mağazaları)</option>
           <option value="ads">En çok reklam</option>
+          <option value="copies">Aynı ürünü satan en çok mağaza</option>
         </select>
         <label className="flex items-center gap-1.5 text-sm">
           <input type="checkbox" name="tr" value="1" defaultChecked={f.tr} className="h-4 w-4" /> Türkiye&apos;ye gönderenler
@@ -179,6 +188,25 @@ export default async function NewStoresPage({ searchParams }: PageProps<"/yeni">
                             {ad.eu_reach !== null ? ` · ${compact(ad.eu_reach)} erişim` : ""} ↗
                           </a>
                         )}
+                      </dd>
+                    </>
+                  )}
+                  {s.copy_count > 0 && (
+                    <>
+                      <dt className="text-zinc-500">Rakip</dt>
+                      <dd title="Aynı ürünü (aynı fotoğraf ya da aynı AliExpress görseli) satan diğer mağazalar">
+                        <Link href={`/yeni?group=${encodeURIComponent(s.copy_group ?? "")}&age=150`} className="font-medium text-violet-700 hover:underline dark:text-violet-400">
+                          {s.copy_count} mağaza daha satıyor
+                        </Link>
+                        {s.copy_same_seller && <span className="text-amber-700 dark:text-amber-400"> · aynı satıcının ağı olabilir</span>}
+                      </dd>
+                    </>
+                  )}
+                  {(s.ali_image_count ?? 0) > 0 && (
+                    <>
+                      <dt className="text-zinc-500">AliExpress</dt>
+                      <dd title="Ürün görselinin dosya adı AliExpress görsel kimliği: fotoğraf AliExpress'ten alınmış">
+                        {s.ali_image_count}/{s.product_count} üründe AliExpress görseli
                       </dd>
                     </>
                   )}

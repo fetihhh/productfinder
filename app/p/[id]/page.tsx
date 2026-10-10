@@ -3,13 +3,14 @@ import { notFound } from "next/navigation";
 import { LineChart, ScoreBars } from "@/components/Charts";
 import { SOURCE_NAMES, STATUS } from "@/components/ProductCard";
 import { TrackingForm } from "@/components/TrackingForm";
-import { availabilityLabel, compact, countryLabel, dayLabel, formatPrice, launchLabel, moneyRange, rangeLabel } from "@/lib/format";
+import { ageLabel, availabilityLabel, compact, countryLabel, dayLabel, formatPrice, launchLabel, moneyRange, rangeLabel } from "@/lib/format";
 import { getProduct, sameImage } from "@/lib/products";
 import { adLibraryPageUrl } from "@/dtc/adLibrary";
 import type { AdSignalRow } from "@/lib/ads";
 import { SOURCE_NAMES as SUPPLIER_SOURCES } from "@/dtc/suppliers";
 import { REVIEW_TO_SALES, toUsd, visitsFromRank } from "@/lib/winner";
 import { getFx } from "@/lib/fx";
+import { copiesOf, type CopyMember } from "@/lib/newStores";
 import { ProfitCalculator } from "@/components/ProfitCalculator";
 
 function Kpi({ label, value, sub, hint }: { label: string; value: string; sub?: string; hint?: string }) {
@@ -95,11 +96,65 @@ function AdsSection({ domain, ads, history }: { domain: string; ads: AdSignalRow
   );
 }
 
+function CopiesSection({ self, members }: { self: string; members: CopyMember[] }) {
+  const sameSeller = members.some((m) => m.copy_same_seller);
+  const prices = members.map((m) => m.hero_price).filter((n): n is number => n !== null).map(Number);
+  return (
+    <section className="mt-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-medium">Aynı ürünü satan mağazalar ({members.length})</h2>
+        {prices.length > 1 && (
+          <p className="text-sm">
+            Fiyat aralığı <strong>{formatPrice(Math.min(...prices), members[0].currency)}</strong> – <strong>{formatPrice(Math.max(...prices), members[0].currency)}</strong>
+          </p>
+        )}
+      </div>
+      <p className="mb-3 text-xs text-zinc-500">
+        Öne çıkan ürün fotoğrafı ya da AliExpress görseli aynı olan yeni mağazalar. Birden çok bağımsız mağazanın aynı anda satması ürünün sattığını gösterir,
+        ama rekabet de artar: fiyat ve açılış tarihlerine bakın.
+        {sameSeller && " Başlık ve fiyat birebir aynı: bu mağazalar büyük ihtimalle aynı satıcının ağı, bağımsız talep kanıtı sayılmaz."}
+      </p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {members.map((m) => (
+          <a
+            key={m.domain}
+            href={m.hero_handle ? `https://${m.domain}/products/${m.hero_handle}` : `https://${m.domain}/`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`flex flex-col overflow-hidden rounded border text-xs hover:border-violet-500 ${m.domain === self ? "border-violet-500" : "border-zinc-200 dark:border-zinc-800"}`}
+          >
+            <span className="block aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-900">
+              {m.hero_image && <img src={m.hero_image} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />}
+            </span>
+            <span className="flex flex-col gap-0.5 p-2">
+              <span className="truncate font-medium text-violet-700 dark:text-violet-400">
+                {m.domain}
+                {m.domain === self ? " (bu)" : ""}
+              </span>
+              {m.hero_price !== null && <span className="font-semibold">{formatPrice(Number(m.hero_price), m.currency)}</span>}
+              <span className="text-zinc-500">
+                {m.first_product_at ? `${ageLabel(m.first_product_at)} önce açıldı` : ""}
+                {m.product_count ? ` · ${m.product_count} ürün` : ""}
+              </span>
+              <span className="text-zinc-500">
+                Puan {Number(m.total_score).toFixed(0)}
+                {m.ads_active ? ` · ${m.ads_active} reklam` : ""}
+                {m.status !== "live" ? ` · ${m.status === "old" ? "150 günü geçti" : m.status}` : ""}
+              </span>
+            </span>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
   const { id } = await params;
   const [data, fx] = await Promise.all([getProduct(id), getFx()]);
   if (!data) notFound();
   const { p, history, ranks, suppliers, ads, adHistory } = data;
+  const copies = await copiesOf(p.brand_domain);
   const w = p.winner_breakdown;
   const brand = p.brands;
   const href = p.product_url ?? `https://${p.brand_domain}`;
@@ -258,6 +313,8 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
       />
 
       <AdsSection domain={p.brand_domain} ads={ads} history={adHistory} />
+
+      {copies.length > 1 && <CopiesSection self={p.brand_domain} members={copies} />}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Panel

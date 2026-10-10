@@ -29,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0011`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0014`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -126,11 +126,12 @@ Amaç: **son 5 ayda açılmış küçük dropshipping mağazalarını** yakalama
 
 1. **Yeni kayıtlı alan adları:** WhoisDS'nin ücretsiz günlük listesi (~70 bin/gün). İlk kurulumda cenk/nrd'nin son 60 günlük birikimi parça parça taranır (her çalıştırmada 300 bin alan adı). Spam ağırlıklı uzantılar (.xyz, .top…) atlanır.
 2. **DNS ile Shopify tespiti:** Shopify'a bağlı alan adları 23.227.38.x adresine çözülür (~%3: günde ~1.000 yeni mağaza). DNS sorgusu siteye istek göndermez.
-3. **Kontrol takvimi:** ilk kontrol kayıttan 5 gün sonra. Şifreli/boş mağaza 14 günde bir (90 günde açılmazsa bırakılır), açık mağaza **haftada bir** (ilk ürünü 150 günü geçince bırakılır). Her kontrol `/products.json` (gerekirse `/meta.json` ve ana sayfa) okur; şifre sayfasına girilmez, robots.txt'ye uyulur.
-4. **Mağaza puanı (0–100):** odak 25 (tek ürün mağazası tam), yenilik 15, **dropship işareti 20** (ürün açıklamasında "7-15 business days" gibi uzun teslimat aralığı ya da dünya geneli gönderim), indirim 10 (compare-at fiyat), fiyat 10 (15–150), **hareket 20** (iki kontrol arasında yeni ürün eklendi +10, varyant stoğu tükendi +10). Baskılı giyim/merch mağazaları −20, dijital ağırlıklı mağazalar 0.
-5. **Aday:** toplam puanı (mağaza puanı + reklam puanı, en fazla 100) ≥ 55, açık ve ilk ürünü son 150 gün içinde olan mağazanın ana sayfasında öne çıkardığı ürün (yoksa en yeni fiziksel ürün) aday olur; sonra normal hattan geçer: pazaryeri kontrolü → toptancı araması → skorlar.
+3. **Kontrol takvimi:** ilk kontrol kayıttan 5 gün sonra. Şifreli/boş mağaza 14 günde bir (90 günde açılmazsa bırakılır), açık mağaza **haftada bir**, puanı ≥ 55 olan açık mağaza **her gün** (stok tükenmesi ve yeni ürün günler içinde görünsün; ilk ürünü 150 günü geçince bırakılır). Her kontrol `/products.json` (gerekirse `/meta.json` ve ana sayfa) okur; şifre sayfasına girilmez, robots.txt'ye uyulur.
+4. **Mağaza puanı (0–100):** odak 25 (tek ürün mağazası tam), yenilik 15, **dropship işareti 20** (ürün açıklamasında "7-15 business days" gibi uzun teslimat aralığı, dünya geneli gönderim ya da **AliExpress görseli**: görselin dosya adı AliExpress görsel kimliği, ör. `S4f799d…edi.avif` — fotoğraf AliExpress'ten indirilip yüklenmiş), indirim 10 (compare-at fiyat), fiyat 10 (15–150), **hareket 20** (iki kontrol arasında yeni ürün eklendi +10, varyant stoğu tükendi +10). Baskılı giyim/merch mağazaları −20, dijital ağırlıklı mağazalar 0.
+5. **Kopyalanan ürünler** (`dtc/copies.ts`): puanı ≥ 35 olan açık mağazaların öne çıkan ürün görseli özetlenir (dHash, yalnızca yeni ya da değişmiş görseller; çalıştırma başına en fazla 400, cdn.shopify.com'dan saniyede 1). Aynı AliExpress görsel kimliği ya da neredeyse aynı fotoğraf (fark ≤ 40/256) → aynı ürün. Aynı Shopify mağazasının farklı alan adları (görsel adresindeki mağaza kimliği aynı) tek mağaza sayılır. Kümedeki tüm mağazalar ürünü **birebir aynı başlık ve fiyatla** satıyorsa "aynı satıcının ağı olabilir" diye işaretlenir (çoğunlukla aynı gün açılmış, ürünle ilgisiz adlı alan adları) ve puan almaz. **Kopya puanı:** bağımsız başka mağaza 1 → 8, 2–4 → 12, ≥ 5 → 15.
+6. **Aday:** toplam puanı (mağaza puanı + reklam puanı + kopya puanı, en fazla 100) ≥ 55, açık ve ilk ürünü son 150 gün içinde olan mağazanın ana sayfasında öne çıkardığı ürün (yoksa en yeni fiziksel ürün) aday olur; sonra normal hattan geçer: pazaryeri kontrolü → toptancı araması → skorlar.
 
-**Yeni mağazalar** sayfası (`/yeni`): açık yeni mağazalar, mağaza yaşı, ürün sayısı, indirim ve dropship işaretleri, Türkiye'ye gönderim, toptan fiyat/marj ve keşif hattının özeti (bulunan / açık / kapalı / kapanmış). Ana listede de **Mağaza yaşı** filtresi (≤ 30 / 90 / 150 gün) vardır; markaların yaşı RDAP kayıt tarihi ve Shopify'daki ilk ürün tarihinden hesaplanır.
+**Yeni mağazalar** sayfası (`/yeni`): açık yeni mağazalar, mağaza yaşı, ürün sayısı, indirim ve dropship işaretleri, AliExpress görseli, aynı ürünü satan rakip mağazalar ("N mağaza daha satıyor" → kümeyi listeler; "Aynı ürünü satan en çok mağaza" sıralaması), Türkiye'ye gönderim, toptan fiyat/marj ve keşif hattının özeti (bulunan / açık / kapalı / kapanmış). Ana listede de **Mağaza yaşı** filtresi (≤ 30 / 90 / 150 gün) vardır; markaların yaşı RDAP kayıt tarihi ve Shopify'daki ilk ürün tarihinden hesaplanır.
 
 **Bilinen sınırlar:** WhoisDS ücretsiz listesi tüm kayıtları değil bir kısmını içerir; 60 günden eski mağazalar ancak izlemeye alındıktan sonra yaşlanarak listede kalır (5 aylık pencere birkaç ay içinde dolar). "Hareket" işaretleri en az iki haftalık kontrol gerektirir.
 

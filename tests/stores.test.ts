@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseRdapRegistration } from "../dtc/rdap.ts";
-import { hasDropshipSignal, nextCheck, parseStoreProducts, pickHero, probeStore, storeActivity, storeScore, type LiveStore } from "../dtc/storeProbe.ts";
+import { aliImageId, hasDropshipSignal, nextCheck, parseStoreProducts, pickHero, probeStore, storeActivity, storeScore, type LiveStore } from "../dtc/storeProbe.ts";
 import type { FetchResult } from "../lib/http.ts";
 import { findShopifyDomains, parseDomainList, whoisdsUrl } from "../lib/nrd.ts";
 import { storeAgeDays } from "../lib/stores.ts";
@@ -51,7 +51,7 @@ test("parseStoreProducts ve pickHero: ana sayfadaki ilk ürün, yoksa en yeni fi
   const products = parseStoreProducts(PRODUCTS)!;
   assert.deepEqual(products[0], {
     handle: "posture-corrector", title: "Posture Corrector Pro", image: "https://cdn.shopify.com/a.jpg", price: 29.99, compareAt: 69.99,
-    createdAt: "2026-09-20T10:00:00Z", physical: true, productType: "Health", availableVariants: 1, totalVariants: 2, dropship: true, apparel: false,
+    createdAt: "2026-09-20T10:00:00Z", physical: true, productType: "Health", availableVariants: 1, totalVariants: 2, aliImageId: null, dropship: true, apparel: false,
   });
   assert.equal(products[1].physical, false);
   assert.equal(pickHero(products, '<a href="/collections/all/products/posture-corrector?variant=1">')?.handle, "posture-corrector");
@@ -82,7 +82,7 @@ test("probeStore: açık, şifreli, kapalı ve silinmiş mağaza", async () => {
 });
 
 const store = (over: Partial<LiveStore> = {}): LiveStore => ({
-  state: "live", products: parseStoreProducts(PRODUCTS)!, productCount: 3, physicalCount: 2, discountedCount: 2, dropshipCount: 1, apparelCount: 0, minPrice: 25, maxPrice: 39,
+  state: "live", products: parseStoreProducts(PRODUCTS)!, productCount: 3, physicalCount: 2, discountedCount: 2, dropshipCount: 1, apparelCount: 0, aliImageCount: 0, minPrice: 25, maxPrice: 39,
   firstProductAt: daysAgo(20), lastProductAt: daysAgo(5), availableVariants: 3, totalVariants: 4, shopName: "Calm Neck", country: "US",
   currency: "USD", shipsToTr: true, hero: parseStoreProducts(PRODUCTS)![0], ...over,
 });
@@ -106,6 +106,21 @@ test("nextCheck: kontrol takvimi", () => {
   assert.equal(nextCheck("closed", 95, NOW).status, "dead");
   assert.equal(nextCheck("dead", 1, NOW).status, "dead");
   assert.deepEqual(nextCheck("error", 1, NOW), { status: "pending", next: daysAgo(-1) });
+  // Puanı yüksek açık mağaza ertesi gün yeniden kontrol edilir (20 saat sonra = sonraki günlük çalıştırma).
+  assert.deepEqual(nextCheck("live", 40, NOW, 60), { status: "live", next: new Date(NOW + 20 * 3_600_000).toISOString() });
+  assert.equal(nextCheck("live", 40, NOW, 54).next, daysAgo(-7));
+});
+
+test("aliImageId: AliExpress görsel kimliği Shopify dosya adında korunur → dropship işareti", () => {
+  assert.equal(aliImageId("https://cdn.shopify.com/s/files/1/0744/7933/7603/files/S4f799d2afe244d7189aaf61e0b2036edi.avif?v=1787638130"), "S4f799d2afe244d7189aaf61e0b2036edi");
+  assert.equal(aliImageId("https://cdn.shopify.com/s/files/1/files/Hb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e.jpg"), null); // 31 onaltılık, harf yok
+  assert.equal(aliImageId("https://cdn.shopify.com/s/files/1/files/Hb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6k_3f2a1b-uuid.jpg"), "Hb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6k");
+  assert.equal(aliImageId("https://cdn.shopify.com/s/files/1/files/sneaker-brown.jpg"), null);
+  assert.equal(aliImageId(null), null);
+  const json = JSON.stringify({ products: [{ handle: "box", title: "UV Box", body_html: "<p>Clean</p>", variants: [{ price: "39", requires_shipping: true, available: true }], images: [{ src: "https://cdn.shopify.com/files/S4f799d2afe244d7189aaf61e0b2036edi.avif" }] }] });
+  const [p] = parseStoreProducts(json)!;
+  assert.equal(p.aliImageId, "S4f799d2afe244d7189aaf61e0b2036edi");
+  assert.equal(p.dropship, true);
 });
 
 test("storeAgeDays ve RDAP kayıt tarihi", () => {

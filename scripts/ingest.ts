@@ -39,7 +39,7 @@ import { setJobState } from "../lib/stores.ts";
 import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranco.ts";
 import { enabledAdapters } from "../sources/index.ts";
 import { adSignals } from "./ads.ts";
-import { brandAges, checkStores, discoverStores, promoteStores } from "./stores.ts";
+import { brandAges, checkStores, copyClusters, discoverStores, promoteStores } from "./stores.ts";
 
 async function collect(): Promise<boolean> {
   let ok = true;
@@ -238,6 +238,8 @@ async function main() {
   const skipStores = process.argv.includes("no-stores");
   const discovered = onlyVerify || skipStores ? true : await discoverStores();
   const checked = skipStores ? true : await checkStores();
+  // Aynı ürünü satan mağazalar (kopya puanı aday seçiminden önce toplam puana eklenir).
+  const copied = skipStores ? true : await copyClusters();
   // Reklam sinyali aday seçiminden önce: reklam veren mağazaların toplam puanı yükselir.
   const advertised = await adSignals();
   const promoted = skipStores ? true : await promoteStores();
@@ -258,7 +260,7 @@ async function main() {
   console.log(`\n▶ Trend skoru: ${scores.total} ürün, ${scores.updated} değişti`);
   console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
   console.log(`\nBitti: ${((Date.now() - started) / 1000).toFixed(1)} sn`);
-  if (![collected, discovered, checked, advertised, promoted, verified, ranked, measured, fx, sourced, aged].every(Boolean)) process.exitCode = 1;
+  if (![collected, discovered, checked, copied, advertised, promoted, verified, ranked, measured, fx, sourced, aged].every(Boolean)) process.exitCode = 1;
 }
 
 await main();

@@ -66,11 +66,10 @@ export async function saveStoreCheck(s: StoreToCheck, probe: StoreProbe): Promis
 
   const firstProductAt = probe.state === "live" ? probe.firstProductAt : s.first_product_at;
   const age = storeAgeDays({ ...s, first_product_at: firstProductAt });
-  const { status, next } = nextCheck(probe.state, age);
+  const score = probe.state === "live" ? storeScore(probe, storeActivity(prevRows[0] ?? null, probe)) : 0;
+  const { status, next } = nextCheck(probe.state, age, Date.now(), score);
   const update: Record<string, unknown> = { status, next_check_at: next, last_checked_at: new Date().toISOString() };
-  let score = 0;
   if (probe.state === "live") {
-    score = storeScore(probe, storeActivity(prevRows[0] ?? null, probe));
     Object.assign(update, {
       shop_name: probe.shopName,
       country: probe.country,
@@ -81,6 +80,8 @@ export async function saveStoreCheck(s: StoreToCheck, probe: StoreProbe): Promis
       discounted_count: probe.discountedCount,
       dropship_count: probe.dropshipCount,
       apparel_count: probe.apparelCount,
+      ali_image_count: probe.aliImageCount,
+      hero_ali_id: probe.hero?.aliImageId ?? null,
       min_price: probe.minPrice,
       max_price: probe.maxPrice,
       first_product_at: probe.firstProductAt,

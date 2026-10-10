@@ -1,14 +1,20 @@
-// Günlük işin "yeni mağaza" adımları: keşif → kontrol → aday ürün, ve markaların yaşı.
+// Günlük işin "yeni mağaza" adımları: keşif → kontrol → kopyalanan ürünler → aday ürün, ve markaların yaşı.
 import {
+  COPY_HASH_PER_RUN,
+  COPY_MIN_STORE_SCORE,
   DNS_CONCURRENCY,
+  IMAGE_MATCH_MAX,
   NRD_BOOTSTRAP_PER_RUN,
   STORE_CHECK_CONCURRENCY,
   STORE_CHECKS_PER_RUN,
   STORE_PROMOTE_MIN_SCORE,
   STORE_PROMOTE_PER_RUN,
 } from "../config/limits.ts";
+import { hashToHex } from "../dtc/copies.ts";
+import { imageHasher } from "../dtc/imageHash.ts";
 import { registrationDate } from "../dtc/rdap.ts";
 import { parseStoreProducts, probeStore } from "../dtc/storeProbe.ts";
+import { saveHeroHash, storesToHash, updateCopies } from "../lib/copies.ts";
 import { registrableDomain } from "../lib/domain.ts";
 import { politeFetch, politeFetchBytes } from "../lib/http.ts";
 import { findShopifyDomains, NRD60_MAX_BYTES, NRD60_URL, parseDomainList, whoisdsUrl } from "../lib/nrd.ts";
@@ -105,6 +111,34 @@ export async function checkStores(): Promise<boolean> {
   await Promise.all(Array.from({ length: STORE_CHECK_CONCURRENCY }, worker));
   console.log(`  durum: ${JSON.stringify(counts)}${failures ? `, hata ${failures}` : ""} (${secs(t0)} sn)`);
   return failures < Math.max(10, list.length * 0.2);
+}
+
+/**
+ * Kopyalanan ürünler: puanı ≥ 35 olan açık mağazaların öne çıkan ürün görselini özetler (yalnızca yeni ya da
+ * değişmiş olanlar), sonra tüm mağazaları aynı fotoğraf / aynı AliExpress görseli üzerinden kümeler.
+ */
+export async function copyClusters(): Promise<boolean> {
+  try {
+    const list = await storesToHash(COPY_HASH_PER_RUN, COPY_MIN_STORE_SCORE);
+    console.log(`\n▶ Kopyalanan ürünler: ${list.length} mağazanın öne çıkan ürün görseli özetlenecek`);
+    const hash = imageHasher((url) => politeFetchBytes(url, 5_000_000, "image/avif,image/webp,image/jpeg,image/png,*/*;q=0.5"));
+    const t0 = Date.now();
+    let failed = 0;
+    for (const s of list) {
+      const h = await hash(s.hero_image);
+      if (h === null) failed++;
+      await saveHeroHash(s.domain, s.hero_image, h === null ? null : hashToHex(h));
+    }
+    const r = await updateCopies(IMAGE_MATCH_MAX);
+    console.log(
+      `  ${list.length - failed} görsel özetlendi${failed ? `, ${failed} okunamadı` : ""} (${secs(t0)} sn) · ` +
+        `${r.groups} ürün birden çok mağazada (${r.stores} mağaza), ${r.changed} mağaza güncellendi`,
+    );
+    return true;
+  } catch (err) {
+    console.error(`  ✖ ${(err as Error).message}`);
+    return false;
+  }
 }
 
 /** Puanı yüksek yeni mağazaların öne çıkan ürününü aday olarak ekler (doğrulama ve toptancı araması bunlarla devam eder). */

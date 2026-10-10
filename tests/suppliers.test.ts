@@ -137,6 +137,10 @@ test("supplierEconomics ve supplyPoints: en düşük toptan fiyat ve marj", () =
   ];
   assert.deepEqual(supplierEconomics(offers, 249, "USD"), { minUsd: 6.8, margin: 36.6 });
   assert.deepEqual(supplierEconomics([], 249, "USD"), { minUsd: null, margin: null });
+  // Yalnızca metinle bulunan ilanda gerçek dışı ucuz fiyat (perakendenin 1/50'sinden az) sayılmaz; fotoğrafla eşleşende sayılır.
+  assert.deepEqual(supplierEconomics([{ similarity: 1, priceMin: 0.07, currency: "USD" }, { similarity: 0.8, priceMin: 1.5, currency: "USD" }], 22, "USD"), { minUsd: 1.5, margin: 14.7 });
+  assert.deepEqual(supplierEconomics([{ similarity: 1, priceMin: 0.07, currency: "USD" }], 22, "USD"), { minUsd: null, margin: null });
+  assert.deepEqual(supplierEconomics([{ similarity: 0.95, priceMin: 0.3, currency: "USD", imageDistance: 4 }], 22, "USD"), { minUsd: 0.3, margin: 73.3 });
   assert.equal(supplyPoints(null, null), 0);
   assert.equal(supplyPoints(6.8, 36.6), 20);
   assert.equal(supplyPoints(50, 2.5), 13);

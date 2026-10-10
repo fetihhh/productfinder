@@ -165,6 +165,9 @@ export function supplyPoints(supplierMinUsd: number | null, margin: number | nul
   return 8 + (m >= 4 ? 12 : m >= 3 ? 9 : m >= 2 ? 5 : 0);
 }
 
+/** Yalnızca metin benzerliğiyle bulunan ilanlarda kabul edilen en yüksek perakende/toptan oranı. */
+export const MAX_TEXT_MARGIN = 50;
+
 /**
  * Benzerliği ≥ %70 olan toptancı ilanlarındaki en düşük birim fiyat (USD) ve perakende fiyata oranı.
  * Fotoğrafla eşleşen (aynı ürün olduğu neredeyse kesin) fiyatlı ilan varsa yalnızca onlar kullanılır.
@@ -176,13 +179,16 @@ export function supplierEconomics(
 ): { minUsd: number | null; margin: number | null } {
   const priced = offers.filter((o) => o.similarity >= 0.7 && o.priceMin !== null && o.priceMin > 0);
   const byImage = priced.filter((o) => o.imageDistance != null && o.imageDistance <= IMAGE_MATCH_MAX);
+  const retail = toUsd(retailPrice, retailCurrency);
+  // Fotoğrafla doğrulanmamış ilanda perakende fiyatın 1/50'sinden ucuz toptan fiyat gerçekçi değildir
+  // (farklı ürün, aksesuar ya da toplu adet fiyatı): marj hesabına katılmaz.
+  const plausible = (usd: number) => byImage.length > 0 || retail === null || retail / usd <= MAX_TEXT_MARGIN;
   const prices = (byImage.length ? byImage : priced)
     .map((o) => toUsd(o.priceMin, o.currency))
-    .filter((n): n is number => n !== null && n > 0);
+    .filter((n): n is number => n !== null && n > 0 && plausible(n));
   if (prices.length === 0) return { minUsd: null, margin: null };
   const minUsd = Math.round(Math.min(...prices) * 100) / 100;
-  const retailUsd = toUsd(retailPrice, retailCurrency);
-  return { minUsd, margin: retailUsd === null ? null : Math.round((retailUsd / minUsd) * 10) / 10 };
+  return { minUsd, margin: retail === null ? null : Math.round((retail / minUsd) * 10) / 10 };
 }
 
 export function pricePoints(usd: number | null): number {

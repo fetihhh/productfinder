@@ -13,6 +13,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       <header className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Product Finder</h1>
         <nav className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          <Link href="/ozet" className="font-medium text-zinc-900 hover:underline dark:text-zinc-100">Özet</Link>
           <Link href="/?days=1&status=all" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">Bugün yeni ({today})</Link>
           <Link href="/yeni" className="font-medium text-sky-700 hover:underline dark:text-sky-400">Yeni mağazalar</Link>
           <Link href="/?sort=rising" className="text-rose-600 hover:underline dark:text-rose-400">↗ Yükselenler</Link>

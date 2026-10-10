@@ -91,7 +91,14 @@ export async function instagramPosts(): Promise<boolean> {
       console.log(`  📸 @${t.username} (${t.domain}) — ${hits.length} çok tutan gönderi · en iyisi ${best.like_count ?? "?"} beğeni, ${best.comments_count ?? 0} yorum (${best.outlier}×)`);
     }
   }
-  if (stopped) console.error(`  ✖ Durduruldu: ${stopped}`);
+  if (stopped) {
+    console.error(`  ✖ Durduruldu: ${stopped}`);
+    const granted = await ig.permissions();
+    const need = ["instagram_basic", "pages_show_list", "pages_read_engagement", "business_management"];
+    console.error(`  anahtarın izinleri: ${granted.join(", ") || "okunamadı"}`);
+    const missing = need.filter((p) => !granted.includes(p));
+    if (missing.length) console.error(`  eksik izin: ${missing.join(", ")}`);
+  }
   console.log(`  özet: ${checked} hesap okundu, ${found} tanesinde çok tutan gönderi var`);
   await setJobState("instagram", { status: stopped ? "stopped" : "ok", reason: stopped ?? undefined, checked, found, at } satisfies InstagramState);
   return true;

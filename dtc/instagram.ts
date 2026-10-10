@@ -120,6 +120,11 @@ export function instagramClient(token: string, version: string, fetchImpl: typeo
   }
 
   return {
+    /** Anahtara verilmiş izinler (tanı için; yalnızca izin adları). */
+    async permissions(): Promise<string[]> {
+      const r = await get<{ data?: { permission: string; status: string }[] }>(`https://graph.facebook.com/${version}/me/permissions`);
+      return r.ok ? (r.data.data ?? []).filter((p) => p.status === "granted").map((p) => p.permission) : [];
+    },
     /** Anahtarın sahibinin Facebook sayfalarına bağlı Instagram profesyonel hesabının kimliği (Business Discovery için gerekir). */
     async ownAccountId(): Promise<IgResult<{ id: string; username: string | null } | null>> {
       const r = await get<{ data?: { instagram_business_account?: { id: string; username?: string } }[] }>(

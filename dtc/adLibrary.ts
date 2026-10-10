@@ -26,6 +26,7 @@ export type AdSummary = {
   pageId: string | null;
   pageName: string | null;
   activeAds: number;
+  /** En fazla 100 (tek sayfa); 100 = "100 ve üzeri". */
   totalAds: number;
   newAds14d: number;
   firstAdAt: string | null;

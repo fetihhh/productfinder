@@ -35,7 +35,7 @@ export function AdsSection({ domain, ads, history }: { domain: string; ads: AdSi
         <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <Kpi label="Yayında" value={String(ads.active_ads)} sub={`toplam ${ads.total_ads}`} />
+              <Kpi label="Yayında" value={String(ads.active_ads)} sub={`son 150 günde ${ads.total_ads >= 100 ? "100+" : ads.total_ads}`} />
               <Kpi label="En eski reklam" value={ads.longest_active_days !== null ? `${ads.longest_active_days} gün` : "—"} sub="hâlâ yayında" />
               <Kpi label="Son 14 gün" value={`+${ads.new_ads_14d}`} sub="yeni reklam" />
               <Kpi label="AB erişimi" value={ads.eu_reach !== null ? compact(ads.eu_reach) : "—"} sub="kişi (tahmini)" />

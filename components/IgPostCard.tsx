@@ -1,5 +1,6 @@
 import { CopyButton } from "@/components/CopyButton";
 import { ageLabel, compact } from "@/lib/format";
+import { isGiveaway } from "@/dtc/instagram";
 import type { IgPostRow } from "@/lib/instagram";
 
 /** Instagram gönderisi: görsel/video, beğeni, yorum, hesabın ortancasına göre kaç kat tuttuğu, indirme ve açma. */
@@ -19,6 +20,11 @@ export function IgPostCard({ p, showStore = true }: { p: IgPostRow; showStore?: 
         <span className="absolute top-2 left-2 badge bg-black/70 text-white shadow-sm">
           {video ? (p.product_type === "REELS" ? "▶ Reels" : "▶ Video") : p.media_type === "CAROUSEL_ALBUM" ? "▦ Albüm" : "◻ Görsel"}
         </span>
+        {isGiveaway(p.caption) && (
+          <span className="absolute bottom-2 left-2 badge bg-violet-600 text-white shadow-sm" title="Çekiliş: yorumlar katılım koşulu, gerçek ilgiyi abartır">
+            🎁 Çekiliş
+          </span>
+        )}
         {p.outlier >= 2 && (
           <span className="absolute top-2 right-2 badge bg-orange-600 text-white shadow-sm" title="Hesabın ortalama (ortanca) gönderisine göre kaç kat etkileşim aldı">
             🔥 {p.outlier.toLocaleString("tr-TR")}×

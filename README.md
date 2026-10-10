@@ -276,10 +276,10 @@ Toplam en fazla 100.
 
 ## Arayüz
 
-- Varsayılan görünüm yalnızca `verified` ürünler.
+- Varsayılan görünüm yalnızca `verified` ürünler; **elenen** (✕ Ele) ürünler gizlenir ("Takip: Elendi" filtresiyle görülür). Üst menüde **Bugün yeni (N)**: son 24 saatte eklenen ürünler.
 - Arama (ürün/marka), durum, **mağaza ülkesi**, **yalnızca Türkiye'ye gönderenler**, kategori, platform, tarih, takip durumu, **minimum yorum**, minimum winner skoru, **fiyat aralığı**; sıralama: winner skoru, trend skoru, **yorum sayısı**, en yeni, fiyat. Filtreler URL'de tutulur.
-- Kart: görsel, ürün/marka linki, durum/platform/winner rozetleri, fiyat, yorum ★, stok, satışa çıkış, mağaza ülkesi, Türkiye gönderimi, **tahmini trafik ve satış**, doğrulama gerekçesi, kaynak yazılar.
-- **Ürün sayfası** (`/p/<id>`): winner skoru, tahmini aylık ziyaret, Tranco sırası, toplam/aylık satış ve ciro kutuları; site trafiği, Tranco sırası, yorum sayısı, tahmini satış ve fiyat grafikleri; winner skoru bileşen çubukları.
+- Kart: **hızlı takip düğmeleri** (★ Favori / İncele / ✕ Ele; aynı düğmeye tekrar basmak kaldırır, notlar korunur), görsel, ürün/marka linki, durum/platform/winner rozetleri, fiyat, yorum ★, stok, satışa çıkış, mağaza ülkesi, Türkiye gönderimi, **tahmini trafik ve satış**, doğrulama gerekçesi, kaynak yazılar.
+- **Ürün sayfası** (`/p/<id>`): toptancı adayları (📷 aynı fotoğraf), **kâr hesabı**, reklamlar, aynı ürünü satan mağazalar, mağaza detayına bağlantı, winner skoru, tahmini aylık ziyaret, Tranco sırası, toplam/aylık satış ve ciro kutuları; site trafiği, Tranco sırası, yorum sayısı, tahmini satış ve fiyat grafikleri; winner skoru bileşen çubukları.
 - **Siteler ve trafik** (`/siteler`): markaları tahmini aylık ziyarete göre sıralayan tablo, 30 günlük değişim, eğilim çizgisi, doğrulanmış/toplam ürün sayısı. Grafikler bağımlılıksız SVG'dir.
 - "Takip ve Türkiye notu": favori / incelenecek / elendi, not, "Türkiye'de rakip var mı?", tahmini maliyet, Türkiye notu.
 

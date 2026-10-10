@@ -48,6 +48,7 @@ export function Filters({ f, categories, platforms, countries }: { f: F; categor
       </select>
       <select name="days" defaultValue={String(f.days)} className={field} aria-label="Tarih">
         <option value="0">Her zaman</option>
+        <option value="1">Son 24 saat</option>
         <option value="7">Son 7 gün</option>
         <option value="30">Son 30 gün</option>
         <option value="90">Son 90 gün</option>

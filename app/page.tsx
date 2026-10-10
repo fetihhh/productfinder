@@ -1,18 +1,19 @@
 import Link from "next/link";
 import { Filters } from "@/components/Filters";
 import { ProductCard } from "@/components/ProductCard";
-import { facets, listProducts, parseFilters } from "@/lib/products";
+import { facets, listProducts, newToday, parseFilters } from "@/lib/products";
 import { logout } from "./login/actions";
 
 export default async function Home({ searchParams }: PageProps<"/">) {
   const f = parseFilters(await searchParams);
-  const [{ rows, error }, { categories, platforms, countries }] = await Promise.all([listProducts(f), facets()]);
+  const [{ rows, error }, { categories, platforms, countries }, today] = await Promise.all([listProducts(f), facets(), newToday()]);
 
   return (
     <main className="mx-auto w-full max-w-7xl px-4 py-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Product Finder</h1>
-        <nav className="flex items-center gap-4 text-sm">
+        <nav className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          <Link href="/?days=1&status=all" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">Bugün yeni ({today})</Link>
           <Link href="/yeni" className="font-medium text-sky-700 hover:underline dark:text-sky-400">Yeni mağazalar</Link>
           <Link href="/?sort=rising" className="text-rose-600 hover:underline dark:text-rose-400">↗ Yükselenler</Link>
           <Link href="/siteler" className="text-blue-600 hover:underline dark:text-blue-400">Siteler ve trafik</Link>

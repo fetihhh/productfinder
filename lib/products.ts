@@ -19,7 +19,7 @@ export type Filters = {
   minReviews: number;
   priceMin: number;
   priceMax: number;
-  days: 0 | 7 | 30 | 90;
+  days: 0 | 1 | 7 | 30 | 90;
   track: TrackStatus | "all";
   sort: "winner" | "rising" | "margin" | "score" | "new" | "reviews" | "price";
   /** Yalnızca toptancısı bulunan ürünler */
@@ -113,7 +113,7 @@ export function parseFilters(sp: Record<string, string | string[] | undefined>):
     minReviews: nonNegative(one(sp.reviews)),
     priceMin: nonNegative(one(sp.pmin)),
     priceMax: nonNegative(one(sp.pmax)),
-    days: ([7, 30, 90] as const).find((d) => d === days) ?? 0,
+    days: ([1, 7, 30, 90] as const).find((d) => d === days) ?? 0,
     track: (TRACKS as readonly string[]).includes(track) ? (track as Filters["track"]) : "all",
     sort: (SORTS as readonly string[]).includes(sort) ? (sort as Filters["sort"]) : "winner",
   };
@@ -147,6 +147,12 @@ export async function listProducts(f: Filters): Promise<{ rows: ProductRow[]; er
     query = query.or(`first_product_at.gte.${since},registered_at.gte.${since.slice(0, 10)}`, { referencedTable: "brands" });
   }
   if (f.track !== "all") query = query.eq("tracking.status", f.track);
+  else {
+    // Elenen ürünler varsayılan listede gösterilmez ("Takip: Elendi" filtresiyle görülür).
+    const { data: rejected } = await db().from("tracking").select("product_id").eq("status", "rejected").limit(1000);
+    const ids = (rejected ?? []).map((r) => r.product_id as string);
+    if (ids.length) query = query.not("id", "in", `(${ids.join(",")})`);
+  }
   if (f.minScore > 0) query = query.gte("winner_score", f.minScore);
   if (f.minReviews > 0) query = query.gte("review_count", f.minReviews);
   if (f.priceMin > 0) query = query.gte("price", f.priceMin);
@@ -167,6 +173,13 @@ export async function listProducts(f: Filters): Promise<{ rows: ProductRow[]; er
   const { data, error } = await query.limit(200);
   if (error) return { rows: [], error: error.message };
   return { rows: data as unknown as ProductRow[], error: null };
+}
+
+/** Son 24 saatte eklenen (elenmemiş) ürün sayısı. */
+export async function newToday(): Promise<number> {
+  const since = new Date(Date.now() - 86_400_000).toISOString();
+  const { count } = await db().from("products").select("id", { count: "exact", head: true }).gte("first_seen_at", since);
+  return count ?? 0;
 }
 
 /** Filtre seçenekleri: mevcut kategoriler, platformlar ve mağaza ülkeleri. */

@@ -12,6 +12,21 @@ function text(formData: FormData, key: string, max: number): string | null {
   return v || null;
 }
 
+/** Karttaki hızlı düğmeler: yalnızca takip durumunu değiştirir (notlar korunur). Aynı duruma tekrar basmak kaldırır. */
+export async function quickTrack(formData: FormData) {
+  await requireSession();
+  const productId = String(formData.get("product_id") ?? "");
+  if (!UUID.test(productId)) throw new Error("Geçersiz ürün");
+  const status = String(formData.get("status") ?? "");
+  const current = String(formData.get("current") ?? "");
+  const next = TRACK_STATUSES.has(status) && status !== current ? status : null;
+  const { error } = await db()
+    .from("tracking")
+    .upsert({ product_id: productId, status: next, updated_at: new Date().toISOString() }, { onConflict: "product_id" });
+  if (error) throw new Error(`Kaydedilemedi: ${error.message}`);
+  refresh();
+}
+
 /** Takip durumu, not ve Türkiye uygunluk alanlarını kaydeder. */
 export async function saveTracking(formData: FormData) {
   await requireSession();

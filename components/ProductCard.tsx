@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { quickTrack } from "@/app/actions";
 import { TrackingForm } from "@/components/TrackingForm";
 import { WIDE_PENDING } from "@/dtc/verify";
 import { ageLabel, availabilityLabel, countryLabel, formatPrice, launchLabel, rangeLabel } from "@/lib/format";
@@ -157,7 +158,29 @@ export function ProductCard({ p }: { p: ProductRow }) {
           ))}
         </p>
 
-        <details className="mt-auto border-t border-zinc-100 pt-2 dark:border-zinc-800">
+        <form action={quickTrack} className="mt-auto flex gap-1.5 border-t border-zinc-100 pt-2 text-xs dark:border-zinc-800">
+          <input type="hidden" name="product_id" value={p.id} />
+          <input type="hidden" name="current" value={t?.status ?? ""} />
+          {(
+            [
+              ["favorite", "★ Favori", "bg-amber-500 text-white"],
+              ["review", "İncele", "bg-sky-600 text-white"],
+              ["rejected", "✕ Ele", "bg-zinc-600 text-white"],
+            ] as const
+          ).map(([value, label, on]) => (
+            <button
+              key={value}
+              name="status"
+              value={value}
+              title={t?.status === value ? "Kaldırmak için tekrar basın" : undefined}
+              className={`rounded px-2 py-1 font-medium ${t?.status === value ? on : "border border-zinc-300 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </form>
+
+        <details className="border-t border-zinc-100 pt-2 dark:border-zinc-800">
           <summary className="cursor-pointer text-sm text-zinc-600 dark:text-zinc-400">
             Takip ve Türkiye notu{t?.note || t?.tr_competitor || t?.tr_est_cost || t?.tr_note ? " •" : ""}
           </summary>

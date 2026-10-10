@@ -26,7 +26,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
   const { id } = await params;
   const [data, fx] = await Promise.all([getProduct(id), getFx()]);
   if (!data) notFound();
-  const { p, history, ranks, suppliers, ads, adHistory } = data;
+  const { p, history, ranks, suppliers, ads, adHistory, nameEn } = data;
   const [copies, isStore] = await Promise.all([copiesOf(p.brand_domain), storeExists(p.brand_domain)]);
   const w = p.winner_breakdown;
   const brand = p.brands;
@@ -66,6 +66,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
           <h1 className="text-xl font-semibold leading-snug">
             <a href={href} target="_blank" rel="noopener noreferrer" className="hover:underline">{p.name}</a>
           </h1>
+          {nameEn && <p className="text-sm text-zinc-500" title="Makine çevirisi (MyMemory)">İngilizcesi: {nameEn}</p>}
           <a href={`https://${p.brand_domain}`} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
             {p.brand_domain} ↗
           </a>

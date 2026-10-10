@@ -233,6 +233,8 @@ export async function getProduct(
   suppliers: SupplierRow[];
   ads: AdSignalRow | null;
   adHistory: { day: string; active_ads: number }[];
+  /** Ürün adı İngilizce değilse saklanan çevirisi (toptancı/pazaryeri araması için yapılmış). */
+  nameEn: string | null;
 } | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const { data, error } = await db()
@@ -251,12 +253,13 @@ export async function getProduct(
   if (error) throw new Error(error.message);
   if (!data) return null;
   const p = data as unknown as ProductDetail;
-  const [history, ranks, suppliers, ads, adHist] = await Promise.all([
+  const [history, ranks, suppliers, ads, adHist, tr] = await Promise.all([
     db().from("product_snapshots").select("day, price, currency, review_count, rating, availability").eq("product_id", id).order("day").limit(400),
     db().from("traffic_ranks").select("day, rank").eq("domain", p.brand_domain).order("day").limit(400),
     db().from("suppliers").select("url, source, title, image_url, price_min, price_max, currency, moq, sold, supplier_name, similarity, image_distance").eq("product_id", id).order("similarity", { ascending: false }).limit(15),
     adSignalsFor([p.brand_domain]),
     adHistory(p.brand_domain),
+    db().from("translations").select("translated").eq("text", p.name.trim()).limit(1).maybeSingle(),
   ]);
   if (suppliers.error) throw new Error(suppliers.error.message);
   if (history.error) throw new Error(history.error.message);
@@ -275,6 +278,7 @@ export async function getProduct(
       .sort((a, b) => Number(sameImage(b)) - Number(sameImage(a)) || b.similarity - a.similarity),
     ads: ads.get(p.brand_domain) ?? null,
     adHistory: adHist,
+    nameEn: (tr.data?.translated as string | undefined) ?? null,
   };
 }
 

@@ -68,6 +68,14 @@ export const AD_COUNTRIES = ["DE", "FR", "IT", "ES", "NL", "BE", "AT", "PL", "SE
 export const GRAPH_API_VERSION = "v24.0";
 
 /**
+ * Instagram (resmi Graph API "Business Discovery", ücretsiz): bir çalıştırmada bakılan hesap sayısı (hesap başına 1 istek;
+ * Instagram Graph API'nin kullanıcı başına saatlik ~200 çağrı sınırının altında). Çok tutan gönderisi olan hesap 2 günde,
+ * diğerleri 5 günde, profesyonel olmayan/bulunamayan hesap 30 günde bir yeniden okunur.
+ */
+export const IG_CHECKS_PER_RUN = Number(process.env.IG_CHECKS_PER_RUN) || 60;
+export const IG_RECHECK_DAYS = { hot: 2, normal: 5, error: 30 } as const;
+
+/**
  * Görsel eşleştirme: ürün fotoğrafıyla toptan ilan fotoğrafı arasındaki dHash farkı (256 bit) ≤ bu değer → aynı fotoğraf.
  * Ölçüm: aynı fotoğrafın farklı boyut/sıkıştırma/kenar boşluğu 0–10, farklı ürünler 60+ (aynı boş tişörtün farklı baskısı 84).
  */

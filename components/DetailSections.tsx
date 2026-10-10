@@ -146,7 +146,7 @@ export function AdsSection({ domain, ads, history }: { domain: string; ads: AdSi
             <div>
               <h3 className="mb-2 text-sm font-semibold">En çok tekrarlanan reklam metinleri</h3>
               <ul className="grid gap-2 md:grid-cols-3">
-                {ads.creatives.map((cr, i) => (
+                {ads.creatives.slice(0, 3).map((cr, i) => (
                   <li key={i} className="rounded-xl border border-line bg-surface-muted/50 p-3 text-sm">
                     <div className="mb-1 flex items-center justify-between gap-2 text-xs">
                       <span className="font-semibold text-brand-strong">

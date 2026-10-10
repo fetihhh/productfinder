@@ -97,6 +97,7 @@ export async function saveStoreCheck(s: StoreToCheck, probe: StoreProbe): Promis
       hero_title: probe.hero?.title ? clip(probe.hero.title, 200) : null,
       niche: nicheOf(probe.hero?.title ?? null, probe.hero?.productType ?? null),
       offer: probe.hero?.offer ?? null,
+      ...(probe.instagram !== undefined ? { instagram: probe.instagram } : {}),
       hero_image: probe.hero?.image ?? null,
       hero_price: probe.hero?.price ?? null,
       store_score: score,

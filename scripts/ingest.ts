@@ -55,6 +55,7 @@ import { setJobState } from "../lib/stores.ts";
 import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranco.ts";
 import { enabledAdapters } from "../sources/index.ts";
 import { adSignals } from "./ads.ts";
+import { instagramPosts } from "./instagram.ts";
 import { brandAges, checkStores, copyClusters, discoverStores, promoteMovers, promoteStores } from "./stores.ts";
 
 async function collect(): Promise<boolean> {
@@ -309,6 +310,7 @@ async function main() {
   // Yalnızca reklam analizi: reklamı bilinen mağazalar yeniden aranır, skorlar güncellenir (~5 dk).
   if (process.argv.includes("ads")) {
     const ok = await adSignals(true);
+    await instagramPosts();
     await timing();
     console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
     await writeJobSummary((Date.now() - started) / 1000);
@@ -325,6 +327,7 @@ async function main() {
   const copied = skipStores ? true : await copyClusters();
   // Reklam sinyali aday seçiminden önce: reklam veren mağazaların toplam puanı yükselir.
   const advertised = await adSignals();
+  await instagramPosts();
   const promotedHero = skipStores ? true : await promoteStores();
   // Öne çıkan ürün dışında, mağazada stoğu tekrar tekrar azalan (asıl satan) ürünler.
   const promotedMovers = skipStores ? true : await promoteMovers();

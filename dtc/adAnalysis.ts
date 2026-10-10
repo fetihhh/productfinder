@@ -2,6 +2,7 @@
 // Dropshipping'de kârsız reklam birkaç gün içinde kapatılır; kazandıran reklam haftalarca yayında kalır, aynı reklam
 // metni yeni kitlelere kopyalanır, yeni reklamlar ve yeni ülkeler eklenir (ölçekleme).
 import { normalizeName } from "../lib/productName.ts";
+import { clip } from "../lib/text.ts";
 import type { ArchivedAd } from "./adLibrary.ts";
 import { adOffers, type AdOffers } from "./offers.ts";
 
@@ -18,7 +19,17 @@ export const STAGE_LABELS: Record<AdStage, string> = {
 };
 
 export type AdScoreParts = { sureklilik: number; olceklenme: number; kopya: number; erisim: number; genisleme: number };
-export type CreativeGroup = { text: string; count: number; active: number; firstStart: string | null };
+export type CreativeGroup = {
+  text: string;
+  count: number;
+  active: number;
+  firstStart: string | null;
+  /** Grubun en eski reklamı (Reklam Kütüphanesi bağlantısı için), başlığı, platformları ve AB erişimi. */
+  adId?: string;
+  title?: string | null;
+  platforms?: string[];
+  reach?: number;
+};
 export type AdvertisedProduct = { handle: string; title: string; ads: number };
 
 export type AdAnalysis = {
@@ -94,13 +105,28 @@ export function analyzeAds(all: ArchivedAd[], activeAds: ArchivedAd[] | null, no
   for (const a of ads) {
     const key = creativeKey(a);
     if (!key) continue;
-    const g = groups.get(key) ?? { text: (a.ad_creative_bodies?.find(Boolean) ?? a.ad_creative_link_titles?.find(Boolean) ?? "").slice(0, 200), count: 0, active: 0, firstStart: null };
+    const g: CreativeGroup = groups.get(key) ?? {
+      text: clip(a.ad_creative_bodies?.find(Boolean) ?? a.ad_creative_link_titles?.find(Boolean) ?? "", 400),
+      count: 0,
+      active: 0,
+      firstStart: null,
+      adId: a.id,
+      title: a.ad_creative_link_titles?.find(Boolean)?.slice(0, 120) ?? null,
+      platforms: [],
+      reach: 0,
+    };
     g.count++;
     if (isActive(a, now)) g.active++;
-    if (a.ad_delivery_start_time && (!g.firstStart || a.ad_delivery_start_time < g.firstStart)) g.firstStart = a.ad_delivery_start_time;
+    if (a.ad_delivery_start_time && (!g.firstStart || a.ad_delivery_start_time < g.firstStart)) {
+      g.firstStart = a.ad_delivery_start_time;
+      g.adId = a.id;
+    }
+    g.platforms = [...new Set([...(g.platforms ?? []), ...(a.publisher_platforms ?? [])])];
+    g.reach = (g.reach ?? 0) + (a.eu_total_reach ?? 0);
     groups.set(key, g);
   }
-  const creatives = [...groups.values()].sort((a, b) => b.active - a.active || b.count - a.count).slice(0, 3);
+  // İlk 3 grup ölçekleme puanında kullanılır; reklam galerisi için 8 grup saklanır.
+  const creatives = [...groups.values()].sort((a, b) => b.active - a.active || b.count - a.count).slice(0, 8);
   const maxDup = creatives[0]?.active ?? 0;
 
   const countries = [...new Set(ads.flatMap((a) => (a.age_country_gender_reach_breakdown ?? []).map((b) => b.country).filter((c): c is string => Boolean(c))))].sort();

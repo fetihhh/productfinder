@@ -10,6 +10,8 @@ import { SOURCE_NAMES as SUPPLIER_SOURCES } from "@/dtc/suppliers";
 import { REVIEW_TO_SALES, toUsd, visitsFromRank } from "@/lib/winner";
 import { getFx } from "@/lib/fx";
 import { copiesOf, offerComparison, storeExists } from "@/lib/newStores";
+import { InstagramSection } from "@/components/IgPostCard";
+import { igPostsFor } from "@/lib/instagram";
 import { ProfitCalculator } from "@/components/ProfitCalculator";
 
 function Panel({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
@@ -27,7 +29,12 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
   const [data, fx] = await Promise.all([getProduct(id), getFx()]);
   if (!data) notFound();
   const { p, history, ranks, suppliers, ads, adHistory, nameEn } = data;
-  const [copies, isStore, offers] = await Promise.all([copiesOf(p.brand_domain), storeExists(p.brand_domain), offerComparison(p.brand_domain)]);
+  const [copies, isStore, offers, ig] = await Promise.all([
+    copiesOf(p.brand_domain),
+    storeExists(p.brand_domain),
+    offerComparison(p.brand_domain),
+    igPostsFor(p.brand_domain),
+  ]);
   const w = p.winner_breakdown;
   const brand = p.brands;
   const href = p.product_url ?? `https://${p.brand_domain}`;
@@ -212,6 +219,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
       />
 
       <AdsSection domain={p.brand_domain} ads={ads} history={adHistory} />
+      <InstagramSection data={ig} />
 
       {copies.length > 1 && <CopiesSection self={p.brand_domain} members={copies} />}
 

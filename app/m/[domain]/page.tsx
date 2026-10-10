@@ -7,6 +7,8 @@ import { movementOrder } from "@/dtc/storeSnapshot";
 import { ageLabel, countryLabel, dayLabel, formatPrice } from "@/lib/format";
 import { getStoreDetail, offerComparison } from "@/lib/newStores";
 import { nicheLabel } from "@/dtc/niche";
+import { InstagramSection } from "@/components/IgPostCard";
+import { igPostsFor } from "@/lib/instagram";
 
 const STORE_STATUS: Record<string, string> = { live: "Açık", closed: "Şifreli / boş", pending: "Kontrol bekliyor", dead: "Kapanmış", old: "150 günü geçti" };
 
@@ -25,7 +27,7 @@ export default async function StorePage({ params }: PageProps<"/m/[domain]">) {
   const data = await getStoreDetail(decodeURIComponent(domain).toLowerCase());
   if (!data) notFound();
   const { s, checks, ads, adHistory, copies } = data;
-  const offers = await offerComparison(s.domain);
+  const [offers, ig] = await Promise.all([offerComparison(s.domain), igPostsFor(s.domain)]);
   const live = checks.filter((c) => c.status === "live");
   const stockPct = s.products_snapshot?.length
     ? Math.round((s.products_snapshot.reduce((n, i) => n + i.a, 0) / Math.max(1, s.products_snapshot.reduce((n, i) => n + i.v, 0))) * 100)
@@ -189,6 +191,7 @@ export default async function StorePage({ params }: PageProps<"/m/[domain]">) {
 
       <CompetitorOffers rows={offers} />
       <AdsSection domain={s.domain} ads={ads} history={adHistory} />
+      <InstagramSection data={ig} />
       {copies.length > 1 && <CopiesSection self={s.domain} members={copies} />}
     </main>
   );

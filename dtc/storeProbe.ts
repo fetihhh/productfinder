@@ -3,6 +3,7 @@
 // Uç noktalar Shopify'ın herkese açık JSON'ları: /products.json ve /meta.json. Şifreli mağazaya girilmez.
 import { STORE_DAILY_MIN_SCORE } from "../config/limits.ts";
 import type { FetchResult } from "../lib/http.ts";
+import { instagramHandle } from "./instagram.ts";
 import { productOffer, type ProductOffer } from "./offers.ts";
 import { parseShopifyMeta } from "./signals.ts";
 
@@ -50,6 +51,8 @@ export type LiveStore = {
   currency: string | null;
   shipsToTr: boolean | null;
   hero: StoreProduct | null;
+  /** Ana sayfadaki Instagram hesabı (ana sayfa okunmadıysa undefined: kayıttaki değer korunur). */
+  instagram?: string | null;
 };
 
 export type StoreProbe = LiveStore | { state: "closed" | "dead"; why: string } | { state: "error"; why: string };
@@ -177,6 +180,7 @@ export async function probeStore(domain: string, fetchPage: FetchPage): Promise<
     currency: meta?.currency ?? null,
     shipsToTr: meta?.shipsTo ? meta.shipsTo.includes("TR") : null,
     hero: pickHero(products, home?.ok ? home.text : null),
+    instagram: home?.ok ? instagramHandle(home.text) : undefined,
   };
 }
 

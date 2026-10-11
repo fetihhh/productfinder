@@ -19,9 +19,13 @@ import {
   TRANSLATE_DAILY_LIMIT,
   TRANSLATE_MONTHLY_LIMIT,
   VERIFY_PER_RUN,
+  EXA_DAILY_LIMIT,
+  EXA_MONTHLY_LIMIT,
+  FIRECRAWL_DAILY_LIMIT,
+  FIRECRAWL_MONTHLY_LIMIT,
 } from "../config/limits.ts";
 import { directSearch } from "../dtc/directSearch.ts";
-import { tavilySearch, type SearchFn } from "../dtc/marketplaceSearch.ts";
+import { tavilySearch, type SearchFn, exaSearch, firecrawlSearch, searchChain } from "../dtc/marketplaceSearch.ts";
 import { readSales } from "../dtc/sales.ts";
 import { imageHasher, productImageUrls } from "../dtc/imageHash.ts";
 import { aliImageId } from "../dtc/storeProbe.ts";
@@ -96,17 +100,26 @@ async function collect(): Promise<boolean> {
   return ok;
 }
 
-/** Tavily aramasını kota sayacının arkasına koyar; anahtar yoksa arama kapalıdır. */
+/**
+ * Geniş pazaryeri araması: Tavily, kotası dolunca Exa, o da dolunca Firecrawl (anahtarı tanımlı olanlar). Her servisin
+ * ücretsiz miktarının altında kalan kendi sayacı vardır; hiçbir anahtar yoksa arama kapalıdır.
+ */
 function quotaGuardedSearch(): SearchFn | null {
-  const key = process.env.TAVILY_API_KEY;
-  if (!key) return null;
-  const search = tavilySearch(key);
-  return async (query) => {
-    if (!(await tryConsumeQuota("tavily", TAVILY_DAILY_LIMIT, TAVILY_MONTHLY_LIMIT))) {
-      return { ok: false, quota: true, reason: "günlük/aylık arama kotası doldu" };
-    }
-    return search(query);
-  };
+  const providers: Parameters<typeof searchChain>[0] = [];
+  if (process.env.TAVILY_API_KEY) {
+    providers.push({ name: "Tavily", search: tavilySearch(process.env.TAVILY_API_KEY), gate: () => tryConsumeQuota("tavily", TAVILY_DAILY_LIMIT, TAVILY_MONTHLY_LIMIT) });
+  }
+  if (process.env.EXA_API_KEY) {
+    providers.push({ name: "Exa", search: exaSearch(process.env.EXA_API_KEY), gate: () => tryConsumeQuota("exa", EXA_DAILY_LIMIT, EXA_MONTHLY_LIMIT) });
+  }
+  if (process.env.FIRECRAWL_API_KEY) {
+    providers.push({
+      name: "Firecrawl",
+      search: firecrawlSearch(process.env.FIRECRAWL_API_KEY),
+      gate: () => tryConsumeQuota("firecrawl", FIRECRAWL_DAILY_LIMIT, FIRECRAWL_MONTHLY_LIMIT),
+    });
+  }
+  return searchChain(providers);
 }
 
 /** Çeviri kotası (MyMemory anahtarsız kullanım sınırının altında kalmak için). */
@@ -119,7 +132,7 @@ async function verify(): Promise<boolean> {
   const products = await productsToVerify(VERIFY_PER_RUN, process.argv.includes("recheck"));
   console.log(`\n▶ DTC doğrulama: ${products.length} ürün`);
   const deps = { fetchPage: politeFetch, searchMarketplaces: quotaGuardedSearch(), directSearch: directSearch(politeFetch) };
-  if (!deps.searchMarketplaces) console.log("  ! TAVILY_API_KEY yok: pazaryeri araması atlanacak");
+  if (!deps.searchMarketplaces) console.log("  ! Arama API anahtarı yok (TAVILY_API_KEY / EXA_API_KEY / FIRECRAWL_API_KEY): geniş pazaryeri araması atlanacak");
 
   const counts: Record<string, number> = {};
   // Aynı çalıştırmada aynı markanın ikinci ürünü için marka araması tekrarlanmasın.

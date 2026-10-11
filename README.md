@@ -43,6 +43,8 @@ cp .env.example .env.local   # değerleri doldurun
 | `SUPABASE_URL` | Vercel, GitHub, yerel | Supabase → Project Settings → API |
 | `SUPABASE_SECRET_KEY` | Vercel, GitHub, yerel | Supabase → API Keys → **secret** (`sb_secret_…`). RLS'i aşar, asla `NEXT_PUBLIC_` önekiyle tanımlamayın |
 | `TAVILY_API_KEY` | GitHub, yerel | tavily.com ücretsiz hesap (kart istemez) |
+| `EXA_API_KEY` | GitHub, isteğe bağlı | exa.ai ücretsiz hesap (kart istemez). Tavily kotası dolunca yedek geniş arama |
+| `FIRECRAWL_API_KEY` | GitHub, isteğe bağlı | firecrawl.dev ücretsiz hesap (kart istemez). Exa'dan sonra ikinci yedek |
 | `META_ACCESS_TOKEN` | GitHub, yerel | Meta Reklam Kütüphanesi erişim anahtarı (ücretsiz, ~60 günde bir yenilenir). Kurulum: aşağıda **Reklam sinyali**. Yoksa reklam adımı atlanır |
 | `TAVILY_DAILY_LIMIT` | isteğe bağlı | Tek seferlik toplu kontroller için günlük sınırı geçici olarak değiştirir (aylık 950 sınırı sabit) |
 | `REDDIT_CLIENT_ID/SECRET` | — | Kullanılmıyor; Reddit API onayı alınırsa ileride |
@@ -69,7 +71,9 @@ cp .env.example .env.local   # değerleri doldurun
 | **Supabase Free** | 500 MB veritabanı, 5 GB çıkış/ay, 2 aktif proje. 7 gün işlem olmazsa proje duraklar | Birkaç MB. Günlük iş projeyi aktif tutar |
 | **GitHub Actions** (private repo) | 2.000 dakika/ay (public repoda sınırsız) | Ölçülen: ~30 dk/gün (mağaza kontrolü, görsel özetleri, 150 reklam araması, 60 doğrulama, 40 toptancı araması) ≈ 900 dk/ay. Public repolarda 60 gün commit olmazsa zamanlanmış iş durur |
 | **Vercel Hobby** | 100 GB veri aktarımı, 1M fonksiyon çağrısı, 4 CPU-saat/ay; fonksiyon süresi 300 sn. **Yalnızca kişisel, ticari olmayan kullanım** | Tek kullanıcı, çok düşük trafik |
-| **Tavily Free** | 1.000 kredi/ay, kart istemez (basic arama = 1 kredi) | Kod sınırı: günde 30, ayda 950. Kota dolarsa ürün ertesi güne kalır, ücretli kullanıma **asla** geçilmez |
+| **Tavily Free** | 1.000 kredi/ay, kart istemez (basic arama = 1 kredi) | Kod sınırı: günde 30, ayda 950. Kota dolarsa sıradaki yedek servise geçilir, ücretli kullanıma **asla** geçilmez |
+| **Exa Free** (yedek, isteğe bağlı) | Her ay ~10 $ ücretsiz kredi, kart istemez; arama ~0,007 $ (~1.400 arama/ay) | Kod sınırı: günde 25, ayda 600. Yalnızca başlık/adres istenir (içerik ek kredi tüketir) |
+| **Firecrawl Free** (yedek, isteğe bağlı) | Ayda 1.000 kredi, kart istemez; 10 sonuçluk arama 2 kredi (~500 arama/ay); aynı anda 2 istek | Kod sınırı: günde 12, ayda 300. Sayfa içeriği istenmez |
 | **Meta Reklam Kütüphanesi API'si** (graph.facebook.com/ads_archive) | Ücretsiz, kart istemez; kimliği doğrulanmış Facebook hesabı gerekir. Hız sınırı API tarafından uygulanır (aşılırsa istek reddedilir, ücret çıkmaz) | Günde en fazla 150 arama, saniyede 1. Hız sınırına takılırsa kalan aramalar ertesi güne kalır |
 | **Instagram Graph API — Business Discovery** (graph.facebook.com) | Ücretsiz, kart istemez; Facebook sayfasına bağlı bir Instagram profesyonel hesabı ve `instagram_basic` + `instagram_manage_insights` + `pages_show_list` izinli anahtar gerekir. Kullanıcı başına saatlik ~200 çağrı | Çalıştırma başına en fazla 60 hesap, saniyede 1 istek |
 | **WhoisDS yeni kayıtlı alan adları** (ücretsiz günlük liste) | Ücretsiz, kayıt gerekmez; "ticari dahil yeniden kullanılabilir" | Günde 1 zip (~70 bin alan adı) |
@@ -94,6 +98,8 @@ gh repo create productfinder --private --source . --push
 gh secret set SUPABASE_URL             # değeri yapıştırın
 gh secret set SUPABASE_SECRET_KEY
 gh secret set TAVILY_API_KEY
+gh secret set EXA_API_KEY            # isteğe bağlı: yedek arama
+gh secret set FIRECRAWL_API_KEY      # isteğe bağlı: ikinci yedek
 gh secret set META_ACCESS_TOKEN        # isteğe bağlı: reklam sinyali
 ```
 

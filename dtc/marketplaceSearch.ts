@@ -65,6 +65,92 @@ export function tavilySearch(apiKey: string, domains: string[] = marketplaceSear
   };
 }
 
+/** Sonuçları verilen sitelerle sınırlar (sitesi süzgeci olmayan arama servisleri için). */
+export function onlyDomains(results: SearchResult[], domains: string[]): SearchResult[] {
+  return results.filter((r) => {
+    try {
+      const h = new URL(r.url).hostname.toLowerCase();
+      return domains.some((d) => h === d || h.endsWith(`.${d}`));
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * Exa arama API'si (ücretsiz katman: her ay ~10 $ kredi, kart istemez; arama ~0,007 $). Siteler includeDomains ile
+ * sınırlanır. Yalnızca başlık ve adres istenir (içerik ek kredi tüketir).
+ */
+export function exaSearch(apiKey: string, domains: string[] = marketplaceSearchDomains()): SearchFn {
+  return async (query) => {
+    let res: Response;
+    try {
+      res = await fetch("https://api.exa.ai/search", {
+        method: "POST",
+        signal: AbortSignal.timeout(20000),
+        headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ query, numResults: 10, type: "auto", includeDomains: domains }),
+      });
+    } catch (err) {
+      return { ok: false, quota: false, reason: `Exa ağ hatası: ${(err as Error).message}` };
+    }
+    if (res.status === 402 || res.status === 429) return { ok: false, quota: true, reason: `Exa kota/limit (HTTP ${res.status})` };
+    if (!res.ok) return { ok: false, quota: false, reason: `Exa HTTP ${res.status}` };
+    const data = (await res.json()) as { results?: { title?: string; url: string; text?: string }[] };
+    return { ok: true, results: (data.results ?? []).map((r) => ({ title: r.title ?? "", url: r.url, content: r.text ?? "" })) };
+  };
+}
+
+/**
+ * Firecrawl arama API'si (ücretsiz katman: ayda 1.000 kredi, kart istemez; 10 sonuçluk arama 2 kredi). Site süzgeci
+ * olmadığı için sonuçlar sonradan verilen sitelerle sınırlanır; sayfa içeriği istenmez (ek kredi).
+ */
+export function firecrawlSearch(apiKey: string, domains: string[] = marketplaceSearchDomains()): SearchFn {
+  return async (query) => {
+    let res: Response;
+    try {
+      res = await fetch("https://api.firecrawl.dev/v2/search", {
+        method: "POST",
+        signal: AbortSignal.timeout(30000),
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ query, limit: 10 }),
+      });
+    } catch (err) {
+      return { ok: false, quota: false, reason: `Firecrawl ağ hatası: ${(err as Error).message}` };
+    }
+    if (res.status === 402 || res.status === 429) return { ok: false, quota: true, reason: `Firecrawl kota/limit (HTTP ${res.status})` };
+    if (!res.ok) return { ok: false, quota: false, reason: `Firecrawl HTTP ${res.status}` };
+    const data = (await res.json()) as { data?: { web?: { url: string; title?: string; description?: string }[] } | { url: string; title?: string; description?: string }[] };
+    const items = Array.isArray(data.data) ? data.data : (data.data?.web ?? []);
+    const results = items.map((r) => ({ title: r.title ?? "", url: r.url, content: r.description ?? "" }));
+    return { ok: true, results: onlyDomains(results, domains) };
+  };
+}
+
+export type QuotaGate = () => Promise<boolean>;
+
+/**
+ * Arama servislerini sırayla dener: kotası dolan ya da sınırına takılan servis atlanır, sıradakine geçilir. Hepsi doluysa
+ * "kota doldu" döner (doğrulama ertesi gün yeniden dener). Hiçbir servis ücretli kullanıma geçmez: her birinin ücretsiz
+ * miktarının altında kalan kendi günlük/aylık sayacı vardır.
+ */
+export function searchChain(providers: { name: string; search: SearchFn; gate: QuotaGate }[]): SearchFn | null {
+  if (providers.length === 0) return null;
+  return async (query) => {
+    const reasons: string[] = [];
+    for (const p of providers) {
+      if (!(await p.gate())) {
+        reasons.push(`${p.name}: kota doldu`);
+        continue;
+      }
+      const r = await p.search(query);
+      if (r.ok || !r.quota) return r;
+      reasons.push(`${p.name}: ${r.reason}`);
+    }
+    return { ok: false, quota: true, reason: reasons.join("; ") };
+  };
+}
+
 export function buildQuery(brandDomain: string, productName: string): string {
   const label = brandDomain.split(".")[0];
   const compact = (s: string) => normalizeName(s).replace(/\s+/g, "");

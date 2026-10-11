@@ -2,6 +2,14 @@
 // Günlük sınır tek seferlik toplu kontroller için TAVILY_DAILY_LIMIT ile geçici olarak değiştirilebilir; aylık sınır değişmez.
 export const TAVILY_DAILY_LIMIT = Number(process.env.TAVILY_DAILY_LIMIT) || 30;
 export const TAVILY_MONTHLY_LIMIT = 950; // 50 kredi pay bırakılır
+// Yedek arama servisleri (Tavily kotası dolunca sırayla). İkisi de ücretsiz katmanda, kart istemez; sınırlar ücretsiz
+// miktarın çok altındadır, ücretli kullanıma geçilmez.
+//   Exa: her ay ~10 $ ücretsiz kredi, arama ~0,007 $ (~1.400 arama) → ayda en fazla 600.
+//   Firecrawl: ayda 1.000 kredi, 10 sonuçluk arama 2 kredi (~500 arama) → ayda en fazla 300.
+export const EXA_DAILY_LIMIT = 25;
+export const EXA_MONTHLY_LIMIT = 600;
+export const FIRECRAWL_DAILY_LIMIT = 12;
+export const FIRECRAWL_MONTHLY_LIMIT = 300;
 
 /** Bir çalıştırmada en fazla kaç ürün doğrulanır (site başına ~2-3 istek, 1 istek/sn). */
 export const VERIFY_PER_RUN = 120;

@@ -50,7 +50,7 @@ export function tavilySearch(apiKey: string, domains: string[] = marketplaceSear
           query,
           search_depth: "basic",
           max_results: 10,
-          include_domains: domains,
+          ...(domains.length ? { include_domains: domains } : {}),
         }),
       });
     } catch (err) {
@@ -89,7 +89,7 @@ export function exaSearch(apiKey: string, domains: string[] = marketplaceSearchD
         method: "POST",
         signal: AbortSignal.timeout(20000),
         headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
-        body: JSON.stringify({ query, numResults: 10, type: "auto", includeDomains: domains }),
+        body: JSON.stringify({ query, numResults: 10, type: "auto", ...(domains.length ? { includeDomains: domains } : {}) }),
       });
     } catch (err) {
       return { ok: false, quota: false, reason: `Exa ağ hatası: ${(err as Error).message}` };
@@ -123,7 +123,7 @@ export function firecrawlSearch(apiKey: string, domains: string[] = marketplaceS
     const data = (await res.json()) as { data?: { web?: { url: string; title?: string; description?: string }[] } | { url: string; title?: string; description?: string }[] };
     const items = Array.isArray(data.data) ? data.data : (data.data?.web ?? []);
     const results = items.map((r) => ({ title: r.title ?? "", url: r.url, content: r.description ?? "" }));
-    return { ok: true, results: onlyDomains(results, domains) };
+    return { ok: true, results: domains.length ? onlyDomains(results, domains) : results };
   };
 }
 

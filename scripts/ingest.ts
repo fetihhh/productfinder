@@ -6,6 +6,7 @@
 //             npm run ingest -- no-stores (yeni mağaza keşfi ve kontrolleri atlanır)
 //             npm run ingest -- resupply  (toptancı aramasını tüm doğrulanmış/takip edilen ürünler için hemen yeniler)
 //             npm run ingest -- ads       (yalnızca reklam analizi; reklamı bilinen mağazalar yeniden aranır)
+//             npm run ingest -- buyut     (tek seferlik: arama servisleriyle mağaza keşfi + tam günlük akış)
 //             npm run ingest -- kesif     (Meta Reklam Kütüphanesi'nden yeni reklamcı mağazalar + kontrol + reklam analizi)
 //             npm run ingest -- detay     (aday/reklamcı mağazaların ürün ayrıntıları + ana sayfadan marka künyesi)
 //             npm run ingest -- instagram (Instagram hesabı bilinmeyen mağazaların ana sayfası + çok tutan gönderiler)
@@ -64,6 +65,7 @@ import { enabledAdapters } from "../sources/index.ts";
 import { adSignals } from "./ads.ts";
 import { prioritizeAdWinners } from "../lib/ads.ts";
 import { discoverFromAds } from "./adDiscovery.ts";
+import { discoverFromSearch } from "./searchDiscovery.ts";
 import { rdapLookups } from "./rdap.ts";
 import { findSocialHandles, guessSocial, instagramPosts } from "./instagram.ts";
 import { turkeyChecks } from "./turkey.ts";
@@ -394,6 +396,15 @@ async function main() {
     await writeJobSummary((Date.now() - started) / 1000);
     if (!ok) process.exitCode = 1;
     return;
+  }
+  // Tek seferlik büyütme: önce arama servisleriyle mağaza keşfi (ücretsiz kotaların ~%30'u), sonra tam günlük akış.
+  if (process.argv.includes("buyut")) {
+    try {
+      await discoverFromSearch();
+    } catch (err) {
+      console.error(`
+▶ Arama ile keşif yapılamadı: ${(err as Error).message}`);
+    }
   }
   const onlyVerify = process.argv.includes("verify") || process.argv.includes("recheck");
   const collected = onlyVerify ? true : await collect();

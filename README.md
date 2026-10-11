@@ -46,7 +46,7 @@ cp .env.example .env.local   # değerleri doldurun
 | `EXA_API_KEY` | GitHub, isteğe bağlı | exa.ai ücretsiz hesap (kart istemez). Tavily kotası dolunca yedek geniş arama |
 | `FIRECRAWL_API_KEY` | GitHub, isteğe bağlı | firecrawl.dev ücretsiz hesap (kart istemez). Exa'dan sonra ikinci yedek |
 | `META_ACCESS_TOKEN` | GitHub, yerel | Meta Reklam Kütüphanesi erişim anahtarı (ücretsiz, ~60 günde bir yenilenir). Kurulum: aşağıda **Reklam sinyali**. Yoksa reklam adımı atlanır |
-| `TAVILY_DAILY_LIMIT` | isteğe bağlı | Tek seferlik toplu kontroller için günlük sınırı geçici olarak değiştirir (aylık 950 sınırı sabit) |
+| `TAVILY_DAILY_LIMIT` | isteğe bağlı | Tek seferlik toplu kontroller için günlük sınırı geçici olarak değiştirir (aylık 700 sınırı sabit) |
 | `REDDIT_CLIENT_ID/SECRET` | — | Kullanılmıyor; Reddit API onayı alınırsa ileride |
 
 ## Komutlar
@@ -71,9 +71,9 @@ cp .env.example .env.local   # değerleri doldurun
 | **Supabase Free** | 500 MB veritabanı, 5 GB çıkış/ay, 2 aktif proje. 7 gün işlem olmazsa proje duraklar | Birkaç MB. Günlük iş projeyi aktif tutar |
 | **GitHub Actions** (private repo) | 2.000 dakika/ay (public repoda sınırsız) | Ölçülen: ~30 dk/gün (mağaza kontrolü, görsel özetleri, 150 reklam araması, 60 doğrulama, 40 toptancı araması) ≈ 900 dk/ay. Public repolarda 60 gün commit olmazsa zamanlanmış iş durur |
 | **Vercel Hobby** | 100 GB veri aktarımı, 1M fonksiyon çağrısı, 4 CPU-saat/ay; fonksiyon süresi 300 sn. **Yalnızca kişisel, ticari olmayan kullanım** | Tek kullanıcı, çok düşük trafik |
-| **Tavily Free** | 1.000 kredi/ay, kart istemez (basic arama = 1 kredi) | Kod sınırı: günde 30, ayda 950. Kota dolarsa sıradaki yedek servise geçilir, ücretli kullanıma **asla** geçilmez |
-| **Exa Free** (yedek, isteğe bağlı) | Her ay ~10 $ ücretsiz kredi, kart istemez; arama ~0,007 $ (~1.400 arama/ay) | Kod sınırı: günde 25, ayda 600. Yalnızca başlık/adres istenir (içerik ek kredi tüketir) |
-| **Firecrawl Free** (yedek, isteğe bağlı) | Ayda 1.000 kredi, kart istemez; 10 sonuçluk arama 2 kredi (~500 arama/ay); aynı anda 2 istek | Kod sınırı: günde 12, ayda 300. Sayfa içeriği istenmez |
+| **Tavily Free** | 1.000 kredi/ay, kart istemez (basic arama = 1 kredi) | Kod sınırı (kotanın %70'i): günde 23, ayda 700. Kota dolarsa sıradaki yedek servise geçilir, ücretli kullanıma **asla** geçilmez |
+| **Exa Free** (yedek, isteğe bağlı) | Her ay ~10 $ ücretsiz kredi, kart istemez; arama ~0,007 $ (~1.400 arama/ay) | Kod sınırı (kotanın %70'i): günde 32, ayda 980. Yalnızca başlık/adres istenir (içerik ek kredi tüketir) |
+| **Firecrawl Free** (yedek, isteğe bağlı) | Ayda 1.000 kredi, kart istemez; 10 sonuçluk arama 2 kredi (~500 arama/ay); aynı anda 2 istek | Kod sınırı (kotanın %70'i): günde 11, ayda 350. Sayfa içeriği istenmez |
 | **Meta Reklam Kütüphanesi API'si** (graph.facebook.com/ads_archive) | Ücretsiz, kart istemez; kimliği doğrulanmış Facebook hesabı gerekir. Hız sınırı API tarafından uygulanır (aşılırsa istek reddedilir, ücret çıkmaz) | Günde en fazla 150 arama, saniyede 1. Hız sınırına takılırsa kalan aramalar ertesi güne kalır |
 | **Instagram Graph API — Business Discovery** (graph.facebook.com) | Ücretsiz, kart istemez; Facebook sayfasına bağlı bir Instagram profesyonel hesabı ve `instagram_basic` + `instagram_manage_insights` + `pages_show_list` izinli anahtar gerekir. Kullanıcı başına saatlik ~200 çağrı | Çalıştırma başına en fazla 60 hesap, saniyede 1 istek |
 | **WhoisDS yeni kayıtlı alan adları** (ücretsiz günlük liste) | Ücretsiz, kayıt gerekmez; "ticari dahil yeniden kullanılabilir" | Günde 1 zip (~70 bin alan adı) |
@@ -339,7 +339,7 @@ Reklamı olan her ürün ve mağaza sayfasında:
 
 ## Türkiye (`dtc/turkey.ts`, `scripts/turkey.ts`)
 
-- **Türkiye'de satılıyor mu:** doğrulanmış ve takip edilen ürünler her gün sırayla (günde en fazla 12, 14 günde bir yenilenir) Tavily arama API'siyle Türk pazaryerlerinde ve fiyat karşılaştırma sitelerinde aranır: Trendyol, Hepsiburada, n11, Amazon TR, Çiçeksepeti, Pazarama, Akakçe, Cimri. Siteler kazınmaz (robots.txt/403). İngilizce olmayan ürün adları için kayıtlı İngilizce çeviri kullanılır; marka kelimeleri atılır. Sonuç ürün sayfasında "🇹🇷 Türkiye'de satılıyor mu?" bölümü (site, başlık, ₺ fiyat, bağlantı; ortanca fiyat ve rakip mağazanın fiyatının TL karşılığı). Sonuçlar "benzer ilan"dır, aynı ürün olduğu kesin değildir. Tavily'nin aylık ortak kotasından (950) düşer, doğrulamanın payını yememek için ayrı günlük sınırı vardır.
+- **Türkiye'de satılıyor mu:** doğrulanmış ve takip edilen ürünler her gün sırayla (günde en fazla 12, 14 günde bir yenilenir) Tavily arama API'siyle Türk pazaryerlerinde ve fiyat karşılaştırma sitelerinde aranır: Trendyol, Hepsiburada, n11, Amazon TR, Çiçeksepeti, Pazarama, Akakçe, Cimri. Siteler kazınmaz (robots.txt/403). İngilizce olmayan ürün adları için kayıtlı İngilizce çeviri kullanılır; marka kelimeleri atılır. Sonuç ürün sayfasında "🇹🇷 Türkiye'de satılıyor mu?" bölümü (site, başlık, ₺ fiyat, bağlantı; ortanca fiyat ve rakip mağazanın fiyatının TL karşılığı). Sonuçlar "benzer ilan"dır, aynı ürün olduğu kesin değildir. Tavily'nin aylık ortak kotasından (700) düşer, doğrulamanın payını yememek için ayrı günlük sınırı vardır.
 - **Türkiye'de açılan mağazalar:** ülkesi Türkiye ya da para birimi TL olan açık yeni mağazaların öne çıkan ürünü puana bakılmadan aday olur ve markasına ülke yazılır. Ürünler listesinde "Daha fazla filtre → Mağaza ülkesi → Türkiye" bu ürünleri gösterir (Türkiye listenin başındadır; durum seçilmemişse doğrulanmamış ürünler de görünür).
 - **Kâr hesabı** ürün sayfasında kapalı açılır bölümdedir.
 

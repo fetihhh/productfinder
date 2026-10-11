@@ -1,22 +1,23 @@
 // Günlük işin "Instagram" adımı: mağazaların Instagram hesaplarındaki çok tutan gönderiler (resmi Business Discovery API).
 import { GRAPH_API_VERSION, IG_CHECKS_PER_RUN } from "../config/limits.ts";
-import { instagramClient, instagramHandle, rankPosts } from "../dtc/instagram.ts";
+import { instagramClient, instagramHandle, rankPosts, tiktokHandle } from "../dtc/instagram.ts";
 import { politeFetch } from "../lib/http.ts";
-import { igTargets, saveIgAccount, saveIgError, setStoreInstagram, storesWithoutInstagram, type InstagramState } from "../lib/instagram.ts";
+import { igTargets, saveIgAccount, saveIgError, setStoreSocial, storesWithoutSocial, type InstagramState } from "../lib/instagram.ts";
 import { setJobState } from "../lib/stores.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Instagram hesabı bilinmeyen mağazaların ana sayfasına bir kez bakılır (alan adı başına 1 istek, robots.txt'ye uyulur).
- * Normalde hesap mağaza kontrolünde bulunur; bu adım "instagram" modunda bekleyenleri hemen doldurur.
+ * Instagram/TikTok hesabı bilinmeyen mağazaların ana sayfasına bir kez bakılır (alan adı başına 1 istek, robots.txt'ye
+ * uyulur). Normalde hesaplar mağaza kontrolünde bulunur; bu adım "instagram" modunda bekleyenleri hemen doldurur.
  * Shopify art arda 429 dönerse (IP kısıtlaması) durur.
  */
-export async function findInstagramHandles(limit = 200, minScore = 50): Promise<void> {
-  console.log("\n▶ Mağazaların Instagram hesapları (ana sayfa)");
-  const domains = await storesWithoutInstagram(limit, minScore);
+export async function findSocialHandles(limit = 200, minScore = 50): Promise<void> {
+  console.log("\n▶ Mağazaların Instagram ve TikTok hesapları (ana sayfa)");
+  const domains = await storesWithoutSocial(limit, minScore);
   console.log(`  ${domains.length} mağaza`);
   let found = 0;
+  let foundTt = 0;
   let throttled = 0;
   let errors = 0;
   for (const d of domains) {
@@ -32,10 +33,12 @@ export async function findInstagramHandles(limit = 200, minScore = 50): Promise<
     }
     throttled = 0;
     const h = instagramHandle(r.text);
-    await setStoreInstagram(d, h ?? "");
+    const tt = tiktokHandle(r.text);
+    await setStoreSocial(d, { instagram: h ?? "", tiktok: tt ?? "" });
     if (h) found++;
+    if (tt) foundTt++;
   }
-  console.log(`  özet: ${found} mağazada Instagram hesabı bulundu${errors ? `, ${errors} sayfa okunamadı` : ""}`);
+  console.log(`  özet: ${found} Instagram, ${foundTt} TikTok hesabı bulundu${errors ? `, ${errors} sayfa okunamadı` : ""}`);
 }
 
 /** İsteğe bağlı adım: izin ya da hesap yoksa atlanır ve işi başarısız saymaz. */

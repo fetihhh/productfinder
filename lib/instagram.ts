@@ -102,12 +102,12 @@ export async function saveIgAccount(t: IgTarget, acc: IgAccount, posts: RankedPo
   if (e3) throw new Error(`ig_posts temizlenemedi: ${e3.message}`);
 }
 
-/** Instagram hesabı henüz aranmamış, reklam veren ya da puanı yüksek açık mağazalar (önce reklam verenler). */
-export async function storesWithoutInstagram(limit: number, minScore: number): Promise<string[]> {
+/** Instagram ya da TikTok hesabı henüz aranmamış, reklam veren ya da puanı yüksek açık mağazalar (önce reklam verenler). */
+export async function storesWithoutSocial(limit: number, minScore: number): Promise<string[]> {
   const { data, error } = await db()
     .from("stores")
     .select("domain")
-    .is("instagram", null)
+    .or("instagram.is.null,tiktok.is.null")
     .eq("status", "live")
     .or(`ad_points.gt.0,total_score.gte.${minScore}`)
     .order("ad_points", { ascending: false })
@@ -117,9 +117,9 @@ export async function storesWithoutInstagram(limit: number, minScore: number): P
   return (data ?? []).map((d) => d.domain as string);
 }
 
-/** "" = ana sayfada Instagram bağlantısı yok (yeniden aranmaz; mağaza kontrolünde güncellenir). */
-export async function setStoreInstagram(domain: string, handle: string): Promise<void> {
-  const { error } = await db().from("stores").update({ instagram: handle }).eq("domain", domain);
+/** "" = ana sayfada bağlantı yok (yeniden aranmaz; mağaza kontrolünde güncellenir). */
+export async function setStoreSocial(domain: string, handles: { instagram: string; tiktok: string }): Promise<void> {
+  const { error } = await db().from("stores").update(handles).eq("domain", domain);
   if (error) throw new Error(`stores güncellenemedi: ${error.message}`);
 }
 
@@ -171,11 +171,13 @@ export async function topIgPosts(f: IgFilter): Promise<IgPostRow[]> {
   return withFollowers((data ?? []) as Omit<IgPostRow, "followers">[]);
 }
 
-/** Bir mağazanın en çok etkileşim alan gönderileri. */
-export async function igPostsFor(domain: string, limit = 6): Promise<{ account: { username: string; followers: number | null; error: string | null } | null; posts: IgPostRow[] }> {
+/** Bir mağazanın en çok etkileşim alan gönderileri (videolar "Videolar" bölümünde gösterildiği için görseller). */
+export async function igPostsFor(domain: string, limit = 6, imagesOnly = true): Promise<{ account: { username: string; followers: number | null; error: string | null } | null; posts: IgPostRow[] }> {
   const { data: acc } = await db().from("ig_accounts").select("username, followers, error").eq("domain", domain).limit(1).maybeSingle();
   if (!acc) return { account: null, posts: [] };
-  const { data } = await db().from("ig_posts").select(POST_COLS).eq("username", acc.username).order("engagement", { ascending: false }).limit(limit);
+  let q = db().from("ig_posts").select(POST_COLS).eq("username", acc.username);
+  if (imagesOnly) q = q.or("media_type.is.null,media_type.neq.VIDEO");
+  const { data } = await q.order("engagement", { ascending: false }).limit(limit);
   return {
     account: { username: acc.username as string, followers: acc.followers as number | null, error: acc.error as string | null },
     posts: await withFollowers((data ?? []) as Omit<IgPostRow, "followers">[]),
@@ -190,3 +192,24 @@ export async function igMedia(id: string): Promise<{ url: string; username: stri
 }
 
 export type InstagramState = { status: "ok" | "no_token" | "no_permission" | "no_account" | "stopped"; reason?: string; checked?: number; found?: number; at: string };
+
+/**
+ * Ürün/mağaza sayfasının "Videolar" bölümü: mağazanın Instagram videoları (etkileşime göre) ve TikTok hesabı. Birden çok
+ * mağazanın bağladığı TikTok hesabı temanın varsayılan bağlantısıdır, gösterilmez.
+ */
+export async function videosFor(domain: string, limit = 8): Promise<{ instagram: string | null; igVideos: IgPostRow[]; tiktok: string | null }> {
+  const { data: store } = await db().from("stores").select("instagram, tiktok").eq("domain", domain).maybeSingle();
+  let tiktok = (store?.tiktok as string | null) || null;
+  if (tiktok) {
+    const { count } = await db().from("stores").select("domain", { count: "exact", head: true }).eq("tiktok", tiktok);
+    if ((count ?? 0) >= 3) tiktok = null;
+  }
+  const { data } = await db()
+    .from("ig_posts")
+    .select(POST_COLS)
+    .eq("domain", domain)
+    .eq("media_type", "VIDEO")
+    .order("engagement", { ascending: false })
+    .limit(limit);
+  return { instagram: (store?.instagram as string | null) || null, igVideos: await withFollowers((data ?? []) as Omit<IgPostRow, "followers">[]), tiktok };
+}

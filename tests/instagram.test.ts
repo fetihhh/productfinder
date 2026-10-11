@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { discoveryUrl, instagramClient, instagramHandle, rankPosts } from "../dtc/instagram.ts";
+import { discoveryUrl, instagramClient, instagramHandle, rankPosts, tiktokHandle } from "../dtc/instagram.ts";
 
 test("instagramHandle: ana sayfadaki en sık hesap; gönderi/reels/paylaş bağlantıları ve sayılar atlanır", () => {
   const html = `
@@ -65,4 +65,13 @@ test("instagramClient: kişisel hesap yalnızca o hesabı atlar, izin hatası ad
   const found = instagramClient("t", "v24.0", reply(200, { business_discovery: { id: "9", username: "brasapro", media: { data: [{ id: "5" }] } } }));
   const d = await found.discover("1784", "brasapro");
   assert.equal(d.ok && d.data.media?.data?.[0].id, "5");
+});
+
+test("tiktokHandle: ana sayfadaki @hesap; tema varsayılanları ve video bağlantıları atlanır", () => {
+  assert.equal(tiktokHandle('<a href="https://www.tiktok.com/@getcosmora">TikTok</a> <a href="https://tiktok.com/@getcosmora?lang=es">'), "getcosmora");
+  assert.equal(tiktokHandle('<a href="https://www.tiktok.com/@shopify">x</a>'), null);
+  assert.equal(tiktokHandle('{"tiktok":"https:\/\/www.tiktok.com\/@brasapro"}'), "brasapro");
+  assert.equal(tiktokHandle('<a href="https://www.tiktok.com/@nurvia.pet/video/7412">'), "nurvia.pet");
+  assert.equal(tiktokHandle('<a href="https://www.tiktok.com/tag/dogs">'), null);
+  assert.equal(tiktokHandle(null), null);
 });

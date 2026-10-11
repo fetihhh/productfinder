@@ -56,7 +56,7 @@ import { setJobState } from "../lib/stores.ts";
 import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranco.ts";
 import { enabledAdapters } from "../sources/index.ts";
 import { adSignals } from "./ads.ts";
-import { findInstagramHandles, instagramPosts } from "./instagram.ts";
+import { findSocialHandles, instagramPosts } from "./instagram.ts";
 import { brandAges, checkStores, copyClusters, discoverStores, promoteMovers, promoteStores } from "./stores.ts";
 
 async function collect(): Promise<boolean> {
@@ -311,7 +311,7 @@ async function main() {
   // Yalnızca reklam analizi: reklamı bilinen mağazalar yeniden aranır, skorlar güncellenir (~5 dk).
   // Yalnızca Instagram: hesabı bilinmeyen mağazaların ana sayfası + çok tutan gönderiler (~5 dk).
   if (process.argv.includes("instagram")) {
-    await findInstagramHandles();
+    await findSocialHandles();
     await instagramPosts();
     await writeJobSummary((Date.now() - started) / 1000);
     return;

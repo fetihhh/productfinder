@@ -11,7 +11,8 @@ import { REVIEW_TO_SALES, toUsd, visitsFromRank } from "@/lib/winner";
 import { getFx } from "@/lib/fx";
 import { copiesOf, offerComparison, storeExists } from "@/lib/newStores";
 import { InstagramSection } from "@/components/IgPostCard";
-import { igPostsFor } from "@/lib/instagram";
+import { igPostsFor, videosFor } from "@/lib/instagram";
+import { VideosSection } from "@/components/VideosSection";
 import { AdItemsSection, LaunchKit } from "@/components/LaunchKit";
 import { adItemsFor } from "@/lib/ads";
 import { adLibraryPageUrl } from "@/dtc/adLibrary";
@@ -32,11 +33,12 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
   const [data, fx] = await Promise.all([getProduct(id), getFx()]);
   if (!data) notFound();
   const { p, history, ranks, suppliers, ads, adHistory, nameEn } = data;
-  const [copies, isStore, offers, ig, adItems] = await Promise.all([
+  const [copies, isStore, offers, ig, videos, adItems] = await Promise.all([
     copiesOf(p.brand_domain),
     storeExists(p.brand_domain),
     offerComparison(p.brand_domain),
     igPostsFor(p.brand_domain),
+    videosFor(p.brand_domain),
     adItemsFor(p.brand_domain),
   ]);
   const w = p.winner_breakdown;
@@ -223,6 +225,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
       />
 
       <AdsSection domain={p.brand_domain} ads={ads} history={adHistory} />
+      <VideosSection data={videos} />
       <AdItemsSection items={adItems} libraryUrl={adLibraryPageUrl(ads?.page_id ?? null, p.brand_domain)} />
       <LaunchKit ads={ads} product={nameEn ?? p.name} storeOffer={offers.find((o) => o.self)?.offer ?? null} />
       <InstagramSection data={ig} />

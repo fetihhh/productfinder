@@ -8,7 +8,8 @@ import { ageLabel, countryLabel, dayLabel, formatPrice } from "@/lib/format";
 import { getStoreDetail, offerComparison } from "@/lib/newStores";
 import { nicheLabel } from "@/dtc/niche";
 import { InstagramSection } from "@/components/IgPostCard";
-import { igPostsFor } from "@/lib/instagram";
+import { igPostsFor, videosFor } from "@/lib/instagram";
+import { VideosSection } from "@/components/VideosSection";
 import { AdItemsSection, LaunchKit } from "@/components/LaunchKit";
 import { adItemsFor } from "@/lib/ads";
 import { adLibraryPageUrl } from "@/dtc/adLibrary";
@@ -30,9 +31,10 @@ export default async function StorePage({ params }: PageProps<"/m/[domain]">) {
   const data = await getStoreDetail(decodeURIComponent(domain).toLowerCase());
   if (!data) notFound();
   const { s, checks, ads, adHistory, copies } = data;
-  const [offers, ig, adItems] = await Promise.all([
+  const [offers, ig, videos, adItems] = await Promise.all([
     offerComparison(s.domain),
     igPostsFor(s.domain),
+    videosFor(s.domain),
     adItemsFor(s.domain),
   ]);
   const live = checks.filter((c) => c.status === "live");
@@ -198,6 +200,7 @@ export default async function StorePage({ params }: PageProps<"/m/[domain]">) {
 
       <CompetitorOffers rows={offers} />
       <AdsSection domain={s.domain} ads={ads} history={adHistory} />
+      <VideosSection data={videos} />
       <AdItemsSection items={adItems} libraryUrl={adLibraryPageUrl(ads?.page_id ?? null, s.domain)} />
       <LaunchKit ads={ads} product={s.hero_title ?? s.shop_name ?? s.domain} storeOffer={s.offer} />
       <InstagramSection data={ig} />

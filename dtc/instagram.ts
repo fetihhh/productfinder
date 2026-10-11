@@ -45,6 +45,20 @@ export function instagramHandle(html: string | null): string | null {
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 }
 
+const TIKTOK_RESERVED = new Set(["tiktok", "shopify", "shopifypartners", "themefullstack", "username", "yourusername", "yourname"]);
+
+/** Ana sayfadaki tiktok.com/@kullanıcı bağlantılarından en sık geçen kullanıcı adı. */
+export function tiktokHandle(html: string | null): string | null {
+  if (!html) return null;
+  const counts = new Map<string, number>();
+  for (const m of html.matchAll(/tiktok\.com\\?\/@([A-Za-z0-9._]{2,24})(?=[/"'?#\s<&\\]|$)/g)) {
+    const h = m[1].toLowerCase().replace(/\.+$/, "");
+    if (!h || TIKTOK_RESERVED.has(h)) continue;
+    counts.set(h, (counts.get(h) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+}
+
 export type IgMedia = {
   id: string;
   caption?: string;

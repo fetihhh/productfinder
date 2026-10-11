@@ -29,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0025`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0026`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -307,6 +307,13 @@ Reklamı olan her ürün ve mağaza sayfasında:
 ## Reklam önizlemesi (`app/reklam/[id]/route.ts`)
 
 "Bu sitenin reklamları" listesinde her reklamda **▶ Videoyu izle**: Meta'nın resmi önizleme sayfası (`render_ad`: reklamın videosu ya da görseli) ekranın sağında tek bir izleme penceresinde açılır; başka bir reklama basınca aynı pencere ona geçer, izlenen reklamlar listede işaretlenir. Facebook bu sayfanın başka bir siteye gömülmesine izin vermez (X-Frame-Options: deny), bu yüzden sayfa içinde değil ayrı pencerede açılır. Meta'nın API'si video dosyasını vermez; önizleme sayfası Reklam Kütüphanesi API'sinin verdiği resmi bağlantıdır ve **kullanıcının tarayıcısında** açılır (sunucu facebook.com'u okumaz). Bağlantı Meta erişim anahtarıyla çalıştığı için anahtar Vercel'e de eklenmelidir: `npx vercel env add META_ACCESS_TOKEN production` (değer GitHub'dakiyle aynı; anahtar yenilenince iki yerde de güncelleyin), ardından yeniden deploy. Anahtar yalnızca giriş yapmış kullanıcının tarayıcısına, yönlendirme adresinde gider.
+
+## Videolar (`components/VideosSection.tsx`, `components/TikTokEmbed.tsx`)
+
+Ürün ve mağaza sayfasında, reklam listesinin üstünde mağazanın videoları sitenin içinde oynatılır:
+- **Instagram:** resmi Business Discovery API'sinden gelen videolar/Reels, etkileşime göre (en fazla 8); sayfada oynar, **İndir** ile kaydedilir. Görsel gönderiler ayrı "Instagram gönderileri" bölümündedir.
+- **TikTok:** mağaza ana sayfasındaki `tiktok.com/@hesap` bağlantısı (`stores.tiktok`; mağaza kontrolünde ve `instagram` modunda bulunur). TikTok'un resmi profil gömmesi (oEmbed "creator" biçimi, `embed.js`) hesabın son videolarını sayfada oynatır; betik kullanıcının tarayıcısında çalışır, sunucu TikTok'u okumaz. Üç ya da daha çok mağazanın bağladığı hesap temanın varsayılanı sayılır, gösterilmez.
+- Meta reklam videoları sayfaya gömülemez (Facebook önizleme sayfası X-Frame-Options: deny); onlar reklam listesindeki **▶ Videoyu izle** ile yan pencerede açılır.
 
 ## Reklam galerisi ve Instagram (`/reklamlar`, `dtc/instagram.ts`, `scripts/instagram.ts`)
 

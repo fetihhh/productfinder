@@ -79,13 +79,13 @@ export function InstagramSection({ data }: { data: { account: { username: string
   return (
     <section className="card mt-5 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="card-title">Instagram&apos;da en çok tutanlar</h2>
+        <h2 className="card-title">Instagram gönderileri</h2>
         <a href={`https://www.instagram.com/${account.username}/`} target="_blank" rel="noopener noreferrer" className="link text-sm">
           @{account.username}
           {account.followers ? ` · ${compact(account.followers)} takipçi` : ""} ↗
         </a>
       </div>
-      <p className="card-note mb-4">Hesabın son gönderileri etkileşime göre (beğeni + 3 × yorum). 🔥 = hesabın ortalama gönderisinin kaç katı.</p>
+      <p className="card-note mb-4">Hesabın görsel gönderileri etkileşime göre (beğeni + 3 × yorum; videolar yukarıda). 🔥 = hesabın ortalama gönderisinin kaç katı.</p>
       {posts.length === 0 ? (
         <p className="text-sm text-muted">{account.error ? `Okunamadı: ${account.error}` : "Gönderi yok."}</p>
       ) : (

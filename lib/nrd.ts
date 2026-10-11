@@ -37,8 +37,23 @@ export function isShopifyIp(ip: string): boolean {
 
 export type DnsResolve = (domain: string) => Promise<string[]>;
 
-const resolver = new Resolver({ timeout: 2500, tries: 1 });
-export const systemResolve: DnsResolve = (d) => resolver.resolve4(d);
+// Çok sayıda eşzamanlı sorguda çözümleyici zaman aşımına düşebilir (ETIMEOUT); eskiden alan adı sessizce "mağaza değil"
+// sayılırdı. Önce sistemin çözümleyicisi (GitHub'da hızlı), zaman aşımında ücretsiz genel çözümleyiciler (Cloudflare,
+// Google, Quad9) denenir.
+const resolver = new Resolver({ timeout: 3000, tries: 2 });
+const backup = new Resolver({ timeout: 5000, tries: 2 });
+backup.setServers(["1.1.1.1", "8.8.8.8", "9.9.9.9"]);
+
+async function withRetry<T>(f: (r: Resolver) => Promise<T>): Promise<T> {
+  try {
+    return await f(resolver);
+  } catch (err) {
+    if ((err as { code?: string }).code !== "ETIMEOUT") throw err;
+    return f(backup);
+  }
+}
+
+export const systemResolve: DnsResolve = (d) => withRetry((r) => r.resolve4(d));
 
 /** Alan adlarından Shopify'a çözülenleri döndürür (paralel DNS sorgusu). */
 export async function findShopifyDomains(domains: string[], concurrency: number, resolve: DnsResolve = systemResolve): Promise<string[]> {
@@ -60,7 +75,7 @@ export async function findShopifyDomains(domains: string[], concurrency: number,
 
 export type StorePlatform = "shopify" | "ikas" | "ticimax";
 export type DnsCname = (host: string) => Promise<string[]>;
-export const systemCname: DnsCname = (h) => resolver.resolveCname(h);
+export const systemCname: DnsCname = (h) => withRetry((r) => r.resolveCname(h));
 
 /** Cloudflare adres blokları: Türk altyapıları (ikas, Ticimax) alan adlarını Cloudflare üzerinden yayınlar. */
 export function isCloudflareIp(ip: string): boolean {

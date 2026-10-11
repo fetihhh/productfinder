@@ -40,6 +40,7 @@ import {
 import { unzipFirst } from "../lib/tranco.ts";
 
 const isoDay = (msAgo: number) => new Date(Date.now() - msAgo).toISOString().slice(0, 10);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const secs = (t0: number) => ((Date.now() - t0) / 1000).toFixed(0);
 
 /** Yeni kayıtlı alan adlarından Shopify mağazalarını bulur (son 3 günün WhoisDS listesi + ilk kurulumda son 60 gün). */
@@ -83,11 +84,13 @@ export async function discoverStores(): Promise<boolean> {
   await setJobState("whoisds_days", done.slice(-30));
 
   const boot = (await getJobState<{ offset: number; done: boolean }>("nrd60")) ?? { offset: 0, done: false };
-  // Türk altyapıları (ikas, Ticimax) eklenmeden önce yalnızca Shopify için taranan kısım bir kez daha, bu kez yalnızca
-  // ikas/Ticimax için taranır (TR_RESCAN_UNTIL'e kadar; çalıştırma başına NRD_BOOTSTRAP_PER_RUN alan adı).
-  const TR_RESCAN_UNTIL = 1_820_000;
-  const tr = (await getJobState<{ offset: number }>("nrd60_tr")) ?? { offset: 0 };
-  if (!boot.done || tr.offset < TR_RESCAN_UNTIL) {
+  // Yeniden tarama: eski DNS ayarı eşzamanlı sorgularda zaman aşımına düşüp mağazaları sessizce kaçırıyordu ve Türk
+  // altyapıları (ikas, Ticimax) yoktu. Listenin tamamı düzeltilmiş DNS ile bir kez daha taranır (çalıştırma başına
+  // RESCAN_PER_RUN alan adı; bilinen mağazalar tekrar eklenmez).
+  const RESCAN_PER_RUN = 500_000;
+  const tr = (await getJobState<{ offset: number; total?: number }>("nrd60_rescan")) ?? { offset: 0 };
+  const rescanPending = tr.total === undefined || tr.offset < tr.total;
+  if (!boot.done || rescanPending) {
     const res = await politeFetchBytes(NRD60_URL, NRD60_MAX_BYTES);
     if (!res.ok) {
       console.error(`  ✖ 60 günlük liste indirilemedi: ${res.reason}`);
@@ -104,13 +107,13 @@ export async function discoverStores(): Promise<boolean> {
         await setJobState("nrd60", { offset, done: offset >= all.length, total: all.length });
         console.log(`  son 60 gün: ${boot.offset}–${offset} / ${all.length} → ${platformSummary(found)}, ${added} yeni (${secs(t0)} sn)`);
       }
-      if (tr.offset < TR_RESCAN_UNTIL) {
-        const end = Math.min(TR_RESCAN_UNTIL, all.length, tr.offset + NRD_BOOTSTRAP_PER_RUN);
+      if (rescanPending && tr.offset < all.length) {
+        const end = Math.min(all.length, tr.offset + RESCAN_PER_RUN);
         const t0 = Date.now();
-        const found = (await findStoreDomains(all.slice(tr.offset, end), DNS_CONCURRENCY)).filter((f) => f.platform !== "shopify");
+        const found = await findStoreDomains(all.slice(tr.offset, end), DNS_CONCURRENCY);
         const added = await insertByPlatform(found, "nrd60", null);
-        await setJobState("nrd60_tr", { offset: end });
-        console.log(`  Türk altyapıları (geriye dönük): ${tr.offset}–${end} → ${platformSummary(found)}, ${added} yeni (${secs(t0)} sn)`);
+        await setJobState("nrd60_rescan", { offset: end, total: all.length });
+        console.log(`  yeniden tarama (düzeltilmiş DNS): ${tr.offset}–${end} / ${all.length} → ${platformSummary(found)}, ${added} yeni (${secs(t0)} sn)`);
       }
     } catch (err) {
       ok = false;
@@ -130,20 +133,48 @@ export async function checkStores(source?: string): Promise<boolean> {
   const counts: Record<string, number> = {};
   let failures = 0;
   let next = 0;
-  // Devre kesici: Shopify aynı IP'den çok istek gelince tüm mağazalar için 429 döner. Art arda bu kadar kısıtlama
-  // gelirse kontroller durdurulur, kalan mağazalar ertesi güne kalır (siteleri zorlamamak ve yanlış "kapandı" dememek için).
+  // Kısıtlamaya uyum: Shopify aynı IP'den çok istek gelince tüm mağazalar için 429 döner. Art arda bu kadar kısıtlama
+  // gelirse durulmaz; önce beklenir (90, 180, 270 sn) ve paralellik yarıya indirilir, kısıtlanan mağaza bir kez daha
+  // denenir. Üç beklemeden sonra hâlâ kısıtlanıyorsa kontroller durur, kalanlar ertesi güne kalır (siteleri zorlamamak ve
+  // yanlış "kapandı" dememek için).
   const THROTTLE_LIMIT = 25;
+  const MAX_PAUSES = 3;
   let throttled = 0;
   let tripped = false;
+  let pauses = 0;
+  let pauseUntil = 0;
+  let allowed = STORE_CHECK_CONCURRENCY;
+  const retried = new Set<string>();
   const t0 = Date.now();
-  const worker = async () => {
+  const worker = async (id: number) => {
     while (next < list.length && !tripped) {
+      if (id >= allowed) return;
+      const wait = pauseUntil - Date.now();
+      if (wait > 0) {
+        await sleep(wait);
+        continue;
+      }
       const s = list[next++];
       try {
         const probe =
           s.platform === "ikas" || s.platform === "ticimax" ? await probeTrStore(s.domain, s.platform, politeFetch) : await probeStore(s.domain, politeFetch);
         if (probe.state === "error" && /429|robots\.txt geçici/.test(probe.why)) {
-          if (++throttled >= THROTTLE_LIMIT) tripped = true;
+          if (++throttled >= THROTTLE_LIMIT) {
+            throttled = 0;
+            if (pauses >= MAX_PAUSES) tripped = true;
+            else {
+              pauses++;
+              pauseUntil = Date.now() + 90_000 * pauses;
+              allowed = Math.max(2, Math.floor(allowed / 2));
+              console.log(`  ! Shopify "çok fazla istek" (429): ${90 * pauses} sn bekleniyor, paralellik ${allowed}`);
+            }
+          }
+          // Kısıtlanan mağaza kaydedilmeden sona eklenir (bir kez); ikinci kez kısıtlanırsa normal kaydedilir.
+          if (!retried.has(s.domain)) {
+            retried.add(s.domain);
+            list.push(s);
+            continue;
+          }
         } else if (probe.state !== "error") throttled = 0;
         const { status, score } = await saveStoreCheck(s, probe);
         counts[status] = (counts[status] ?? 0) + 1;
@@ -156,9 +187,9 @@ export async function checkStores(source?: string): Promise<boolean> {
       }
     }
   };
-  await Promise.all(Array.from({ length: STORE_CHECK_CONCURRENCY }, worker));
+  await Promise.all(Array.from({ length: STORE_CHECK_CONCURRENCY }, (_, i) => worker(i)));
   console.log(`  durum: ${JSON.stringify(counts)}${failures ? `, hata ${failures}` : ""} (${secs(t0)} sn)`);
-  if (tripped) console.log(`  ! Shopify art arda ${THROTTLE_LIMIT} kez "çok fazla istek" (429) döndü: kontroller durduruldu, ${list.length - next} mağaza yarına kaldı`);
+  if (tripped) console.log(`  ! Shopify ${MAX_PAUSES} beklemeden sonra da "çok fazla istek" (429) döndü: kontroller durduruldu, ${list.length - next} mağaza yarına kaldı`);
   return failures < Math.max(10, list.length * 0.2);
 }
 

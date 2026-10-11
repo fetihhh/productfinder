@@ -15,6 +15,7 @@ on:
           - instagram # Instagram hesaplarını bul + çok tutan gönderiler (~5 dk)
           - kesif # Meta Reklam Kütüphanesi'nden yeni reklamcı mağazalar (~10 dk)
           - detay # ürün ayrıntıları ve marka künyesi (~10 dk)
+          - arama # arama servisleri testi (Tavily, Exa, Firecrawl; 1'er arama)
           - verify # toplama hariç hepsi
           - resupply # toptancı aramasını hemen yenile
 

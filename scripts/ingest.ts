@@ -356,6 +356,27 @@ async function main() {
     if (!checked) process.exitCode = 1;
     return;
   }
+  // Arama servisi testi: her anahtarlı servisle bir deneme araması (kota sayacından düşer); anahtarlar yazdırılmaz.
+  if (process.argv.includes("arama")) {
+    const q = "galaxy projector night light";
+    const tests: [string, string | undefined, () => SearchFn][] = [
+      ["Tavily", process.env.TAVILY_API_KEY, () => tavilySearch(process.env.TAVILY_API_KEY!)],
+      ["Exa", process.env.EXA_API_KEY, () => exaSearch(process.env.EXA_API_KEY!)],
+      ["Firecrawl", process.env.FIRECRAWL_API_KEY, () => firecrawlSearch(process.env.FIRECRAWL_API_KEY!)],
+    ];
+    console.log(`
+▶ Arama servisleri testi ("${q}")`);
+    for (const [name, key, make] of tests) {
+      if (!key) {
+        console.log(`  · ${name}: anahtar yok`);
+        continue;
+      }
+      await tryConsumeQuota(name.toLowerCase(), 1000, 100000);
+      const r = await make()(q);
+      console.log(r.ok ? `  ✔ ${name}: ${r.results.length} sonuç (${[...new Set(r.results.map((x) => new URL(x.url).hostname))].slice(0, 4).join(", ")})` : `  ✖ ${name}: ${r.reason}`);
+    }
+    return;
+  }
   // Yalnızca Instagram: hesabı bilinmeyen mağazaların ana sayfası + çok tutan gönderiler (~5 dk).
   if (process.argv.includes("instagram")) {
     await findSocialHandles();

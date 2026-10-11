@@ -1,5 +1,7 @@
 // "Yeni mağazalar" sayfasının sorguları (yalnızca sunucu).
 import type { ProductOffer } from "../dtc/offers.ts";
+import type { ProductDetail } from "../dtc/productDetail.ts";
+import type { StoreTech } from "../dtc/storeTech.ts";
 import type { StoreScoreParts } from "../dtc/storeProbe.ts";
 import type { SnapItem } from "../dtc/storeSnapshot.ts";
 import { adHistory, adSignalsFor, type AdHistoryPoint, type AdSignalRow } from "./ads.ts";
@@ -165,6 +167,37 @@ export type StoreDetail = NewStoreRow & {
 export type StoreCheckPoint = { day: string; status: string; product_count: number | null; available_variants: number | null; total_variants: number | null };
 
 /** Alan adı yeni mağaza keşfinde var mı (ürün sayfasından mağaza detayına bağlantı için). */
+export type StoreExtras = {
+  domain: string;
+  shop_name: string | null;
+  country: string | null;
+  currency: string | null;
+  registered_on: string | null;
+  first_product_at: string | null;
+  product_count: number | null;
+  min_price: number | null;
+  max_price: number | null;
+  hero_handle: string | null;
+  source: string | null;
+  instagram: string | null;
+  tiktok: string | null;
+  tech: StoreTech | null;
+  tech_at: string | null;
+  details: Record<string, ProductDetail> | null;
+};
+
+/** Ürün/mağaza sayfası: marka künyesi ve ürün ayrıntıları için mağaza kaydı (yoksa null). */
+export async function storeExtras(domain: string): Promise<StoreExtras | null> {
+  const { data } = await db()
+    .from("stores")
+    .select(
+      "domain, shop_name, country, currency, registered_on, first_product_at, product_count, min_price, max_price, hero_handle, source, instagram, tiktok, tech, tech_at, details",
+    )
+    .eq("domain", domain)
+    .maybeSingle();
+  return (data as StoreExtras | null) ?? null;
+}
+
 export async function storeExists(domain: string): Promise<boolean> {
   const { data } = await db().from("stores").select("domain").eq("domain", domain).maybeSingle();
   return Boolean(data);

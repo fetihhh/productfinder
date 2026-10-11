@@ -9,7 +9,8 @@ import { getProduct, sameImage } from "@/lib/products";
 import { SOURCE_NAMES as SUPPLIER_SOURCES } from "@/dtc/suppliers";
 import { REVIEW_TO_SALES, toUsd, visitsFromRank } from "@/lib/winner";
 import { getFx } from "@/lib/fx";
-import { copiesOf, offerComparison, storeExists } from "@/lib/newStores";
+import { copiesOf, offerComparison, storeExtras } from "@/lib/newStores";
+import { BrandCard, ProductDetailsCard } from "@/components/BrandDetails";
 import { InstagramSection } from "@/components/IgPostCard";
 import { igPostsFor, videosFor } from "@/lib/instagram";
 import { VideosSection } from "@/components/VideosSection";
@@ -33,15 +34,17 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
   const [data, fx] = await Promise.all([getProduct(id), getFx()]);
   if (!data) notFound();
   const { p, history, ranks, suppliers, ads, adHistory, nameEn } = data;
-  const [copies, isStore, offers, ig, videos, adItems] = await Promise.all([
+  const [copies, store, offers, ig, videos, adItems] = await Promise.all([
     copiesOf(p.brand_domain),
-    storeExists(p.brand_domain),
+    storeExtras(p.brand_domain),
     offerComparison(p.brand_domain),
     igPostsFor(p.brand_domain),
     videosFor(p.brand_domain),
     adItemsFor(p.brand_domain),
   ]);
   const w = p.winner_breakdown;
+  const handle = p.product_url?.match(/\/products\/([^/?#]+)/)?.[1];
+  const detail = store?.details ? (store.details[handle ? decodeURIComponent(handle) : ""] ?? null) : null;
   const brand = p.brands;
   const href = p.product_url ?? `https://${p.brand_domain}`;
   const currency = p.currency ?? history.findLast((h) => h.currency)?.currency ?? null;
@@ -83,7 +86,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
           <a href={`https://${p.brand_domain}`} target="_blank" rel="noopener noreferrer" className="link text-sm">
             {p.brand_domain} ↗
           </a>
-          {isStore && (
+          {Boolean(store) && (
             <Link href={`/m/${p.brand_domain}`} className="link ml-3 text-sm">
               Mağaza detayı →
             </Link>
@@ -139,6 +142,8 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
           <TimingCard timing={p.timing} reason={p.timing_reason} />
         </div>
       )}
+
+      {detail && <ProductDetailsCard d={detail} currency={p.currency} url={p.product_url} />}
 
       <section className="card mt-5 p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -214,6 +219,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
         )}
       </section>
 
+      {store && <BrandCard s={store} />}
       <CompetitorOffers rows={offers} />
 
       <ProfitCalculator

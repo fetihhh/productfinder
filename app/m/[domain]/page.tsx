@@ -5,7 +5,8 @@ import { AdsSection, CompetitorOffers, CopiesSection, Kpi, TimingCard } from "@/
 import { STATUS } from "@/components/ProductCard";
 import { movementOrder } from "@/dtc/storeSnapshot";
 import { ageLabel, countryLabel, dayLabel, formatPrice } from "@/lib/format";
-import { getStoreDetail, offerComparison } from "@/lib/newStores";
+import { getStoreDetail, offerComparison, storeExtras } from "@/lib/newStores";
+import { BrandCard, ProductDetailsCard } from "@/components/BrandDetails";
 import { nicheLabel } from "@/dtc/niche";
 import { InstagramSection } from "@/components/IgPostCard";
 import { igPostsFor, videosFor } from "@/lib/instagram";
@@ -31,12 +32,14 @@ export default async function StorePage({ params }: PageProps<"/m/[domain]">) {
   const data = await getStoreDetail(decodeURIComponent(domain).toLowerCase());
   if (!data) notFound();
   const { s, checks, ads, adHistory, copies } = data;
-  const [offers, ig, videos, adItems] = await Promise.all([
+  const [offers, ig, videos, adItems, extras] = await Promise.all([
     offerComparison(s.domain),
     igPostsFor(s.domain),
     videosFor(s.domain),
     adItemsFor(s.domain),
+    storeExtras(s.domain),
   ]);
+  const heroDetail = extras?.details && s.hero_handle ? (extras.details[s.hero_handle] ?? null) : null;
   const live = checks.filter((c) => c.status === "live");
   const stockPct = s.products_snapshot?.length
     ? Math.round((s.products_snapshot.reduce((n, i) => n + i.a, 0) / Math.max(1, s.products_snapshot.reduce((n, i) => n + i.v, 0))) * 100)
@@ -198,6 +201,8 @@ export default async function StorePage({ params }: PageProps<"/m/[domain]">) {
         )}
       </section>
 
+      {heroDetail && <ProductDetailsCard d={heroDetail} currency={s.currency} url={s.hero_handle ? `https://${s.domain}/products/${s.hero_handle}` : null} />}
+      {extras && <BrandCard s={extras} />}
       <CompetitorOffers rows={offers} />
       <AdsSection domain={s.domain} ads={ads} history={adHistory} />
       <VideosSection data={videos} />

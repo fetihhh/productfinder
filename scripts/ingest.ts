@@ -7,6 +7,7 @@
 //             npm run ingest -- resupply  (toptancı aramasını tüm doğrulanmış/takip edilen ürünler için hemen yeniler)
 //             npm run ingest -- ads       (yalnızca reklam analizi; reklamı bilinen mağazalar yeniden aranır)
 //             npm run ingest -- kesif     (Meta Reklam Kütüphanesi'nden yeni reklamcı mağazalar + kontrol + reklam analizi)
+//             npm run ingest -- detay     (aday/reklamcı mağazaların ürün ayrıntıları + ana sayfadan marka künyesi)
 //             npm run ingest -- instagram (Instagram hesabı bilinmeyen mağazaların ana sayfası + çok tutan gönderiler)
 import {
   BIG_BRAND_MAX_RANK,
@@ -321,6 +322,14 @@ async function main() {
     console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
     await writeJobSummary((Date.now() - started) / 1000);
     if (![checked, ok, promoted].every(Boolean)) process.exitCode = 1;
+    return;
+  }
+  // Ürün ayrıntıları ve marka künyesi: aday/reklamcı mağazalar hemen kontrol edilir, ana sayfa bilgileri doldurulur (~10 dk).
+  if (process.argv.includes("detay")) {
+    const checked = await checkStores("detay");
+    await findSocialHandles(300, 35);
+    await writeJobSummary((Date.now() - started) / 1000);
+    if (!checked) process.exitCode = 1;
     return;
   }
   // Yalnızca Instagram: hesabı bilinmeyen mağazaların ana sayfası + çok tutan gönderiler (~5 dk).

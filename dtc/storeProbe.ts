@@ -4,6 +4,8 @@
 import { STORE_DAILY_MIN_SCORE } from "../config/limits.ts";
 import type { FetchResult } from "../lib/http.ts";
 import { instagramHandle, tiktokHandle } from "./instagram.ts";
+import { productDetail, type ProductDetail } from "./productDetail.ts";
+import { storeTech, type StoreTech } from "./storeTech.ts";
 import { productOffer, type ProductOffer } from "./offers.ts";
 import { parseShopifyMeta } from "./signals.ts";
 
@@ -29,6 +31,8 @@ export type StoreProduct = {
   aliImageId: string | null;
   /** Ürün sayfasındaki teklif: indirim, ücretsiz kargo, garanti, paket. */
   offer: ProductOffer;
+  /** Seçenekler, varyantlar (fiyat, stok, ağırlık), fotoğraflar, açıklama maddeleri. */
+  detail?: ProductDetail;
 };
 
 export type LiveStore = {
@@ -55,6 +59,8 @@ export type LiveStore = {
   instagram?: string | null;
   /** Ana sayfadaki TikTok hesabı (aynı kural). */
   tiktok?: string | null;
+  /** Ana sayfadan marka künyesi (izleme kodları, uygulamalar, iletişim, kargo/iade vaadi). */
+  tech?: StoreTech;
 };
 
 export type StoreProbe = LiveStore | { state: "closed" | "dead"; why: string } | { state: "error"; why: string };
@@ -121,6 +127,7 @@ export function parseStoreProducts(text: string): StoreProduct[] | null {
         price,
         compareAt !== null && price !== null && compareAt > price ? compareAt : null,
       ),
+      detail: productDetail(p),
     }];
   });
 }
@@ -184,6 +191,7 @@ export async function probeStore(domain: string, fetchPage: FetchPage): Promise<
     hero: pickHero(products, home?.ok ? home.text : null),
     instagram: home?.ok ? (instagramHandle(home.text) ?? "") : undefined,
     tiktok: home?.ok ? (tiktokHandle(home.text) ?? "") : undefined,
+    tech: home?.ok ? storeTech(home.text) : undefined,
   };
 }
 

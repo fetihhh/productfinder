@@ -107,7 +107,7 @@ export async function storesWithoutSocial(limit: number, minScore: number): Prom
   const { data, error } = await db()
     .from("stores")
     .select("domain")
-    .or("instagram.is.null,tiktok.is.null")
+    .or("instagram.is.null,tiktok.is.null,tech.is.null")
     .eq("status", "live")
     .or(`ad_points.gt.0,total_score.gte.${minScore}`)
     .order("ad_points", { ascending: false })
@@ -118,8 +118,11 @@ export async function storesWithoutSocial(limit: number, minScore: number): Prom
 }
 
 /** "" = ana sayfada bağlantı yok (yeniden aranmaz; mağaza kontrolünde güncellenir). */
-export async function setStoreSocial(domain: string, handles: { instagram: string; tiktok: string }): Promise<void> {
-  const { error } = await db().from("stores").update(handles).eq("domain", domain);
+export async function setStoreSocial(domain: string, handles: { instagram: string; tiktok: string; tech?: unknown }): Promise<void> {
+  const { error } = await db()
+    .from("stores")
+    .update({ ...handles, ...(handles.tech ? { tech_at: new Date().toISOString() } : {}) })
+    .eq("domain", domain);
   if (error) throw new Error(`stores güncellenemedi: ${error.message}`);
 }
 

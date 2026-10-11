@@ -14,6 +14,7 @@ on:
           - ads # yalnızca reklam analizi (~5 dk)
           - instagram # Instagram hesaplarını bul + çok tutan gönderiler (~5 dk)
           - kesif # Meta Reklam Kütüphanesi'nden yeni reklamcı mağazalar (~10 dk)
+          - detay # ürün ayrıntıları ve marka künyesi (~10 dk)
           - verify # toplama hariç hepsi
           - resupply # toptancı aramasını hemen yenile
 

@@ -29,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0026`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0027`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -314,6 +314,13 @@ Reklamı olan her ürün ve mağaza sayfasında:
 ## Reklam önizlemesi (`app/reklam/[id]/route.ts`)
 
 "Bu sitenin reklamları" listesinde her reklamda **▶ Videoyu izle**: Meta'nın resmi önizleme sayfası (`render_ad`: reklamın videosu ya da görseli) ekranın sağında tek bir izleme penceresinde açılır; başka bir reklama basınca aynı pencere ona geçer, izlenen reklamlar listede işaretlenir. Facebook bu sayfanın başka bir siteye gömülmesine izin vermez (X-Frame-Options: deny), bu yüzden sayfa içinde değil ayrı pencerede açılır. Meta'nın API'si video dosyasını vermez; önizleme sayfası Reklam Kütüphanesi API'sinin verdiği resmi bağlantıdır ve **kullanıcının tarayıcısında** açılır (sunucu facebook.com'u okumaz). Bağlantı Meta erişim anahtarıyla çalıştığı için anahtar Vercel'e de eklenmelidir: `npx vercel env add META_ACCESS_TOKEN production` (değer GitHub'dakiyle aynı; anahtar yenilenince iki yerde de güncelleyin), ardından yeniden deploy. Anahtar yalnızca giriş yapmış kullanıcının tarayıcısına, yönlendirme adresinde gider.
+
+## Marka künyesi ve ürün ayrıntıları (`dtc/storeTech.ts`, `dtc/productDetail.ts`, `components/BrandDetails.tsx`)
+
+- **Marka künyesi** (ürün ve mağaza sayfası): mağaza kontrolünde zaten okunan ana sayfa HTML'inden; **reklam/izleme kodları** (Meta, TikTok, Google Ads, Snapchat, Pinterest, Microsoft Ads, Taboola; Google Analytics, Klaviyo, Hotjar, Clarity), **yorum uygulaması** (Judge.me, Loox, Yotpo, Okendo…), **kapıda ödeme** (Releasit, EasySell ya da metinde), **upsell/paket** (Kaching, ReConvert, Vitals…), **canlı destek**, **ödeme yöntemleri** (Klarna, PayPal, Shop Pay…), tema, diller (hreflang), sosyal hesaplar, e-posta/telefon/WhatsApp, **teslimat vaadi** (≥ 10 gün = Çin'den gönderim) ve **iade vaadi**; ayrıca alan adı kaydı, ilk ürün, katalog ve nasıl bulunduğu. Ek istek atılmaz.
+- **Ürün ayrıntıları**: Shopify `products.json`'dan öne çıkan ürün, aday ürünler ve stoğu en çok azalan 3 ürün için (mağaza başına en fazla 6) seçenekler, varyantlar (fiyat, indirim öncesi fiyat, stok, ağırlık), 10 fotoğraf, açıklama maddeleri. Kontroller arasında stokta → tükendi olan varyantın günü tutulur (**ilk tükenen renk/beden genelde en çok satandır**), yeniden stoğa girenler ayrıca işaretlenir. Açıklama Google Çeviri bağlantısıyla Türkçe okunabilir.
+- Mağaza puanı ≥ 35 olan mağazalarda her kontrolde güncellenir. Hemen doldurmak için Actions → **Run workflow** → `detay`: aday ürünü ya da reklamı olan en fazla 400 açık mağaza zamanı beklemeden kontrol edilir, ana sayfası okunmamış mağazaların künyesi doldurulur.
+- **Niş**: öne çıkan ürün belirsizse mağazanın tüm ürünlerinin (başlık + ürün türü) oyuyla (en az 2 ürün ve %40) belirlenir; anahtar kelimeler 14 dilde genişletildi.
 
 ## Videolar (`components/VideosSection.tsx`, `components/TikTokEmbed.tsx`)
 

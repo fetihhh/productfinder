@@ -1,6 +1,7 @@
 // Günlük işin "Instagram" adımı: mağazaların Instagram hesaplarındaki çok tutan gönderiler (resmi Business Discovery API).
 import { GRAPH_API_VERSION, IG_CHECKS_PER_RUN } from "../config/limits.ts";
 import { instagramClient, instagramHandle, rankPosts, tiktokHandle } from "../dtc/instagram.ts";
+import { storeTech } from "../dtc/storeTech.ts";
 import { politeFetch } from "../lib/http.ts";
 import { igTargets, saveIgAccount, saveIgError, setStoreSocial, storesWithoutSocial, type InstagramState } from "../lib/instagram.ts";
 import { setJobState } from "../lib/stores.ts";
@@ -13,7 +14,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * Shopify art arda 429 dönerse (IP kısıtlaması) durur.
  */
 export async function findSocialHandles(limit = 200, minScore = 50): Promise<void> {
-  console.log("\n▶ Mağazaların Instagram ve TikTok hesapları (ana sayfa)");
+  console.log("\n▶ Mağazaların Instagram/TikTok hesapları ve marka künyesi (ana sayfa)");
   const domains = await storesWithoutSocial(limit, minScore);
   console.log(`  ${domains.length} mağaza`);
   let found = 0;
@@ -34,7 +35,7 @@ export async function findSocialHandles(limit = 200, minScore = 50): Promise<voi
     throttled = 0;
     const h = instagramHandle(r.text);
     const tt = tiktokHandle(r.text);
-    await setStoreSocial(d, { instagram: h ?? "", tiktok: tt ?? "" });
+    await setStoreSocial(d, { instagram: h ?? "", tiktok: tt ?? "", tech: storeTech(r.text) });
     if (h) found++;
     if (tt) foundTt++;
   }

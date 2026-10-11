@@ -1,8 +1,9 @@
 // Yeni mağaza keşfinin veritabanı katmanı (yalnızca cron).
 import { COPY_MIN_STORE_SCORE, NEW_STORE_MAX_AGE_DAYS } from "../config/limits.ts";
 import { nextCheck, storeActivity, storeScore, storeScoreParts, type StoreProbe } from "../dtc/storeProbe.ts";
-import { nicheOf } from "../dtc/niche.ts";
+import { nicheOfStore } from "../dtc/niche.ts";
 import { mergeSnapshot, type SnapItem } from "../dtc/storeSnapshot.ts";
+import { mergeDetail, type ProductDetail } from "../dtc/productDetail.ts";
 import { db } from "./db.ts";
 import { clip } from "./text.ts";
 
@@ -36,6 +37,19 @@ export async function insertStores(domains: string[], source: string, registered
 }
 
 export type StoreToCheck = { domain: string; registered_on: string | null; discovered_at: string; first_product_at: string | null; status?: string };
+
+/** Aday ürünü ya da reklamı olan açık mağazalar (kontrol zamanı beklenmez): ürün ayrıntılarını hemen doldurmak için. */
+export async function storesForDetail(limit: number): Promise<StoreToCheck[]> {
+  const { data, error } = await db()
+    .from("stores")
+    .select("domain, registered_on, discovered_at, first_product_at, status")
+    .eq("status", "live")
+    .or("product_id.not.is.null,ad_points.gt.0")
+    .order("total_score", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`stores okunamadı: ${error.message}`);
+  return data as StoreToCheck[];
+}
 
 export async function storesToCheck(limit: number, source?: string): Promise<StoreToCheck[]> {
   let query = db()
@@ -97,10 +111,11 @@ export async function saveStoreCheck(s: StoreToCheck, probe: StoreProbe): Promis
       last_product_at: probe.lastProductAt,
       hero_handle: probe.hero?.handle ?? null,
       hero_title: probe.hero?.title ? clip(probe.hero.title, 200) : null,
-      niche: nicheOf(probe.hero?.title ?? null, probe.hero?.productType ?? null),
+      niche: nicheOfStore(probe.hero ? { title: probe.hero.title, productType: probe.hero.productType } : null, probe.products),
       offer: probe.hero?.offer ?? null,
       ...(probe.instagram !== undefined ? { instagram: probe.instagram } : {}),
       ...(probe.tiktok !== undefined ? { tiktok: probe.tiktok } : {}),
+      ...(probe.tech ? { tech: probe.tech, tech_at: new Date().toISOString() } : {}),
       hero_image: probe.hero?.image ?? null,
       hero_price: probe.hero?.price ?? null,
       store_score: score,
@@ -108,13 +123,29 @@ export async function saveStoreCheck(s: StoreToCheck, probe: StoreProbe): Promis
     });
     // Ürün bazında hareket yalnızca aday olabilecek mağazalarda izlenir (veritabanı boyutu).
     if (score >= COPY_MIN_STORE_SCORE) {
-      const { data: snapRow, error: sErr } = await db().from("stores").select("products_snapshot").eq("domain", s.domain).maybeSingle();
+      const [{ data: snapRow, error: sErr }, { data: tracked }] = await Promise.all([
+        db().from("stores").select("products_snapshot, details").eq("domain", s.domain).maybeSingle(),
+        db().from("products").select("product_url").eq("brand_domain", s.domain).limit(10),
+      ]);
       if (sErr) throw new Error(`stores okunamadı: ${sErr.message}`);
       const { items } = mergeSnapshot((snapRow?.products_snapshot as SnapItem[] | null) ?? null, probe.products, today);
+      // Ürün ayrıntıları: öne çıkan ürün, aday ürünler ve stoğu en çok azalan ürünler (en fazla 6).
+      const handles = [
+        probe.hero?.handle,
+        ...((tracked ?? []) as { product_url: string | null }[]).map((r) => r.product_url?.match(/\/products\/([^/?#]+)/)?.[1]),
+        ...items.filter((i) => i.so > 0).sort((a, b) => b.so - a.so).slice(0, 3).map((i) => i.h),
+      ].filter((h): h is string => Boolean(h));
+      const prevDetails = (snapRow?.details as Record<string, ProductDetail> | null) ?? {};
+      const details: Record<string, ProductDetail> = {};
+      for (const h of [...new Set(handles.map((x) => decodeURIComponent(x)))].slice(0, 6)) {
+        const p = probe.products.find((x) => x.handle === h);
+        if (p?.detail) details[h] = mergeDetail(prevDetails[h], p.detail, today);
+      }
       Object.assign(update, {
         products_snapshot: items,
         stock_drops: items.reduce((n, i) => n + i.so, 0),
         moving_products: items.filter((i) => i.so > 0).length,
+        ...(Object.keys(details).length ? { details } : {}),
       });
     }
   }

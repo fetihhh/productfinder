@@ -30,6 +30,7 @@ import {
   saveBrandAge,
   saveStoreCheck,
   setJobState,
+  storesForDetail,
   storesToCheck,
   storesToPromote,
   storesWithMovers,
@@ -88,9 +89,12 @@ export async function discoverStores(): Promise<boolean> {
   return ok;
 }
 
-/** Zamanı gelen mağazaları kontrol eder (farklı alan adları paralel; her alan adına 1 istek/sn). source: yalnızca bu kaynaktakiler. */
+/**
+ * Zamanı gelen mağazaları kontrol eder (farklı alan adları paralel; her alan adına 1 istek/sn). source: yalnızca bu
+ * kaynaktakiler; "detay": aday ürünü ya da reklamı olan açık mağazalar zamanı beklemeden.
+ */
 export async function checkStores(source?: string): Promise<boolean> {
-  const list = await storesToCheck(STORE_CHECKS_PER_RUN, source);
+  const list = source === "detay" ? await storesForDetail(400) : await storesToCheck(STORE_CHECKS_PER_RUN, source);
   console.log(`\n▶ Mağaza kontrolü: ${list.length} mağaza`);
   const counts: Record<string, number> = {};
   let failures = 0;

@@ -49,7 +49,10 @@ const PRODUCTS = JSON.stringify({
 
 test("parseStoreProducts ve pickHero: ana sayfadaki ilk ürün, yoksa en yeni fiziksel ürün", () => {
   const products = parseStoreProducts(PRODUCTS)!;
-  assert.deepEqual(products[0], {
+  const { detail, ...first } = products[0];
+  assert.deepEqual(detail?.variants.map((v) => [v.price, v.compareAt, v.available]), [[29.99, 59.99, true], [34.99, 69.99, false]]);
+  assert.deepEqual(detail?.images, ["https://cdn.shopify.com/a.jpg"]);
+  assert.deepEqual(first, {
     handle: "posture-corrector", title: "Posture Corrector Pro", image: "https://cdn.shopify.com/a.jpg", price: 29.99, compareAt: 69.99,
     createdAt: "2026-09-20T10:00:00Z", physical: true, productType: "Health", availableVariants: 1, totalVariants: 2, aliImageId: null, dropship: true, apparel: false,
     offer: { discountPct: 57, freeShipping: false, guaranteeDays: null, bundle: false },

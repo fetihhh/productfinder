@@ -8,14 +8,18 @@ const STOP = new Set([
   "de", "la", "el", "le", "les", "des", "du", "et", "con", "para", "per", "il", "di", "und", "mit", "für", "fur", "en", "y", "a",
 ]);
 
-/** Etiket adayları: kısa ürün adının ilk 2–3 anlamlı kelimesinin birleşimi ("galaxyprojector"), tek ayırt edici kelime değil. */
+/**
+ * Etiket adayları: İngilizce ürün adlarında ürünün türü sondadır ("Korea's #1 Hair Growth Serum" → #hairgrowthserum),
+ * önce son 3 (en fazla 22 harf) ya da son 2 kelime, sonra ilk 2 kelime ("galaxyprojector").
+ */
 export function productHashtags(name: string, brandWords: string[] = [], max = 2): string[] {
   const words = normalizeName(name.split(/\s+[—–|·:-]\s+|\s*[|(]/)[0])
     .split(" ")
     .filter((w) => w.length >= 3 && !STOP.has(w) && !brandWords.includes(w) && !/^\d+$/.test(w));
   const out: string[] = [];
-  if (words.length >= 2) out.push(words.slice(0, 2).join(""));
-  if (words.length >= 3) out.push(words.slice(1, 3).join(""), words.slice(0, 3).join(""));
+  const last3 = words.slice(-3).join("");
+  if (words.length >= 3 && last3.length <= 22) out.push(last3);
+  if (words.length >= 2) out.push(words.slice(-2).join(""), words.slice(0, 2).join(""));
   if (words.length === 1 && words[0].length >= 6) out.push(words[0]);
   return [...new Set(out.filter((t) => t.length >= 6 && t.length <= 30 && /^[a-z0-9]+$/.test(t)))].slice(0, max);
 }
@@ -70,5 +74,5 @@ export const topMediaUrl = (version: string, hashtagId: string, igUserId: string
   `https://graph.facebook.com/${version}/${encodeURIComponent(hashtagId)}/top_media?${new URLSearchParams({
     user_id: igUserId,
     fields: "id,caption,media_type,media_url,permalink,like_count,comments_count,timestamp",
-    limit: "50",
+    limit: "30",
   })}`;

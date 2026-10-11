@@ -54,7 +54,8 @@ test("TikTok oEmbed: hesap ve yazar adı; ad mağazayla eşleşmeli", () => {
 test("productHashtags ve rankTagPosts: ürün adından etiket; videolar önce, etkileşime göre", () => {
   assert.deepEqual(productHashtags("Cosmora Galaxy Projector — Multi-Slide Star Night Light", ["cosmora"]), ["galaxyprojector"]);
   assert.deepEqual(productHashtags("Posture Corrector Pro Max", []), ["posturecorrector"]);
-  assert.deepEqual(productHashtags("Electric Spin Scrubber Cordless", []), ["electricspin", "spinscrubber"]);
+  assert.deepEqual(productHashtags("Korea's #1 Hair Growth Serum", []), ["hairgrowthserum", "growthserum"]);
+  assert.deepEqual(productHashtags("Electric Spin Scrubber", []), ["electricspinscrubber", "spinscrubber"]);
   assert.deepEqual(productHashtags("Obsidian", []), ["obsidian"]);
   assert.deepEqual(productHashtags("Pro Kit", []), []);
   const r = rankTagPosts("galaxyprojector", [

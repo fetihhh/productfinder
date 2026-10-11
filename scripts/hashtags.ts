@@ -44,6 +44,7 @@ export async function productTagPosts(tagsPerDay = IG_TAGS_PER_DAY): Promise<voi
       continue;
     }
     const posts: TagPost[] = [];
+    let failed = 0;
     for (const tag of tags) {
       if (used >= tagsPerDay || !(await tryConsumeQuota("ig_hashtags", tagsPerDay, 120))) break;
       used++;
@@ -59,11 +60,17 @@ export async function productTagPosts(tagsPerDay = IG_TAGS_PER_DAY): Promise<voi
       await sleep(1000);
       const m = await ig.topMedia(h.data, igUserId);
       if (!m.ok) {
+        failed++;
         console.log(`  ✖ #${tag} gönderileri: ${m.reason}`);
         continue;
       }
       posts.push(...rankTagPosts(tag, m.data));
       await sleep(1000);
+    }
+    if (posts.length === 0 && failed > 0) {
+      console.log(`  · ${p.name.slice(0, 50)}: gönderiler alınamadı, yarın yeniden denenecek`);
+      if (used >= tagsPerDay) break;
+      continue;
     }
     const ranked = posts.sort((a, b) => Number(b.media_type === "VIDEO") - Number(a.media_type === "VIDEO") || b.engagement - a.engagement).slice(0, 12);
     await saveTagPosts(p.id, tags, ranked);

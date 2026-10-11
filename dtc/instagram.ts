@@ -178,10 +178,10 @@ export function discoveryUrl(igUserId: string, username: string, version: string
 type GraphError = { message?: string; code?: number; error_subcode?: number };
 
 export function instagramClient(token: string, version: string, fetchImpl: typeof fetch = fetch) {
-  async function get<T>(url: string): Promise<IgResult<T>> {
+  async function get<T>(url: string, timeoutMs = 20_000): Promise<IgResult<T>> {
     let res: Response;
     try {
-      res = await fetchImpl(url, { signal: AbortSignal.timeout(20_000), headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+      res = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs), headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
     } catch (err) {
       return { ok: false, fatal: false, reason: `Ağ hatası: ${(err as Error).message}` };
     }
@@ -210,7 +210,8 @@ export function instagramClient(token: string, version: string, fetchImpl: typeo
     },
     /** Etiketin en popüler gönderileri (son 24 saatte değil, genel popülerlik). */
     async topMedia(hashtagId: string, igUserId: string): Promise<IgResult<Parameters<typeof rankTagPosts>[1]>> {
-      const r = await get<{ data?: Parameters<typeof rankTagPosts>[1] }>(topMediaUrl(version, hashtagId, igUserId));
+      // Çok popüler etiketlerde (#hairgrowth) yanıt yavaştır.
+      const r = await get<{ data?: Parameters<typeof rankTagPosts>[1] }>(topMediaUrl(version, hashtagId, igUserId), 60_000);
       return r.ok ? { ok: true, data: r.data.data ?? [] } : r;
     },
     /** Anahtara verilmiş izinler (tanı için; yalnızca izin adları). */

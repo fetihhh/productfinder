@@ -174,6 +174,8 @@ export async function saveStoreCheck(s: StoreToCheck, probe: StoreProbe): Promis
 }
 
 export type StoreToPromote = {
+  country: string | null;
+  currency: string | null;
   domain: string;
   shop_name: string | null;
   hero_handle: string;
@@ -188,11 +190,12 @@ export async function storesToPromote(limit: number, minScore: number): Promise<
   const since = new Date(Date.now() - NEW_STORE_MAX_AGE_DAYS * DAY).toISOString();
   const { data, error } = await db()
     .from("stores")
-    .select("domain, shop_name, hero_handle, hero_title, hero_image, first_product_at, store_score:total_score")
+    .select("domain, shop_name, hero_handle, hero_title, hero_image, first_product_at, country, currency, store_score:total_score")
     .eq("status", "live")
     .is("product_id", null)
     .not("hero_handle", "is", null)
-    .gte("total_score", minScore)
+    // Türkiye'de açılan mağazalar (ülke TR ya da para birimi TL) puana bakılmadan aday olur: kendi pazarınızdaki rakipler.
+    .or(`total_score.gte.${minScore},country.eq.TR,currency.eq.TRY`)
     .gte("first_product_at", since)
     .order("total_score", { ascending: false })
     .limit(limit);
@@ -276,4 +279,12 @@ export async function sellerNetwork(domain: string): Promise<NetworkStore[]> {
   const { data, error } = await db().rpc("seller_network", { p_domain: domain });
   if (error) return [];
   return (data ?? []) as NetworkStore[];
+}
+
+/** Mağazadan gelen ürünün markasına mağazanın ülkesini yazar (ürün listesindeki "Mağaza ülkesi" filtresi için). */
+export async function setBrandCountry(domain: string, country: string | null, currency: string | null): Promise<void> {
+  const c = country ?? (currency === "TRY" ? "TR" : null);
+  if (!c) return;
+  const { error } = await db().from("brands").update({ country: c }).eq("domain", domain).is("country", null);
+  if (error) throw new Error(`brands güncellenemedi: ${error.message}`);
 }

@@ -30,6 +30,7 @@ import {
   saveBrandAge,
   saveStoreCheck,
   setJobState,
+  setBrandCountry,
   storesForDetail,
   storesToCheck,
   storesToPromote,
@@ -182,7 +183,8 @@ export async function promoteStores(): Promise<boolean> {
         marketplaceLinks: [],
       });
       await markStorePromoted(s.domain, productId);
-      console.log(`  + ${s.hero_title}  [${s.domain}] puan ${s.store_score}`);
+      await setBrandCountry(registrableDomain(`https://${s.domain}/`) ?? s.domain, s.country, s.currency);
+      console.log(`  + ${s.hero_title}  [${s.domain}] puan ${s.store_score}${s.country === "TR" || s.currency === "TRY" ? " 🇹🇷" : ""}`);
     } catch (err) {
       ok = false;
       console.error(`  ! ${s.domain}: ${(err as Error).message}`);

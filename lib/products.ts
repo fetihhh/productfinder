@@ -30,8 +30,6 @@ export type Filters = {
   age: 0 | 30 | 90 | 150;
   /** Yalnızca Meta'da yayında reklamı olan markalar */
   ads: boolean;
-  /** Türkiye: "sold" = Türk pazaryerlerinde benzer ilanı var, "open" = arandı ve bulunamadı (rakip yok). */
-  turkey: "" | "sold" | "open";
 };
 
 export type ProductRow = {
@@ -118,14 +116,14 @@ export function parseFilters(sp: Record<string, string | string[] | undefined>):
   const country = one(sp.country).toUpperCase();
   return {
     q: one(sp.q).slice(0, 100),
-    status: (STATUSES as readonly string[]).includes(status) ? (status as Filters["status"]) : "verified",
+    // Türk mağazalarının ürünleri çoğunlukla henüz doğrulanmadı: Türkiye seçilince durum belirtilmemişse hepsi gösterilir.
+    status: (STATUSES as readonly string[]).includes(status) ? (status as Filters["status"]) : country === "TR" ? "all" : "verified",
     category: one(sp.category).slice(0, 100),
     platform: one(sp.platform).slice(0, 40),
     country: /^[A-Z]{2}$/.test(country) ? country : "",
     shipsTr: one(sp.tr) === "1",
     supplier: one(sp.sup) === "1",
     ads: one(sp.ads) === "1",
-    turkey: one(sp.trk) === "sold" || one(sp.trk) === "open" ? (one(sp.trk) as Filters["turkey"]) : "",
     age: ([30, 90, 150] as const).find((a) => a === Number(one(sp.age))) ?? 0,
     minScore: nonNegative(one(sp.min), 100),
     minReviews: nonNegative(one(sp.reviews)),
@@ -160,8 +158,6 @@ export async function listProducts(f: Filters): Promise<{ rows: ProductRow[]; er
   if (f.shipsTr) query = query.eq("brands.ships_to_tr", true);
   if (f.supplier) query = query.gt("supplier_count", 0);
   if (f.ads) query = query.gte("brands.ads_active", 1);
-  if (f.turkey === "sold") query = query.not("tr_checked_at", "is", null).not("tr_listings", "eq", "[]");
-  if (f.turkey === "open") query = query.not("tr_checked_at", "is", null).eq("tr_listings", "[]");
   if (f.age) {
     const since = new Date(Date.now() - f.age * 86_400_000).toISOString();
     query = query.or(`first_product_at.gte.${since},registered_at.gte.${since.slice(0, 10)}`, { referencedTable: "brands" });
@@ -212,7 +208,8 @@ export async function facets(): Promise<{ categories: string[]; platforms: strin
   return {
     categories: uniq((cats.data ?? []).map((r) => r.category)),
     platforms: uniq((brands.data ?? []).map((r) => r.platform)),
-    countries: uniq((brands.data ?? []).map((r) => r.country)),
+    // Türkiye her zaman listenin başında (kendi pazarınız); diğerleri verideki ülkeler.
+    countries: ["TR", ...uniq((brands.data ?? []).map((r) => r.country)).filter((c) => c !== "TR")],
   };
 }
 

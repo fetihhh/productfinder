@@ -43,11 +43,6 @@ export function Filters({ f, categories, platforms, countries }: { f: F; categor
             <option value="new">En yeni</option>
             <option value="price">Fiyat (artan)</option>
           </select>
-          <select name="trk" defaultValue={f.turkey} className="field sm:w-52" aria-label="Türkiye">
-            <option value="">🇹🇷 Türkiye: hepsi</option>
-            <option value="sold">Türkiye&apos;de satılanlar</option>
-            <option value="open">Türkiye&apos;de rakibi yok</option>
-          </select>
         </div>
         <button className="btn-primary sm:px-5">Filtrele</button>
       </div>

@@ -158,14 +158,6 @@ export function ProductCard({ p, ad }: { p: ProductRow; ad?: { stage: AdStage; s
             )}
             {ad && ad.stage !== "none" && <AdStageBadge stage={ad.stage} score={ad.score} />}
             <TimingBadge timing={p.timing} reason={p.timing_reason} hideUnproven />
-            {p.tr_checked_at && (
-              <span
-                className={`badge shadow-sm ${p.tr_listings?.length ? "bg-red-600 text-white" : "bg-emerald-600 text-white"}`}
-                title={p.tr_listings?.length ? `Türk pazaryerlerinde ${p.tr_listings.length} benzer ilan` : "Türk pazaryerlerinde benzer ilan bulunamadı"}
-              >
-                🇹🇷 {p.tr_listings?.length ? `TR'de ${p.tr_listings.length} ilan` : "TR'de yok"}
-              </span>
-            )}
             {Number(p.momentum_score) >= RISING_BADGE && (
               <span className="badge bg-rose-500 text-white shadow-sm">↗ Yükselişte {Number(p.momentum_score).toFixed(0)}</span>
             )}

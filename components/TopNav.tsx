@@ -9,7 +9,6 @@ const ITEMS = [
   { href: "/", label: "Ürünler", match: (p: string) => p === "/" || p.startsWith("/p/") },
   { href: "/yeni", label: "Yeni mağazalar", match: (p: string) => p === "/yeni" || p.startsWith("/m/") },
   { href: "/reklamlar", label: "Reklamlar", match: (p: string) => p === "/reklamlar" },
-  { href: "/turkiye", label: "Türkiye", match: (p: string) => p === "/turkiye" },
   { href: "/nisler", label: "Nişler", match: (p: string) => p === "/nisler" },
   { href: "/?sort=rising", label: "Yükselenler", match: () => false },
   { href: "/siteler", label: "Siteler", match: (p: string) => p === "/siteler" },

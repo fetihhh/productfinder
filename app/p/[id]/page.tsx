@@ -17,7 +17,8 @@ import { igPostsFor, videosFor } from "@/lib/instagram";
 import { ProductTagPosts, VideosSection } from "@/components/VideosSection";
 import type { HashtagState } from "@/lib/hashtags";
 import { AdItemsSection, LaunchKit } from "@/components/LaunchKit";
-import { adItemsFor } from "@/lib/ads";
+import { adItemsFor, adStoreContext } from "@/lib/ads";
+import { assignAdsToProducts } from "@/dtc/adItems";
 import { adLibraryPageUrl } from "@/dtc/adLibrary";
 import { ProfitCalculator } from "@/components/ProfitCalculator";
 
@@ -36,7 +37,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
   const [data, fx] = await Promise.all([getProduct(id), getFx()]);
   if (!data) notFound();
   const { p, history, ranks, suppliers, ads, adHistory, nameEn } = data;
-  const [copies, store, offers, ig, videos, adItems, network, tagState] = await Promise.all([
+  const [copies, store, offers, ig, videos, adItems, network, tagState, adCtx] = await Promise.all([
     copiesOf(p.brand_domain),
     storeExtras(p.brand_domain),
     offerComparison(p.brand_domain),
@@ -45,10 +46,18 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
     adItemsFor(p.brand_domain),
     sellerNetwork(p.brand_domain),
     getJobState<HashtagState>("ig_hashtags"),
+    adStoreContext(p.brand_domain),
   ]);
   const w = p.winner_breakdown;
   const handle = p.product_url?.match(/\/products\/([^/?#]+)/)?.[1];
   const detail = store?.details ? (store.details[handle ? decodeURIComponent(handle) : ""] ?? null) : null;
+  // Reklamlar: bu ürünün reklamları ve sitenin diğer ürünlerininkiler ayrı (reklam metni ↔ mağazanın ürün adları).
+  const productHandle = handle ? decodeURIComponent(handle) : null;
+  const assigned = productHandle ? assignAdsToProducts(adItems, adCtx?.products ?? [], store?.hero_handle ?? adCtx?.hero_handle ?? null) : null;
+  const productAds = assigned ? adItems.filter((i) => assigned.get(i.id) === productHandle) : [];
+  const otherAds = assigned ? adItems.filter((i) => assigned.get(i.id) !== productHandle) : adItems;
+  const direct = productHandle ? assignAdsToProducts(productAds, adCtx?.products ?? [], null) : null;
+  const productAdsGuessed = Boolean(direct && productAds.some((i) => direct.get(i.id) !== productHandle));
   const brand = p.brands;
   const href = p.product_url ?? `https://${p.brand_domain}`;
   const currency = p.currency ?? history.findLast((h) => h.currency)?.currency ?? null;
@@ -239,7 +248,19 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
 
       <AdsSection domain={p.brand_domain} ads={ads} history={adHistory} />
       <VideosSection data={videos} />
-      <AdItemsSection items={adItems} libraryUrl={adLibraryPageUrl(ads?.page_id ?? null, p.brand_domain)} />
+      {productAds.length > 0 && (
+        <AdItemsSection
+          title="Bu ürünün reklamları"
+          items={productAds}
+          libraryUrl={adLibraryPageUrl(ads?.page_id ?? null, p.brand_domain)}
+          note={productAdsGuessed ? "Reklam metni ürün adıyla birebir eşleşmeyen reklamlar, mağazanın öne çıkan ürünü bu olduğu için buraya alındı." : undefined}
+        />
+      )}
+      <AdItemsSection
+        title={productAds.length > 0 ? "Sitenin diğer ürünlerinin reklamları" : "Bu sitenin reklamları"}
+        items={otherAds}
+        libraryUrl={adLibraryPageUrl(ads?.page_id ?? null, p.brand_domain)}
+      />
       <LaunchKit ads={ads} product={nameEn ?? p.name} storeOffer={offers.find((o) => o.self)?.offer ?? null} />
       <InstagramSection data={ig} />
 

@@ -1,4 +1,5 @@
 // Tek tek reklamlar: Reklam Kütüphanesi kaydı → saklanan satır, ve ürün sayfasındaki listenin sıralaması.
+import { normalizeName } from "../lib/productName.ts";
 import { clip } from "../lib/text.ts";
 import { creativeKey } from "./adAnalysis.ts";
 import type { ArchivedAd } from "./adLibrary.ts";
@@ -75,4 +76,26 @@ export function viewAdItems(items: AdItem[], now = Date.now()): AdItemView[] {
       return { ...i, active, days, copies: g?.n ?? 1, activeCopies: g?.active ?? (active ? 1 : 0), score: Math.round(score * 10) / 10 };
     })
     .sort((a, b) => b.score - a.score);
+}
+
+/**
+ * Her reklamı mağazanın hangi ürününe ait olduğuna göre eşler: reklam başlığı/metni/açıklaması ürün adının ayırt edici
+ * kelimelerinin çoğunu (2 kelimelik adlarda 1'ini) içeriyorsa o ürün. Hiçbir ürünle eşleşmeyen reklam, mağazanın öne
+ * çıkan ürününe yazılır (dropshipping mağazaları reklamın çoğunu tek ürüne verir; reklam dili ürün adından farklı olabilir).
+ */
+export function assignAdsToProducts(items: Pick<AdItem, "id" | "title" | "body" | "description">[], products: { h: string; t: string }[], heroHandle: string | null): Map<string, string | null> {
+  const words = (s: string) => [...new Set(normalizeName(s).split(" ").filter((w) => w.length >= 4))];
+  const prods = products.map((p) => ({ h: p.h, w: words(p.t) })).filter((p) => p.w.length > 0);
+  const out = new Map<string, string | null>();
+  for (const i of items) {
+    const text = ` ${normalizeName([i.title, i.body, i.description].filter(Boolean).join(" "))} `;
+    let best: { h: string; cov: number } | null = null;
+    for (const p of prods) {
+      const cov = p.w.filter((w) => text.includes(` ${w} `)).length / p.w.length;
+      const need = p.w.length <= 2 ? 0.5 : 0.6;
+      if (cov >= need && (!best || cov > best.cov)) best = { h: p.h, cov };
+    }
+    out.set(i.id, best?.h ?? heroHandle);
+  }
+  return out;
 }

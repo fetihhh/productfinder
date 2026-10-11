@@ -159,16 +159,29 @@ export function LaunchKit({ ads, product, storeOffer }: { ads: AdSignalRow | nul
 }
 
 /** Sitenin tüm Meta reklamları (sıralanabilir liste). */
-export function AdItemsSection({ items, libraryUrl }: { items: AdItemView[]; libraryUrl: string }) {
+export function AdItemsSection({
+  items,
+  libraryUrl,
+  title = "Bu sitenin reklamları",
+  note,
+}: {
+  items: AdItemView[];
+  libraryUrl: string;
+  title?: string;
+  note?: string;
+}) {
   if (items.length === 0) return null;
   return (
     <section className="card mt-5 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="card-title">Bu sitenin reklamları ({items.length})</h2>
+        <h2 className="card-title">
+          {title} ({items.length})
+        </h2>
         <a href={libraryUrl} target="_blank" rel="noopener noreferrer" className="link text-sm">
           Tümü Reklam Kütüphanesi&apos;nde ↗
         </a>
       </div>
+      {note && <p className="mb-2 rounded-xl bg-amber-500/10 px-3 py-2 text-sm">{note}</p>}
       <p className="card-note mb-4">
         Son 150 günde AB&apos;de yayınlanan reklamlar. &quot;En çok tutan&quot; sırası: yayında olan reklam önce, yayında kalma süresi (kârsız reklam birkaç günde
         kapatılır), aynı metnin yayındaki kopya sayısı (ölçekleme) ve erişim. &quot;▶ Videoyu izle&quot; reklamın videosunu/görselini ekranın sağındaki izleme

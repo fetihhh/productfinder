@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { adItemRow, viewAdItems } from "../dtc/adItems.ts";
+import { adItemRow, assignAdsToProducts, viewAdItems } from "../dtc/adItems.ts";
 
 const NOW = Date.parse("2026-10-11T12:00:00Z");
 const ago = (d: number) => new Date(NOW - d * 86_400_000).toISOString();
@@ -44,4 +44,26 @@ test("viewAdItems: yayında + uzun süre + kopya önce; durmuş reklamın süres
   assert.equal(stopped.active, false);
   assert.equal(stopped.days, 10);
   assert.deepEqual([v[1].copies, v[1].activeCopies], [2, 2]);
+});
+
+test("assignAdsToProducts: reklam metni ürün adıyla eşleşir; eşleşmeyen öne çıkan ürüne yazılır", () => {
+  const products = [
+    { h: "galaxy-projector", t: "Cosmora Galaxy Projector Night Light" },
+    { h: "moon-lamp", t: "Moon Lamp" },
+  ];
+  const m = assignAdsToProducts(
+    [
+      { id: "1", title: "Galaxy Projector", body: "Turn your room into a galaxy with this night light projector", description: null },
+      { id: "2", title: null, body: "Our moon lamp glows like the real moon", description: null },
+      { id: "3", title: "Un regalo que no olvidarán", body: "¿Buscas un regalo?", description: null },
+    ],
+    products,
+    "galaxy-projector",
+  );
+  assert.deepEqual([...m.entries()], [
+    ["1", "galaxy-projector"],
+    ["2", "moon-lamp"],
+    ["3", "galaxy-projector"],
+  ]);
+  assert.equal(assignAdsToProducts([{ id: "x", title: "nothing", body: null, description: null }], products, null).get("x"), null);
 });

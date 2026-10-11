@@ -15,7 +15,7 @@ export function VideosSection({ data }: { data: { instagram: string | null; igVi
   return (
     <section className="card mt-5 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="card-title">Videolar</h2>
+        <h2 className="card-title">Mağazanın kendi videoları (Instagram / TikTok)</h2>
         <div className="flex flex-wrap gap-3 text-sm">
           {instagram && (
             <a href={`https://www.instagram.com/${instagram}/`} target="_blank" rel="noopener noreferrer" className="link">

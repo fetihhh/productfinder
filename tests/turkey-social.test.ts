@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { accountMatchesStore, handleCandidates, parseTiktokOembed, tiktokMatchesStore } from "../dtc/instagram.ts";
 import { trListings, trQuery, tryPrice } from "../dtc/turkey.ts";
+import { productHashtags, rankTagPosts } from "../dtc/hashtags.ts";
 
 test("tryPrice: Türk fiyat yazımları", () => {
   assert.equal(tryPrice("Galaksi Projektör 1.299,90 TL kargo bedava"), 1299.9);
@@ -45,4 +46,19 @@ test("TikTok oEmbed: hesap ve yazar adı; ad mağazayla eşleşmeli", () => {
   assert.equal(tiktokMatchesStore("Cosmora Official", "getcosmora.com", "Cosmora"), true);
   assert.equal(tiktokMatchesStore("Maria López", "getcosmora.com", "Cosmora"), false);
   assert.equal(tiktokMatchesStore("Brasa Pro", "brasapro.com", null), true);
+});
+
+test("productHashtags ve rankTagPosts: ürün adından etiket; videolar önce, etkileşime göre", () => {
+  assert.deepEqual(productHashtags("Cosmora Galaxy Projector — Multi-Slide Star Night Light", ["cosmora"]), ["galaxyprojector"]);
+  assert.deepEqual(productHashtags("Posture Corrector Pro Max", []), ["posturecorrector"]);
+  assert.deepEqual(productHashtags("Electric Spin Scrubber Cordless", []), ["electricspin", "spinscrubber"]);
+  assert.deepEqual(productHashtags("Obsidian", []), ["obsidian"]);
+  assert.deepEqual(productHashtags("Pro Kit", []), []);
+  const r = rankTagPosts("galaxyprojector", [
+    { id: "1", media_type: "IMAGE", like_count: 5000 },
+    { id: "2", media_type: "VIDEO", like_count: 100, comments_count: 10 },
+    { id: "3", media_type: "VIDEO", like_count: 900 },
+  ]);
+  assert.deepEqual(r.map((p) => p.id), ["3", "2", "1"]);
+  assert.equal(r[1].engagement, 130);
 });

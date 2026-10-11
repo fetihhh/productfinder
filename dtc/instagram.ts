@@ -4,6 +4,7 @@
 // instagram.com sayfaları kazınmaz (robots.txt tüm botları engeller); yalnızca graph.facebook.com kullanılır.
 
 import { classifyGraphError } from "./adLibrary.ts";
+import { hashtagSearchUrl, rankTagPosts, topMediaUrl } from "./hashtags.ts";
 
 const RESERVED = new Set([
   "p",
@@ -196,6 +197,16 @@ export function instagramClient(token: string, version: string, fetchImpl: typeo
   }
 
   return {
+    /** Etiketin kimliği (Hashtag Search; hesap başına 7 günde 30 farklı etiket). Etiket yoksa null. */
+    async hashtagId(igUserId: string, tag: string): Promise<IgResult<string | null>> {
+      const r = await get<{ data?: { id: string }[] }>(hashtagSearchUrl(version, igUserId, tag));
+      return r.ok ? { ok: true, data: r.data.data?.[0]?.id ?? null } : r;
+    },
+    /** Etiketin en popüler gönderileri (son 24 saatte değil, genel popülerlik). */
+    async topMedia(hashtagId: string, igUserId: string): Promise<IgResult<Parameters<typeof rankTagPosts>[1]>> {
+      const r = await get<{ data?: Parameters<typeof rankTagPosts>[1] }>(topMediaUrl(version, hashtagId, igUserId));
+      return r.ok ? { ok: true, data: r.data.data ?? [] } : r;
+    },
     /** Anahtara verilmiş izinler (tanı için; yalnızca izin adları). */
     async permissions(): Promise<string[]> {
       const r = await get<{ data?: { permission: string; status: string }[] }>(`https://graph.facebook.com/${version}/me/permissions`);

@@ -62,6 +62,7 @@ import { discoverFromAds } from "./adDiscovery.ts";
 import { rdapLookups } from "./rdap.ts";
 import { findSocialHandles, guessSocial, instagramPosts } from "./instagram.ts";
 import { turkeyChecks } from "./turkey.ts";
+import { productTagPosts } from "./hashtags.ts";
 import { brandAges, checkStores, copyClusters, discoverStores, promoteMovers, promoteStores } from "./stores.ts";
 
 async function collect(): Promise<boolean> {
@@ -343,6 +344,7 @@ async function main() {
     await findSocialHandles();
     await guessSocial();
     await instagramPosts();
+    await productTagPosts();
     await writeJobSummary((Date.now() - started) / 1000);
     return;
   }
@@ -387,6 +389,11 @@ async function main() {
     console.error(`\n▶ Hesap tahmini yapılamadı: ${(err as Error).message}`);
   }
   await instagramPosts();
+  try {
+    await productTagPosts();
+  } catch (err) {
+    console.error(`\n▶ Ürün etiketleri aranamadı: ${(err as Error).message}`);
+  }
   const promotedHero = skipStores ? true : await promoteStores();
   // Öne çıkan ürün dışında, mağazada stoğu tekrar tekrar azalan (asıl satan) ürünler.
   const promotedMovers = skipStores ? true : await promoteMovers();

@@ -11,10 +11,11 @@ import { REVIEW_TO_SALES, toUsd, visitsFromRank } from "@/lib/winner";
 import { getFx } from "@/lib/fx";
 import { copiesOf, offerComparison, storeExtras } from "@/lib/newStores";
 import { BrandCard, ProductDetailsCard, SellerNetwork, TurkeyCard } from "@/components/BrandDetails";
-import { sellerNetwork } from "@/lib/stores";
+import { getJobState, sellerNetwork } from "@/lib/stores";
 import { InstagramSection } from "@/components/IgPostCard";
 import { igPostsFor, videosFor } from "@/lib/instagram";
-import { VideosSection } from "@/components/VideosSection";
+import { ProductTagPosts, VideosSection } from "@/components/VideosSection";
+import type { HashtagState } from "@/lib/hashtags";
 import { AdItemsSection, LaunchKit } from "@/components/LaunchKit";
 import { adItemsFor } from "@/lib/ads";
 import { adLibraryPageUrl } from "@/dtc/adLibrary";
@@ -35,7 +36,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
   const [data, fx] = await Promise.all([getProduct(id), getFx()]);
   if (!data) notFound();
   const { p, history, ranks, suppliers, ads, adHistory, nameEn } = data;
-  const [copies, store, offers, ig, videos, adItems, network] = await Promise.all([
+  const [copies, store, offers, ig, videos, adItems, network, tagState] = await Promise.all([
     copiesOf(p.brand_domain),
     storeExtras(p.brand_domain),
     offerComparison(p.brand_domain),
@@ -43,6 +44,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
     videosFor(p.brand_domain),
     adItemsFor(p.brand_domain),
     sellerNetwork(p.brand_domain),
+    getJobState<HashtagState>("ig_hashtags"),
   ]);
   const w = p.winner_breakdown;
   const handle = p.product_url?.match(/\/products\/([^/?#]+)/)?.[1];
@@ -145,6 +147,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
         </div>
       )}
 
+      <ProductTagPosts tags={p.ig_tags} posts={p.ig_tag_posts} checkedAt={p.ig_tag_checked_at} state={tagState} />
       {detail && <ProductDetailsCard d={detail} currency={p.currency} url={p.product_url} />}
       <TurkeyCard listings={p.tr_listings} checkedAt={p.tr_checked_at} priceUsd={toUsd(p.price, currency)} usdTry={fx?.rates.USD ?? null} />
 

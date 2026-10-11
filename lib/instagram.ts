@@ -107,7 +107,7 @@ export async function storesWithoutSocial(limit: number, minScore: number): Prom
   const { data, error } = await db()
     .from("stores")
     .select("domain")
-    .or("instagram.is.null,tiktok.is.null,tech.is.null")
+    .or("instagram.is.null,tiktok.is.null,tech.is.null,tech->ids.is.null")
     .eq("status", "live")
     .or(`ad_points.gt.0,total_score.gte.${minScore}`)
     .order("ad_points", { ascending: false })

@@ -39,8 +39,25 @@ function CopyText({ text }: { text: string }) {
   );
 }
 
+/** Reklamın Meta önizlemesi (görsel/video): yalnızca ekrana gelince yüklenir. */
+function AdPreview({ id }: { id: string }) {
+  return (
+    <div className="w-full shrink-0 overflow-hidden rounded-xl border border-line bg-white sm:w-[300px]">
+      <iframe
+        src={`/reklam/${id}`}
+        title="Reklam önizlemesi"
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+        className="block h-[520px] w-full"
+      />
+    </div>
+  );
+}
+
 /** Mağazanın tüm Meta reklamları: sıralama, yayındakiler, aynı metnin kopyalarını birleştirme ve arama. */
-export function AdList({ items }: { items: AdItemView[] }) {
+export function AdList({ items, previews = true }: { items: AdItemView[]; previews?: boolean }) {
+  const [showPreview, setShowPreview] = useState(previews);
   const [sort, setSort] = useState<SortKey>("score");
   const [activeOnly, setActiveOnly] = useState(false);
   const [merge, setMerge] = useState(true);
@@ -84,6 +101,10 @@ export function AdList({ items }: { items: AdItemView[] }) {
           <input type="checkbox" className="check" checked={merge} onChange={(e) => setMerge(e.target.checked)} />
           Aynı metni birleştir
         </label>
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm select-none has-checked:border-amber-500/60 has-checked:bg-amber-500/10">
+          <input type="checkbox" className="check" checked={showPreview} onChange={(e) => setShowPreview(e.target.checked)} />
+          Video / görsel önizleme
+        </label>
         <span className="text-xs text-muted">
           {rows.length} / {items.length} reklam
         </span>
@@ -91,63 +112,69 @@ export function AdList({ items }: { items: AdItemView[] }) {
 
       <ol className="mt-4 space-y-3">
         {rows.slice(0, limit).map((i, n) => (
-          <li key={i.id} className="rounded-2xl border border-line p-4">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-              <span className="grid h-6 w-6 place-items-center rounded-full bg-surface-muted text-[11px] font-semibold tabular-nums">{n + 1}</span>
-              <span className={`inline-flex items-center gap-1 font-medium ${i.active ? "text-emerald-600 dark:text-emerald-400" : "text-muted"}`}>
-                <span className={`h-2 w-2 rounded-full ${i.active ? "bg-emerald-500" : "bg-zinc-400"}`} />
-                {i.active ? "Yayında" : "Durdu"}
-              </span>
-              {i.days !== null && (
-                <span title="Yayında kaldığı süre">
-                  <b className="tabular-nums">{i.days}</b> gün
+          <li key={i.id} className="flex flex-col gap-4 rounded-2xl border border-line p-4 sm:flex-row">
+            {showPreview && <AdPreview id={i.id} />}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-surface-muted text-[11px] font-semibold tabular-nums">{n + 1}</span>
+                <span className={`inline-flex items-center gap-1 font-medium ${i.active ? "text-emerald-600 dark:text-emerald-400" : "text-muted"}`}>
+                  <span className={`h-2 w-2 rounded-full ${i.active ? "bg-emerald-500" : "bg-zinc-400"}`} />
+                  {i.active ? "Yayında" : "Durdu"}
                 </span>
+                {i.days !== null && (
+                  <span title="Yayında kaldığı süre">
+                    <b className="tabular-nums">{i.days}</b> gün
+                  </span>
+                )}
+                {i.start_at && (
+                  <span className="text-muted">
+                    {day(i.start_at)} → {i.active ? "bugün" : i.stop_at ? day(i.stop_at) : "?"}
+                  </span>
+                )}
+                {i.copies > 1 && (
+                  <span className="badge bg-orange-500/15 text-orange-700 dark:text-orange-300" title="Aynı metinle açılmış reklam sayısı (yayında / toplam): ölçekleme işareti">
+                    {i.activeCopies}/{i.copies} kopya
+                  </span>
+                )}
+                {i.eu_reach ? (
+                  <span title="AB'deki erişim">
+                    👥 <b className="tabular-nums">{compact(i.eu_reach)}</b>
+                  </span>
+                ) : null}
+                {i.female_share !== null && (
+                  <span className="text-muted" title="Erişimin cinsiyet ve en büyük yaş dilimi">
+                    {i.female_share >= 0.5 ? `%${Math.round(i.female_share * 100)} kadın` : `%${Math.round((1 - i.female_share) * 100)} erkek`}
+                    {i.top_age ? ` · ${i.top_age}` : ""}
+                  </span>
+                )}
+                <span className="ml-auto text-[11px] text-muted tabular-nums" title="Önerilen sıra puanı: yayında kalma süresi, yayındaki kopya, erişim">
+                  puan {i.score}
+                </span>
+              </div>
+              {i.title && <p className="mt-2 text-sm font-semibold">{i.title}</p>}
+              {i.body && (
+                <details className="group mt-1">
+                  <summary className="cursor-pointer list-none text-sm whitespace-pre-line [&::-webkit-details-marker]:hidden">
+                    <span className="line-clamp-3 group-open:line-clamp-none">{i.body}</span>
+                    <span className="text-xs text-brand-strong group-open:hidden">devamı</span>
+                  </summary>
+                </details>
               )}
-              {i.start_at && (
-                <span className="text-muted">
-                  {day(i.start_at)} → {i.active ? "bugün" : i.stop_at ? day(i.stop_at) : "?"}
-                </span>
-              )}
-              {i.copies > 1 && (
-                <span className="badge bg-orange-500/15 text-orange-700 dark:text-orange-300" title="Aynı metinle açılmış reklam sayısı (yayında / toplam): ölçekleme işareti">
-                  {i.activeCopies}/{i.copies} kopya
-                </span>
-              )}
-              {i.eu_reach ? (
-                <span title="AB'deki erişim">
-                  👥 <b className="tabular-nums">{compact(i.eu_reach)}</b>
-                </span>
-              ) : null}
-              {i.female_share !== null && (
-                <span className="text-muted" title="Erişimin cinsiyet ve en büyük yaş dilimi">
-                  {i.female_share >= 0.5 ? `%${Math.round(i.female_share * 100)} kadın` : `%${Math.round((1 - i.female_share) * 100)} erkek`}
-                  {i.top_age ? ` · ${i.top_age}` : ""}
-                </span>
-              )}
-              <span className="ml-auto text-[11px] text-muted tabular-nums" title="Önerilen sıra puanı: yayında kalma süresi, yayındaki kopya, erişim">
-                puan {i.score}
-              </span>
-            </div>
-            {i.title && <p className="mt-2 text-sm font-semibold">{i.title}</p>}
-            {i.body && (
-              <details className="group mt-1">
-                <summary className="cursor-pointer list-none text-sm whitespace-pre-line [&::-webkit-details-marker]:hidden">
-                  <span className="line-clamp-3 group-open:line-clamp-none">{i.body}</span>
-                  <span className="text-xs text-brand-strong group-open:hidden">devamı</span>
-                </summary>
-              </details>
-            )}
-            {i.description && <p className="mt-1 text-xs text-muted">{i.description}</p>}
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-              {i.platforms.length > 0 && <span>{i.platforms.map((p) => PLATFORM[p] ?? p).join(" · ")}</span>}
-              {i.countries.length > 0 && <span title={i.countries.join(", ")}>{i.countries.slice(0, 8).map(flag).join(" ")}</span>}
-              {i.page_name && <span>Sayfa: {i.page_name}</span>}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <a href={`https://www.facebook.com/ads/library/?id=${encodeURIComponent(i.id)}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary">
-                Reklamı aç ↗
-              </a>
-              {(i.title || i.body) && <CopyText text={[i.title, i.body].filter(Boolean).join("\n\n")} />}
+              {i.description && <p className="mt-1 text-xs text-muted">{i.description}</p>}
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                {i.platforms.length > 0 && <span>{i.platforms.map((p) => PLATFORM[p] ?? p).join(" · ")}</span>}
+                {i.countries.length > 0 && <span title={i.countries.join(", ")}>{i.countries.slice(0, 8).map(flag).join(" ")}</span>}
+                {i.page_name && <span>Sayfa: {i.page_name}</span>}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <a href={`https://www.facebook.com/ads/library/?id=${encodeURIComponent(i.id)}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary">
+                  Reklamı aç ↗
+                </a>
+                <a href={`/reklam/${i.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">
+                  Önizlemeyi büyüt ↗
+                </a>
+                {(i.title || i.body) && <CopyText text={[i.title, i.body].filter(Boolean).join("\n\n")} />}
+              </div>
             </div>
           </li>
         ))}

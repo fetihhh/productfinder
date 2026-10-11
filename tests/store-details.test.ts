@@ -71,13 +71,18 @@ test("sellerIds: Meta/TikTok piksel ve Google Ads/GTM kimlikleri (Shopify web pi
   const html = `<script>fbq('init', '1234567890123456');</script>
     <script>webPixelsManager.init({"settings":"{\\"pixel_id\\":\\"9876543210987654\\"}"})</script>
     <script>ttq.load('CABCDEFGHIJKLMNOPQRS');</script><script>{"pixelCode":"CZYXWVUTSRQPONMLKJIH"}</script>
+    <script>{"pixels":"[{\\\"id\\\":44674,\\\"pixel_id\\\":\\\"DAA9FJ3C77U6DHMOUK10\\\"}]"}</script>
     <script>gtag('config','AW-1122334455'); (function(w,d,s,l,i){})(window,document,'script','dataLayer','GTM-ABC123');</script>`;
   assert.deepEqual(sellerIds(html), {
     meta: ["1234567890123456", "9876543210987654"],
-    tiktok: ["CABCDEFGHIJKLMNOPQRS", "CZYXWVUTSRQPONMLKJIH"],
+    tiktok: ["CABCDEFGHIJKLMNOPQRS", "CZYXWVUTSRQPONMLKJIH", "DAA9FJ3C77U6DHMOUK10"],
     google: ["AW-1122334455", "GTM-ABC123"],
   });
   assert.deepEqual(sellerIds("<html></html>"), { meta: [], tiktok: [], google: [] });
+  // Kod adı geçmeyen Shopify web pikseli: kimlikten "Meta pikseli" etiketi türetilir.
+  const t = storeTech(`<script>{"configuration":"{\\"pixel_id\\":\\"1982944479027710\\",\\"pixel_type\\":\\"facebook_pixel\\"}"}</script>`);
+  assert.deepEqual(t.pixels, ["Meta (Facebook) pikseli"]);
+  assert.deepEqual(t.ids?.meta, ["1982944479027710"]);
 });
 
 test("parseRdap: kayıt ve bitiş tarihi, kayıt firması; geçersiz yanıt null", () => {

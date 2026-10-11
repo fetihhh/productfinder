@@ -24,7 +24,11 @@ export type StoreTech = {
   socials: string[];
   /** Reklam hesabı kimlikleri: aynı kimliği kullanan mağazalar aynı satıcınındır. */
   ids?: SellerIds;
+  /** Ayrıştırma sürümü: kurallar değişince eski künyeler yeniden okunur. */
+  v?: number;
 };
+
+export const TECH_VERSION = 2;
 
 export type SellerIds = { meta: string[]; tiktok: string[]; google: string[] };
 
@@ -32,7 +36,8 @@ const uniq = (xs: string[], max = 5) => [...new Set(xs)].slice(0, max);
 
 /** Meta piksel, TikTok piksel ve Google Ads/Etiket Yöneticisi kimlikleri (Shopify web pikselleri dahil). */
 export function sellerIds(html: string): SellerIds {
-  const h = html.replace(/\\"/g, '"');
+  // Shopify web piksel yapılandırması iç içe kaçışlı JSON'dur (\\\" ya da \"): tümü düz tırnağa indirilir.
+  const h = html.replace(/\\+"/g, '"');
   const meta = [
     ...[...h.matchAll(/fbq\(\s*['"]init['"]\s*,\s*['"](\d{10,20})['"]/g)].map((m) => m[1]),
     ...[...h.matchAll(/"(?:pixel_id|pixelId|facebook_pixel_id|facebookPixelId)"\s*:\s*"(\d{10,20})"/g)].map((m) => m[1]),
@@ -40,6 +45,8 @@ export function sellerIds(html: string): SellerIds {
   const tiktok = [
     ...[...h.matchAll(/ttq\.load\(\s*['"]([A-Z0-9]{18,24})['"]/g)].map((m) => m[1]),
     ...[...h.matchAll(/"(?:pixelCode|pixel_code|tiktok_pixel_id|tiktokPixelId)"\s*:\s*"([A-Z0-9]{18,24})"/g)].map((m) => m[1]),
+    // Shopify TikTok uygulaması: "pixel_id":"DAA9FJ3C77U6DHMOUK10" (harf + rakam; Meta pikseli yalnızca rakamdır).
+    ...[...h.matchAll(/"pixel_id"\s*:\s*"([A-Z0-9]{18,24})"/g)].map((m) => m[1]).filter((v) => /[A-Z]/.test(v)),
   ];
   const google = [...h.matchAll(/\b(AW-\d{8,12}|GTM-[A-Z0-9]{6,8})\b/g)].map((m) => m[1]);
   return { meta: uniq(meta), tiktok: uniq(tiktok), google: uniq(google) };
@@ -124,7 +131,17 @@ const RETURN_BEFORE = new RegExp(
 const COD_TEXT = /contra\s*reembolso|pago\s+contra\s+entrega|paga\s+al\s+recibir|paiement\s+à\s+la\s+livraison|pagamento\s+alla\s+consegna|nachnahme|cash\s+on\s+delivery|betaling\s+bij\s+levering|pagamento\s+na\s+entrega|kapıda\s+ödeme/i;
 
 /** Ana sayfa HTML'inden marka künyesi. */
+/** Kimliği bulunan piksel, kod adı geçmese de (Shopify web pikselleri) listeye eklenir. */
+function withIdPixels(pixels: string[], ids: SellerIds): string[] {
+  const out = new Set(pixels);
+  if (ids.meta.length) out.add("Meta (Facebook) pikseli");
+  if (ids.tiktok.length) out.add("TikTok pikseli");
+  if (ids.google.some((g) => g.startsWith("AW-"))) out.add("Google Ads");
+  return PIXELS.map(([n]) => n).filter((n) => out.has(n));
+}
+
 export function storeTech(html: string): StoreTech {
+  const ids = sellerIds(html);
   const text = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -157,7 +174,7 @@ export function storeTech(html: string): StoreTech {
     .filter(([, re]) => re.test(html))
     .map(([n]) => n);
   return {
-    pixels: match(html, PIXELS),
+    pixels: withIdPixels(match(html, PIXELS), ids),
     reviews: match(html, REVIEWS),
     cod: match(html, COD),
     upsell: match(html, UPSELL),
@@ -172,6 +189,7 @@ export function storeTech(html: string): StoreTech {
     codText: COD_TEXT.test(text),
     languages,
     socials,
-    ids: sellerIds(html),
+    ids,
+    v: TECH_VERSION,
   };
 }

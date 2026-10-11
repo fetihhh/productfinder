@@ -33,7 +33,7 @@ export async function knownAdvertisers(limit: number): Promise<AdTarget[]> {
 
 export async function adTargets(limit: number, minStoreScore: number): Promise<AdTarget[]> {
   const since = new Date(Date.now() - NEW_STORE_MAX_AGE_DAYS * DAY).toISOString();
-  const [verified, stores] = await Promise.all([
+  const [verified, stores, fromAds] = await Promise.all([
     db().from("products").select("brand_domain").eq("dtc_status", "verified").limit(1000),
     db()
       .from("stores")
@@ -43,12 +43,15 @@ export async function adTargets(limit: number, minStoreScore: number): Promise<A
       .gte("store_score", minStoreScore)
       .order("store_score", { ascending: false })
       .limit(2000),
+    // Reklamdan keşfedilen açık ve yeni mağazalar: reklam verdikleri bilindiği için puana bakılmaz, önce aranır.
+    db().from("stores").select("domain, shop_name").eq("source", "reklam").eq("status", "live").gte("first_product_at", since).limit(500),
   ]);
   if (verified.error) throw new Error(`products okunamadı: ${verified.error.message}`);
+  if (fromAds.error) throw new Error(`stores okunamadı: ${fromAds.error.message}`);
   if (stores.error) throw new Error(`stores okunamadı: ${stores.error.message}`);
 
-  const shopNames = new Map<string, string | null>(stores.data.map((s) => [s.domain as string, s.shop_name as string | null]));
-  const ordered = [...new Set([...verified.data.map((p) => p.brand_domain as string), ...shopNames.keys()])];
+  const shopNames = new Map<string, string | null>([...fromAds.data, ...stores.data].map((s) => [s.domain as string, s.shop_name as string | null]));
+  const ordered = [...new Set([...fromAds.data.map((s) => s.domain as string), ...verified.data.map((p) => p.brand_domain as string), ...shopNames.keys()])];
   const known = await inChunks(ordered, async (chunk) => {
     const { data, error } = await db().from("ad_signals").select("domain, page_id, next_check_at").in("domain", chunk);
     if (error) throw new Error(`ad_signals okunamadı: ${error.message}`);

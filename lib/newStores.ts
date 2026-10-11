@@ -15,6 +15,8 @@ export type StoreFilters = {
   /** Yalnızca AliExpress görseli kullanan (kesin dropshipping) / stok hareketi olan mağazalar. */
   ali: boolean;
   moving: boolean;
+  /** Yalnızca Meta Reklam Kütüphanesi'nden keşfedilen (zaten reklam veren) mağazalar. */
+  fromAds: boolean;
   /** Yalnızca bu nişteki mağazalar (boş = hepsi). */
   niche: string;
   /** Yalnızca bu kümedeki (aynı ürünü satan) mağazalar. */
@@ -23,6 +25,8 @@ export type StoreFilters = {
 
 export type NewStoreRow = {
   domain: string;
+  /** Keşif kaynağı: whoisds, nrd60, reklam (Meta Reklam Kütüphanesi). */
+  source: string;
   shop_name: string | null;
   country: string | null;
   ships_to_tr: boolean | null;
@@ -74,6 +78,7 @@ export function parseStoreFilters(sp: Record<string, string | string[] | undefin
     ads: one(sp.ads) === "1",
     ali: one(sp.ali) === "1",
     moving: one(sp.moving) === "1",
+    fromAds: one(sp.reklamdan) === "1",
     niche: one(sp.niche).replace(/[^a-z]/g, "").slice(0, 20),
     group: one(sp.group).toLowerCase().replace(/[^a-z0-9.-]/g, "").slice(0, 100),
   };
@@ -84,7 +89,7 @@ export async function listNewStores(f: StoreFilters): Promise<{ rows: NewStoreRo
   let query = db()
     .from("stores")
     .select(
-      "domain, shop_name, country, ships_to_tr, product_count, discounted_count, dropship_count, apparel_count, min_price, max_price, currency, first_product_at, registered_on, hero_handle, hero_title, hero_image, hero_price, store_score, ad_points, ads_active, total_score, copy_group, copy_count, copy_same_seller, ali_image_count, stock_drops, moving_products, niche, timing, timing_reason, offer, checks, product_id, products(dtc_status, margin_ratio, supplier_min_usd)",
+      "domain, source, shop_name, country, ships_to_tr, product_count, discounted_count, dropship_count, apparel_count, min_price, max_price, currency, first_product_at, registered_on, hero_handle, hero_title, hero_image, hero_price, store_score, ad_points, ads_active, total_score, copy_group, copy_count, copy_same_seller, ali_image_count, stock_drops, moving_products, niche, timing, timing_reason, offer, checks, product_id, products(dtc_status, margin_ratio, supplier_min_usd)",
     )
     .eq("status", "live")
     .gte("first_product_at", since);
@@ -93,6 +98,7 @@ export async function listNewStores(f: StoreFilters): Promise<{ rows: NewStoreRo
   if (f.group) query = query.eq("copy_group", f.group);
   if (f.ali) query = query.gte("ali_image_count", 1);
   if (f.moving) query = query.gte("stock_drops", 1);
+  if (f.fromAds) query = query.eq("source", "reklam");
   if (f.niche) query = query.eq("niche", f.niche);
   if (f.tr) query = query.eq("ships_to_tr", true);
   if (f.q) query = query.or(`domain.ilike.*${f.q}*,shop_name.ilike.*${f.q}*,hero_title.ilike.*${f.q}*`);

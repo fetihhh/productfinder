@@ -117,6 +117,7 @@ export default async function NewStoresPage({ searchParams }: PageProps<"/yeni">
         </div>
         <div className="mt-3 flex flex-wrap gap-2 border-t border-line pt-3">
           <Toggle name="moving" checked={f.moving} label="📉 Satış hareketi" title="Kontroller arasında stokta olan varyant sayısı azalan mağazalar" />
+          <Toggle name="reklamdan" checked={f.fromAds} label="📣 Reklamdan bulunanlar" title="Meta Reklam Kütüphanesi'nde yayındaki reklamlardan keşfedilen, zaten reklam veren mağazalar" />
           <Toggle name="ali" checked={f.ali} label="AliExpress görseli" title="Ürün görselinin dosya adı AliExpress görsel kimliği: fotoğraf AliExpress'ten alınmış" />
           <Toggle name="ads" checked={f.ads} label="Reklam veriyor" />
           <Toggle name="tr" checked={f.tr} label="Türkiye'ye gönderir" />
@@ -168,6 +169,11 @@ export default async function NewStoresPage({ searchParams }: PageProps<"/yeni">
                     {s.stock_drops > 0 && <span className="badge bg-rose-500 text-white shadow-sm">📉 {s.stock_drops} stok azalması</span>}
                     {ad && ad.total_ads > 0 && ad.ad_stage !== "none" && <AdStageBadge stage={ad.ad_stage} score={Number(ad.ad_score)} />}
                     <TimingBadge timing={s.timing} reason={s.timing_reason} hideUnproven />
+                    {s.source === "reklam" && (
+                      <span className="badge bg-sky-600 text-white shadow-sm" title="Meta Reklam Kütüphanesi'nde yayındaki reklamlardan bulundu">
+                        📣 Reklamdan
+                      </span>
+                    )}
                     {s.copy_count > 0 && !s.copy_same_seller && <span className="badge bg-violet-500 text-white shadow-sm">{s.copy_count} rakip</span>}
                   </div>
                   <ScoreRing

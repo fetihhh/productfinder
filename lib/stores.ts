@@ -37,11 +37,13 @@ export async function insertStores(domains: string[], source: string, registered
 
 export type StoreToCheck = { domain: string; registered_on: string | null; discovered_at: string; first_product_at: string | null; status?: string };
 
-export async function storesToCheck(limit: number): Promise<StoreToCheck[]> {
-  const { data, error } = await db()
+export async function storesToCheck(limit: number, source?: string): Promise<StoreToCheck[]> {
+  let query = db()
     .from("stores")
     .select("domain, registered_on, discovered_at, first_product_at, status")
-    .in("status", ["pending", "closed", "live"])
+    .in("status", ["pending", "closed", "live"]);
+  if (source) query = query.eq("source", source);
+  const { data, error } = await query
     .lte("next_check_at", new Date().toISOString())
     .order("next_check_at", { ascending: true })
     .limit(limit);

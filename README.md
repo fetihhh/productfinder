@@ -143,6 +143,13 @@ Amaç: **son 5 ayda açılmış küçük dropshipping mağazalarını** yakalama
 
 **Bilinen sınırlar:** WhoisDS ücretsiz listesi tüm kayıtları değil bir kısmını içerir; 60 günden eski mağazalar ancak izlemeye alındıktan sonra yaşlanarak listede kalır (5 aylık pencere birkaç ay içinde dolar). "Hareket" işaretleri en az iki haftalık kontrol gerektirir.
 
+## Reklamdan mağaza keşfi (`config/adDiscovery.ts`, `dtc/adDiscovery.ts`, `scripts/adDiscovery.ts`)
+
+Yeni kayıtlı alan adı listeleri yalnızca son günlerde alınan alan adlarını verir. Bu adım tersinden gider: Meta Reklam Kütüphanesi'nde **AB'de yayındaki, son 45 günde başlamış** reklamlarda dropshipping reklamlarının sık kullandığı ifadeler aranır (14 dilde ~50 ifade: "envío gratis", "livraison gratuite", "perfect gift for her", "Rückenschmerzen"…; tam ifade araması). Reklamların bağlantı başlığındaki site adresi ("GETCOSMORA.COM") ayıklanır; pazaryerleri, sosyal ağlar ve barındırma alan adları atlanır. Bilinmeyen siteler `source = "reklam"` ile mağaza listesine eklenir ve aynı çalıştırmada kontrol edilir; açık ve son 5 ayda ürün eklemeye başlamış olanların reklamları mağaza puanına bakılmadan önce analiz edilir.
+- Çalıştırma başına 20 ifade (ifade başına 1 istek, saniyede 1); liste birkaç günde bir baştan döner (`job_state.ad_discovery.cursor`).
+- Tam günlük işte yeni alan adı keşfinden sonra çalışır. Ayrıca Actions → **Run workflow** → `kesif` modu: keşif + yalnızca bu mağazaların kontrolü + reklam analizi + aday seçimi.
+- `/yeni` sayfasında **📣 Reklamdan bulunanlar** filtresi ve kartlarda "📣 Reklamdan" etiketi.
+
 ## Reklam sinyali (`dtc/adLibrary.ts`, `scripts/ads.ts`)
 
 Bir dropshipping mağazası bir ürüne haftalarca reklam veriyorsa ürün büyük ihtimalle satıyordur: kârsız reklam birkaç gün içinde kapatılır. Bu sinyal Meta'nın resmi ve ücretsiz **Reklam Kütüphanesi API'si**nden okunur.

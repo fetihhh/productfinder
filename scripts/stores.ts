@@ -88,9 +88,9 @@ export async function discoverStores(): Promise<boolean> {
   return ok;
 }
 
-/** Zamanı gelen mağazaları kontrol eder (farklı alan adları paralel; her alan adına 1 istek/sn). */
-export async function checkStores(): Promise<boolean> {
-  const list = await storesToCheck(STORE_CHECKS_PER_RUN);
+/** Zamanı gelen mağazaları kontrol eder (farklı alan adları paralel; her alan adına 1 istek/sn). source: yalnızca bu kaynaktakiler. */
+export async function checkStores(source?: string): Promise<boolean> {
+  const list = await storesToCheck(STORE_CHECKS_PER_RUN, source);
   console.log(`\n▶ Mağaza kontrolü: ${list.length} mağaza`);
   const counts: Record<string, number> = {};
   let failures = 0;

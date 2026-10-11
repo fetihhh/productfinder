@@ -6,6 +6,7 @@
 //             npm run ingest -- no-stores (yeni mağaza keşfi ve kontrolleri atlanır)
 //             npm run ingest -- resupply  (toptancı aramasını tüm doğrulanmış/takip edilen ürünler için hemen yeniler)
 //             npm run ingest -- ads       (yalnızca reklam analizi; reklamı bilinen mağazalar yeniden aranır)
+//             npm run ingest -- kesif     (Meta Reklam Kütüphanesi'nden yeni reklamcı mağazalar + kontrol + reklam analizi)
 //             npm run ingest -- instagram (Instagram hesabı bilinmeyen mağazaların ana sayfası + çok tutan gönderiler)
 import {
   BIG_BRAND_MAX_RANK,
@@ -56,6 +57,7 @@ import { setJobState } from "../lib/stores.ts";
 import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranco.ts";
 import { enabledAdapters } from "../sources/index.ts";
 import { adSignals } from "./ads.ts";
+import { discoverFromAds } from "./adDiscovery.ts";
 import { findSocialHandles, instagramPosts } from "./instagram.ts";
 import { brandAges, checkStores, copyClusters, discoverStores, promoteMovers, promoteStores } from "./stores.ts";
 
@@ -309,6 +311,18 @@ async function timing(): Promise<void> {
 async function main() {
   const started = Date.now();
   // Yalnızca reklam analizi: reklamı bilinen mağazalar yeniden aranır, skorlar güncellenir (~5 dk).
+  // Yalnızca reklamdan keşif: yeni reklamcı mağazalar bulunur, kontrol edilir, reklamları analiz edilir (~10 dk).
+  if (process.argv.includes("kesif")) {
+    await discoverFromAds();
+    const checked = await checkStores("reklam");
+    const ok = await adSignals();
+    const promoted = await promoteStores();
+    await timing();
+    console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
+    await writeJobSummary((Date.now() - started) / 1000);
+    if (![checked, ok, promoted].every(Boolean)) process.exitCode = 1;
+    return;
+  }
   // Yalnızca Instagram: hesabı bilinmeyen mağazaların ana sayfası + çok tutan gönderiler (~5 dk).
   if (process.argv.includes("instagram")) {
     await findSocialHandles();
@@ -330,6 +344,14 @@ async function main() {
   // Yeni mağazalar: keşif (yeni kayıtlı alan adları) → kontrol → puanı yüksek olanların öne çıkan ürünü aday olur.
   const skipStores = process.argv.includes("no-stores");
   const discovered = onlyVerify || skipStores ? true : await discoverStores();
+  // Reklam Kütüphanesi'nden keşif: zaten reklam veren mağazalar (aynı çalıştırmada kontrol edilir).
+  if (!onlyVerify && !skipStores) {
+    try {
+      await discoverFromAds();
+    } catch (err) {
+      console.error(`\n▶ Reklamdan keşif yapılamadı: ${(err as Error).message}`);
+    }
+  }
   const checked = skipStores ? true : await checkStores();
   // Aynı ürünü satan mağazalar (kopya puanı aday seçiminden önce toplam puana eklenir).
   const copied = skipStores ? true : await copyClusters();

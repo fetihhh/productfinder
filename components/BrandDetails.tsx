@@ -1,6 +1,7 @@
 import { weightLabel, type ProductDetail } from "@/dtc/productDetail";
 import { ageLabel, countryLabel, formatPrice } from "@/lib/format";
 import type { StoreExtras } from "@/lib/newStores";
+import type { NetworkStore } from "@/lib/stores";
 
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -53,7 +54,10 @@ export function BrandCard({ s }: { s: StoreExtras }) {
         <dl className="grid grid-cols-[8.5rem_1fr] gap-x-3 gap-y-2 text-sm">
           <Row label="Mağaza">{s.shop_name ?? s.domain}</Row>
           <Row label="Ülke / para">{[s.country ? countryLabel(s.country) : null, s.currency].filter(Boolean).join(" · ") || "—"}</Row>
-          <Row label="Alan adı kaydı">{s.registered_on ? `${s.registered_on} (${ageLabel(s.registered_on)} önce)` : "—"}</Row>
+          <Row label="Alan adı kaydı">
+            {s.registered_on ? `${s.registered_on} (${ageLabel(s.registered_on)} önce)` : "—"}
+            {s.registrar ? <span className="block text-xs text-muted">{s.registrar}</span> : null}
+          </Row>
           <Row label="İlk ürün">{s.first_product_at ? `${s.first_product_at.slice(0, 10)} (${ageLabel(s.first_product_at)} önce)` : "—"}</Row>
           <Row label="Katalog">
             {s.product_count ?? "?"} ürün
@@ -200,6 +204,44 @@ export function ProductDetailsCard({ d, currency, url }: { d: ProductDetail; cur
             </a>
           )}
         </div>
+      </div>
+    </section>
+  );
+}
+
+/** Aynı satıcının diğer mağazaları: aynı reklam pikseli, Google Ads/GTM, e-posta ya da WhatsApp. */
+export function SellerNetwork({ stores }: { stores: NetworkStore[] }) {
+  if (stores.length === 0) return null;
+  return (
+    <section className="card mt-5 p-5">
+      <h2 className="card-title">Aynı satıcının diğer mağazaları ({stores.length})</h2>
+      <p className="card-note mb-4">
+        Ana sayfasında aynı reklam pikseli, Google Ads/Etiket Yöneticisi kimliği, e-posta ya da WhatsApp numarası olan mağazalar. Kazanan bir satıcının
+        test ettiği diğer ürünler buradadır; kapanan mağazalar tutmayan testlerdir.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {stores.map((s) => (
+          <a key={s.domain} href={`/m/${s.domain}`} className="flex gap-3 rounded-xl border border-line p-3 transition hover:border-amber-500/60">
+            <span className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-surface-muted ring-1 ring-line">
+              {s.hero_image && <img src={s.hero_image} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />}
+            </span>
+            <span className="min-w-0 flex-1 text-sm">
+              <span className="block truncate font-medium">{s.hero_title ?? s.shop_name ?? s.domain}</span>
+              <span className="block truncate text-xs text-muted">
+                {s.domain} · {s.status === "live" ? "açık" : s.status === "dead" || s.status === "closed" ? "kapandı" : s.status}
+                {s.total_score !== null ? ` · puan ${Math.round(Number(s.total_score))}` : ""}
+                {s.first_product_at ? ` · ${ageLabel(s.first_product_at)} önce açıldı` : ""}
+              </span>
+              <span className="mt-1 flex flex-wrap gap-1">
+                {s.reasons.map((r) => (
+                  <span key={r} className="badge bg-violet-600/15 text-violet-700 dark:text-violet-300">
+                    {r}
+                  </span>
+                ))}
+              </span>
+            </span>
+          </a>
+        ))}
       </div>
     </section>
   );

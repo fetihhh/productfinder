@@ -174,7 +174,45 @@ export function AdItemsSection({ items, libraryUrl }: { items: AdItemView[]; lib
         kapatılır), aynı metnin yayındaki kopya sayısı (ölçekleme) ve erişim. &quot;▶ Videoyu izle&quot; reklamın videosunu/görselini ekranın sağındaki izleme
         penceresinde açar (Facebook önizlemenin sayfaya gömülmesine izin vermez); sıradaki reklama basınca aynı pencere ona geçer.
       </p>
+      <AdPages items={items} />
       <AdList items={items} />
     </section>
+  );
+}
+
+/** Reklam veren Facebook sayfaları: dropshipping mağazaları reklamı çoğu zaman birden çok sayfadan yayınlar. */
+function AdPages({ items }: { items: AdItemView[] }) {
+  const by = new Map<string, { id: string | null; name: string; ads: number; active: number; first: string | null; last: string | null }>();
+  for (const i of items) {
+    const key = i.page_id ?? i.page_name ?? "?";
+    const e = by.get(key) ?? { id: i.page_id, name: i.page_name ?? "Bilinmeyen sayfa", ads: 0, active: 0, first: null, last: null };
+    e.ads++;
+    if (i.active) e.active++;
+    if (i.start_at && (!e.first || i.start_at < e.first)) e.first = i.start_at;
+    if (i.start_at && (!e.last || i.start_at > e.last)) e.last = i.start_at;
+    by.set(key, e);
+  }
+  const pages = [...by.values()].sort((a, b) => b.active - a.active || b.ads - a.ads);
+  if (pages.length === 0) return null;
+  return (
+    <div className="mb-4">
+      <h3 className="mb-2 text-sm font-semibold">Reklam veren sayfalar ({pages.length})</h3>
+      <div className="flex flex-wrap gap-2">
+        {pages.map((p) => (
+          <a
+            key={p.id ?? p.name}
+            href={p.id ? `https://www.facebook.com/ads/library/?active_status=all&ad_type=all&country=ALL&view_all_page_id=${encodeURIComponent(p.id)}` : undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-xl border border-line px-3 py-2 text-sm transition hover:border-amber-500/60"
+          >
+            <span className="font-medium">{p.name}</span>
+            <span className="ml-2 text-xs text-muted">
+              {p.active} yayında / {p.ads} reklam{p.first ? ` · ${p.first.slice(0, 10)} → ${p.last?.slice(0, 10)}` : ""}
+            </span>
+          </a>
+        ))}
+      </div>
+    </div>
   );
 }

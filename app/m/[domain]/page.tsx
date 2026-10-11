@@ -6,7 +6,8 @@ import { STATUS } from "@/components/ProductCard";
 import { movementOrder } from "@/dtc/storeSnapshot";
 import { ageLabel, countryLabel, dayLabel, formatPrice } from "@/lib/format";
 import { getStoreDetail, offerComparison, storeExtras } from "@/lib/newStores";
-import { BrandCard, ProductDetailsCard } from "@/components/BrandDetails";
+import { BrandCard, ProductDetailsCard, SellerNetwork } from "@/components/BrandDetails";
+import { sellerNetwork } from "@/lib/stores";
 import { nicheLabel } from "@/dtc/niche";
 import { InstagramSection } from "@/components/IgPostCard";
 import { igPostsFor, videosFor } from "@/lib/instagram";
@@ -32,11 +33,12 @@ export default async function StorePage({ params }: PageProps<"/m/[domain]">) {
   const data = await getStoreDetail(decodeURIComponent(domain).toLowerCase());
   if (!data) notFound();
   const { s, checks, ads, adHistory, copies } = data;
-  const [offers, ig, videos, adItems, extras] = await Promise.all([
+  const [offers, ig, videos, adItems, network, extras] = await Promise.all([
     offerComparison(s.domain),
     igPostsFor(s.domain),
     videosFor(s.domain),
     adItemsFor(s.domain),
+    sellerNetwork(s.domain),
     storeExtras(s.domain),
   ]);
   const heroDetail = extras?.details && s.hero_handle ? (extras.details[s.hero_handle] ?? null) : null;
@@ -203,6 +205,7 @@ export default async function StorePage({ params }: PageProps<"/m/[domain]">) {
 
       {heroDetail && <ProductDetailsCard d={heroDetail} currency={s.currency} url={s.hero_handle ? `https://${s.domain}/products/${s.hero_handle}` : null} />}
       {extras && <BrandCard s={extras} />}
+      <SellerNetwork stores={network} />
       <CompetitorOffers rows={offers} />
       <AdsSection domain={s.domain} ads={ads} history={adHistory} />
       <VideosSection data={videos} />

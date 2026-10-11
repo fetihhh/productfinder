@@ -22,7 +22,28 @@ export type StoreTech = {
   codText: boolean;
   languages: string[];
   socials: string[];
+  /** Reklam hesabı kimlikleri: aynı kimliği kullanan mağazalar aynı satıcınındır. */
+  ids?: SellerIds;
 };
+
+export type SellerIds = { meta: string[]; tiktok: string[]; google: string[] };
+
+const uniq = (xs: string[], max = 5) => [...new Set(xs)].slice(0, max);
+
+/** Meta piksel, TikTok piksel ve Google Ads/Etiket Yöneticisi kimlikleri (Shopify web pikselleri dahil). */
+export function sellerIds(html: string): SellerIds {
+  const h = html.replace(/\\"/g, '"');
+  const meta = [
+    ...[...h.matchAll(/fbq\(\s*['"]init['"]\s*,\s*['"](\d{10,20})['"]/g)].map((m) => m[1]),
+    ...[...h.matchAll(/"(?:pixel_id|pixelId|facebook_pixel_id|facebookPixelId)"\s*:\s*"(\d{10,20})"/g)].map((m) => m[1]),
+  ];
+  const tiktok = [
+    ...[...h.matchAll(/ttq\.load\(\s*['"]([A-Z0-9]{18,24})['"]/g)].map((m) => m[1]),
+    ...[...h.matchAll(/"(?:pixelCode|pixel_code|tiktok_pixel_id|tiktokPixelId)"\s*:\s*"([A-Z0-9]{18,24})"/g)].map((m) => m[1]),
+  ];
+  const google = [...h.matchAll(/\b(AW-\d{8,12}|GTM-[A-Z0-9]{6,8})\b/g)].map((m) => m[1]);
+  return { meta: uniq(meta), tiktok: uniq(tiktok), google: uniq(google) };
+}
 
 type Rule = [string, RegExp];
 
@@ -151,5 +172,6 @@ export function storeTech(html: string): StoreTech {
     codText: COD_TEXT.test(text),
     languages,
     socials,
+    ids: sellerIds(html),
   };
 }

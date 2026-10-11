@@ -10,7 +10,8 @@ import { SOURCE_NAMES as SUPPLIER_SOURCES } from "@/dtc/suppliers";
 import { REVIEW_TO_SALES, toUsd, visitsFromRank } from "@/lib/winner";
 import { getFx } from "@/lib/fx";
 import { copiesOf, offerComparison, storeExtras } from "@/lib/newStores";
-import { BrandCard, ProductDetailsCard } from "@/components/BrandDetails";
+import { BrandCard, ProductDetailsCard, SellerNetwork } from "@/components/BrandDetails";
+import { sellerNetwork } from "@/lib/stores";
 import { InstagramSection } from "@/components/IgPostCard";
 import { igPostsFor, videosFor } from "@/lib/instagram";
 import { VideosSection } from "@/components/VideosSection";
@@ -34,13 +35,14 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
   const [data, fx] = await Promise.all([getProduct(id), getFx()]);
   if (!data) notFound();
   const { p, history, ranks, suppliers, ads, adHistory, nameEn } = data;
-  const [copies, store, offers, ig, videos, adItems] = await Promise.all([
+  const [copies, store, offers, ig, videos, adItems, network] = await Promise.all([
     copiesOf(p.brand_domain),
     storeExtras(p.brand_domain),
     offerComparison(p.brand_domain),
     igPostsFor(p.brand_domain),
     videosFor(p.brand_domain),
     adItemsFor(p.brand_domain),
+    sellerNetwork(p.brand_domain),
   ]);
   const w = p.winner_breakdown;
   const handle = p.product_url?.match(/\/products\/([^/?#]+)/)?.[1];
@@ -220,6 +222,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
       </section>
 
       {store && <BrandCard s={store} />}
+      <SellerNetwork stores={network} />
       <CompetitorOffers rows={offers} />
 
       <ProfitCalculator

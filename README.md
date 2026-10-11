@@ -29,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0027`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0028`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -318,6 +318,9 @@ Reklamı olan her ürün ve mağaza sayfasında:
 ## Marka künyesi ve ürün ayrıntıları (`dtc/storeTech.ts`, `dtc/productDetail.ts`, `components/BrandDetails.tsx`)
 
 - **Marka künyesi** (ürün ve mağaza sayfası): mağaza kontrolünde zaten okunan ana sayfa HTML'inden; **reklam/izleme kodları** (Meta, TikTok, Google Ads, Snapchat, Pinterest, Microsoft Ads, Taboola; Google Analytics, Klaviyo, Hotjar, Clarity), **yorum uygulaması** (Judge.me, Loox, Yotpo, Okendo…), **kapıda ödeme** (Releasit, EasySell ya da metinde), **upsell/paket** (Kaching, ReConvert, Vitals…), **canlı destek**, **ödeme yöntemleri** (Klarna, PayPal, Shop Pay…), tema, diller (hreflang), sosyal hesaplar, e-posta/telefon/WhatsApp, **teslimat vaadi** (≥ 10 gün = Çin'den gönderim) ve **iade vaadi**; ayrıca alan adı kaydı, ilk ürün, katalog ve nasıl bulunduğu. Ek istek atılmaz.
+- **Aynı satıcının diğer mağazaları** (`seller_network` SQL fonksiyonu): ana sayfadaki Meta/TikTok piksel kimliği (Shopify web pikselleri dahil), Google Ads/Etiket Yöneticisi kimliği, e-posta ya da WhatsApp numarası aynı olan mağazalar; eşleşme gerekçesi, durum (açık/kapandı), puan ve açılış. Kazanan bir satıcının test ettiği diğer ürünler; kapanan mağazalar tutmayan testlerdir.
+- **Reklam veren sayfalar**: "Bu sitenin reklamları" bölümünde reklamların hangi Facebook sayfalarından verildiği (sayfa başına yayındaki/toplam reklam, tarih aralığı, Reklam Kütüphanesi bağlantısı).
+- **Alan adı kaydı** (`scripts/rdap.ts`): kayıt tarihi bilinmeyen açık mağazalar için RDAP (rdap.org → kayıt kuruluşunun RDAP sunucusu; resmi, ücretsiz; saniyede 1 istek); kayıt tarihi ve kayıt firması. Günlük işte, `kesif` ve `detay` modlarında çalışır (çalıştırma başına 120–200 mağaza).
 - **Ürün ayrıntıları**: Shopify `products.json`'dan öne çıkan ürün, aday ürünler ve stoğu en çok azalan 3 ürün için (mağaza başına en fazla 6) seçenekler, varyantlar (fiyat, indirim öncesi fiyat, stok, ağırlık), 10 fotoğraf, açıklama maddeleri. Kontroller arasında stokta → tükendi olan varyantın günü tutulur (**ilk tükenen renk/beden genelde en çok satandır**), yeniden stoğa girenler ayrıca işaretlenir. Açıklama Google Çeviri bağlantısıyla Türkçe okunabilir.
 - Mağaza puanı ≥ 35 olan mağazalarda her kontrolde güncellenir. Hemen doldurmak için Actions → **Run workflow** → `detay`: aday ürünü ya da reklamı olan en fazla 400 açık mağaza zamanı beklemeden kontrol edilir, ana sayfası okunmamış mağazaların künyesi doldurulur.
 - **Niş**: öne çıkan ürün belirsizse mağazanın tüm ürünlerinin (başlık + ürün türü) oyuyla (en az 2 ürün ve %40) belirlenir; anahtar kelimeler 14 dilde genişletildi.

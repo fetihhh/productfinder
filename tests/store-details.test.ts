@@ -2,7 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { descriptionBullets, mergeDetail, productDetail, weightLabel } from "../dtc/productDetail.ts";
 import { nicheOfStore } from "../dtc/niche.ts";
-import { storeTech } from "../dtc/storeTech.ts";
+import { sellerIds, storeTech } from "../dtc/storeTech.ts";
+import { parseRdap } from "../dtc/rdap.ts";
 
 test("storeTech: izleme kodları, uygulamalar, ödeme, iletişim, kargo ve iade vaadi", () => {
   const html = `<html><head>
@@ -64,4 +65,27 @@ test("nicheOfStore: öne çıkan ürün belirsizse mağazanın ürünlerinin oyu
   assert.equal(nicheOfStore({ title: "Obsidian", productType: null }, [{ title: "Dog Bed" }, { title: "Cat Toy" }, { title: "Obsidian" }]), "pet");
   assert.equal(nicheOfStore({ title: "Obsidian", productType: null }, [{ title: "Dog Bed" }, { title: "Lamp" }]), "other");
   assert.equal(nicheOfStore({ title: "Neck Massager", productType: null }, [{ title: "Dog Bed" }, { title: "Cat Toy" }]), "health");
+});
+
+test("sellerIds: Meta/TikTok piksel ve Google Ads/GTM kimlikleri (Shopify web pikselleri dahil)", () => {
+  const html = `<script>fbq('init', '1234567890123456');</script>
+    <script>webPixelsManager.init({"settings":"{\\"pixel_id\\":\\"9876543210987654\\"}"})</script>
+    <script>ttq.load('CABCDEFGHIJKLMNOPQRS');</script><script>{"pixelCode":"CZYXWVUTSRQPONMLKJIH"}</script>
+    <script>gtag('config','AW-1122334455'); (function(w,d,s,l,i){})(window,document,'script','dataLayer','GTM-ABC123');</script>`;
+  assert.deepEqual(sellerIds(html), {
+    meta: ["1234567890123456", "9876543210987654"],
+    tiktok: ["CABCDEFGHIJKLMNOPQRS", "CZYXWVUTSRQPONMLKJIH"],
+    google: ["AW-1122334455", "GTM-ABC123"],
+  });
+  assert.deepEqual(sellerIds("<html></html>"), { meta: [], tiktok: [], google: [] });
+});
+
+test("parseRdap: kayıt ve bitiş tarihi, kayıt firması; geçersiz yanıt null", () => {
+  const json = JSON.stringify({
+    events: [{ eventAction: "registration", eventDate: "2026-08-29T15:48:11Z" }, { eventAction: "expiration", eventDate: "2027-08-29T15:48:11Z" }],
+    entities: [{ roles: ["registrar"], vcardArray: ["vcard", [["version", {}, "text", "4.0"], ["fn", {}, "text", "NameCheap, Inc."]]] }],
+  });
+  assert.deepEqual(parseRdap(json), { registered: "2026-08-29T15:48:11Z", expires: "2027-08-29T15:48:11Z", registrar: "NameCheap, Inc." });
+  assert.equal(parseRdap("not json"), null);
+  assert.equal(parseRdap("{}"), null);
 });

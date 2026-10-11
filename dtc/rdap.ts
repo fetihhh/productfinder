@@ -18,3 +18,28 @@ export async function registrationDate(domain: string, fetchPage: FetchPage): Pr
   const res = await fetchPage(`https://rdap.org/domain/${encodeURIComponent(domain)}`, "application/rdap+json, application/json");
   return res.ok ? parseRdapRegistration(res.text) : null;
 }
+
+export type RdapInfo = { registered: string | null; expires: string | null; registrar: string | null };
+
+type Rdap = {
+  events?: { eventAction?: string; eventDate?: string }[];
+  entities?: { roles?: string[]; vcardArray?: [string, [string, unknown, string, unknown][]] }[];
+};
+
+export const rdapUrl = (domain: string) => `https://rdap.org/domain/${encodeURIComponent(domain)}`;
+
+/** Kayıt ve bitiş tarihi ile kayıt firması (registrar varlığının vCard "fn" alanı; kişisel veri okunmaz). */
+export function parseRdap(text: string): RdapInfo | null {
+  let j: Rdap;
+  try {
+    j = JSON.parse(text) as Rdap;
+  } catch {
+    return null;
+  }
+  const ev = (a: string) => j.events?.find((e) => e.eventAction === a)?.eventDate ?? null;
+  const reg = j.entities?.find((e) => e.roles?.includes("registrar"));
+  const fn = reg?.vcardArray?.[1]?.find((v) => v[0] === "fn")?.[3];
+  const registered = ev("registration");
+  if (!registered && !fn) return null;
+  return { registered, expires: ev("expiration"), registrar: typeof fn === "string" ? fn.slice(0, 120) : null };
+}

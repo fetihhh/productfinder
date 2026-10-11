@@ -173,6 +173,7 @@ export type StoreExtras = {
   country: string | null;
   currency: string | null;
   registered_on: string | null;
+  registrar: string | null;
   first_product_at: string | null;
   product_count: number | null;
   min_price: number | null;
@@ -191,7 +192,7 @@ export async function storeExtras(domain: string): Promise<StoreExtras | null> {
   const { data } = await db()
     .from("stores")
     .select(
-      "domain, shop_name, country, currency, registered_on, first_product_at, product_count, min_price, max_price, hero_handle, source, instagram, tiktok, tech, tech_at, details",
+      "domain, shop_name, country, currency, registered_on, registrar, first_product_at, product_count, min_price, max_price, hero_handle, source, instagram, tiktok, tech, tech_at, details",
     )
     .eq("domain", domain)
     .maybeSingle();

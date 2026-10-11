@@ -236,3 +236,44 @@ export async function saveBrandAge(domain: string, registeredAt: string | null, 
     .eq("domain", domain);
   if (error) throw new Error(`brands güncellenemedi: ${error.message}`);
 }
+
+/** Kayıt tarihi bilinmeyen açık mağazalar (önce reklamdan bulunanlar ve reklam verenler); RDAP'ı hiç sorgulanmamış olanlar. */
+export async function storesWithoutRdap(limit: number): Promise<string[]> {
+  const { data, error } = await db()
+    .from("stores")
+    .select("domain")
+    .eq("status", "live")
+    .is("registered_on", null)
+    .is("rdap_at", null)
+    .order("ad_points", { ascending: false })
+    .order("total_score", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`stores okunamadı: ${error.message}`);
+  return (data ?? []).map((r) => r.domain as string);
+}
+
+export async function saveRdap(domain: string, info: { registered: string | null; registrar: string | null } | null): Promise<void> {
+  const update: Record<string, unknown> = { rdap_at: new Date().toISOString() };
+  if (info?.registered) update.registered_on = info.registered.slice(0, 10);
+  if (info?.registrar) update.registrar = info.registrar;
+  const { error } = await db().from("stores").update(update).eq("domain", domain);
+  if (error) throw new Error(`stores güncellenemedi: ${error.message}`);
+}
+
+export type NetworkStore = {
+  domain: string;
+  shop_name: string | null;
+  hero_title: string | null;
+  hero_image: string | null;
+  status: string;
+  total_score: number | null;
+  first_product_at: string | null;
+  reasons: string[];
+};
+
+/** Aynı satıcının diğer mağazaları (aynı piksel, Google Ads/GTM, e-posta ya da WhatsApp). */
+export async function sellerNetwork(domain: string): Promise<NetworkStore[]> {
+  const { data, error } = await db().rpc("seller_network", { p_domain: domain });
+  if (error) return [];
+  return (data ?? []) as NetworkStore[];
+}

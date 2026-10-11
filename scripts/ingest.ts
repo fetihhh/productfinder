@@ -59,6 +59,7 @@ import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranc
 import { enabledAdapters } from "../sources/index.ts";
 import { adSignals } from "./ads.ts";
 import { discoverFromAds } from "./adDiscovery.ts";
+import { rdapLookups } from "./rdap.ts";
 import { findSocialHandles, instagramPosts } from "./instagram.ts";
 import { brandAges, checkStores, copyClusters, discoverStores, promoteMovers, promoteStores } from "./stores.ts";
 
@@ -316,6 +317,7 @@ async function main() {
   if (process.argv.includes("kesif")) {
     await discoverFromAds();
     const checked = await checkStores("reklam");
+    await rdapLookups();
     const ok = await adSignals();
     const promoted = await promoteStores();
     await timing();
@@ -328,6 +330,7 @@ async function main() {
   if (process.argv.includes("detay")) {
     const checked = await checkStores("detay");
     await findSocialHandles(300, 35);
+    await rdapLookups(200);
     await writeJobSummary((Date.now() - started) / 1000);
     if (!checked) process.exitCode = 1;
     return;
@@ -362,6 +365,14 @@ async function main() {
     }
   }
   const checked = skipStores ? true : await checkStores();
+  if (!skipStores) {
+    try {
+      await rdapLookups();
+    } catch (err) {
+      console.error(`
+▶ Alan adı kaydı sorgulanamadı: ${(err as Error).message}`);
+    }
+  }
   // Aynı ürünü satan mağazalar (kopya puanı aday seçiminden önce toplam puana eklenir).
   const copied = skipStores ? true : await copyClusters();
   // Reklam sinyali aday seçiminden önce: reklam veren mağazaların toplam puanı yükselir.

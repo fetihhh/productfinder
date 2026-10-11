@@ -178,7 +178,7 @@ export async function guessSocial(limit = 40, maxIgCalls = 150): Promise<void> {
         const r = await politeFetch(tiktokOembedUrl(c), "application/json");
         if (!r.ok) continue;
         const o = parseTiktokOembed(r.text);
-        if (o && tiktokMatchesStore(o.author, t.domain, t.shop_name)) {
+        if (o && tiktokMatchesStore(o.author, t.domain, t.shop_name, o.handle)) {
           found.tiktok = o.handle;
           ttFound++;
           console.log(`  🎵 ${t.domain} → TikTok @${o.handle} (${o.author})`);

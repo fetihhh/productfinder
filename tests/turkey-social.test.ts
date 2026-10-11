@@ -43,9 +43,12 @@ test("TikTok oEmbed: hesap ve yazar adı; ad mağazayla eşleşmeli", () => {
   const o = parseTiktokOembed(JSON.stringify({ author_name: "Cosmora Official", author_url: "https://www.tiktok.com/@cosmora", embed_product_id: "cosmora", type: "rich" }));
   assert.deepEqual(o, { author: "Cosmora Official", handle: "cosmora" });
   assert.equal(parseTiktokOembed('{"status_msg":"Something went wrong"}'), null);
-  assert.equal(tiktokMatchesStore("Cosmora Official", "getcosmora.com", "Cosmora"), true);
-  assert.equal(tiktokMatchesStore("Maria López", "getcosmora.com", "Cosmora"), false);
-  assert.equal(tiktokMatchesStore("Brasa Pro", "brasapro.com", null), true);
+  assert.equal(tiktokMatchesStore("Cosmora", "getcosmora.com", "Cosmora", "getcosmora"), true); // alan adının tamamı
+  assert.equal(tiktokMatchesStore("Cosmora Official", "getcosmora.com", "Cosmora", "cosmora"), false); // yazar adı mağaza adı değil
+  assert.equal(tiktokMatchesStore("Cosmora", "getcosmora.com", "Cosmora", "cosmora"), true); // yazar = mağaza adı, kullanıcı adı = mağaza adı
+  assert.equal(tiktokMatchesStore("Cyclairfohn", "cyclairpro.com", "CYCLAIR PRO", "cyclair"), false); // başka marka
+  assert.equal(tiktokMatchesStore("BRASAPRO", "brasapro.com", null, "brasapro"), true);
+  assert.equal(tiktokMatchesStore("Maria López", "getcosmora.com", "Cosmora", "maria"), false);
 });
 
 test("productHashtags ve rankTagPosts: ürün adından etiket; videolar önce, etkileşime göre", () => {

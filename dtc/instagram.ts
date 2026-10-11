@@ -119,13 +119,19 @@ export function parseTiktokOembed(text: string): { author: string; handle: strin
   }
 }
 
-/** TikTok hesabı mağazaya ait sayılır mı: yazar adı mağaza adını ya da alan adı çekirdeğini içeriyor (sesli harf/boşluk duyarsız). */
-export function tiktokMatchesStore(author: string, domain: string, shopName: string | null): boolean {
+/**
+ * TikTok hesabı mağazaya ait sayılır mı (TikTok'ta web sitesi alanı API'de yok; yanlış eşleşme yerine eşleşmeme seçilir):
+ * kullanıcı adı alan adının tamamı (ya da + .official/_official/official) olmalı; değilse yazar adı mağaza adıyla birebir
+ * aynı olmalı. "cyclairpro.com" için @cyclair ("Cyclairfohn", başka marka) kabul edilmez.
+ */
+export function tiktokMatchesStore(author: string, domain: string, shopName: string | null, handle = ""): boolean {
   const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  const label = norm(domain.split(".")[0]);
+  const h = norm(handle);
   const a = norm(author);
-  const core = domain.split(".")[0].toLowerCase().replace(/^(get|try|shop|the|my|buy|use)(?=[a-z]{3})/, "").replace(/(shop|store|official|online|co|hq)$/, "");
   const name = norm(shopName ?? "");
-  return (core.length >= 4 && a.includes(core)) || (name.length >= 4 && (a.includes(name) || name.includes(a) && a.length >= 4));
+  if (label.length >= 5 && [label, `${label}official`].includes(h)) return true;
+  return name.length >= 4 && a === name && (h === name || h === `${name}official` || h === label);
 }
 
 const GIVEAWAY =

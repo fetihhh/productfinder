@@ -2,6 +2,7 @@ import { weightLabel, type ProductDetail } from "@/dtc/productDetail";
 import { ageLabel, countryLabel, formatPrice } from "@/lib/format";
 import type { StoreExtras } from "@/lib/newStores";
 import type { NetworkStore } from "@/lib/stores";
+import type { TrListing } from "@/dtc/turkey";
 
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -243,6 +244,48 @@ export function SellerNetwork({ stores }: { stores: NetworkStore[] }) {
           </a>
         ))}
       </div>
+    </section>
+  );
+}
+
+/** Türkiye'de satılıyor mu: Türk pazaryerlerinde ve fiyat karşılaştırma sitelerinde benzer ilanlar. */
+export function TurkeyCard({ listings, checkedAt, priceUsd, usdTry }: { listings: TrListing[] | null; checkedAt: string | null; priceUsd: number | null; usdTry: number | null }) {
+  const prices = (listings ?? []).map((l) => l.price).filter((n): n is number => n !== null).sort((a, b) => a - b);
+  const median = prices.length ? prices[Math.floor((prices.length - 1) / 2)] : null;
+  const tl = (n: number) => n.toLocaleString("tr-TR", { style: "currency", currency: "TRY", maximumFractionDigits: 0 });
+  return (
+    <section className="card mt-5 p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="card-title">🇹🇷 Türkiye&apos;de satılıyor mu?</h2>
+        {checkedAt && <span className="text-xs text-muted">{ageLabel(checkedAt)} önce arandı</span>}
+      </div>
+      <p className="card-note mb-4">
+        Trendyol, Hepsiburada, n11, Amazon TR, Çiçeksepeti, Pazarama, Akakçe ve Cimri&apos;de benzer ilanlar (arama API&apos;siyle; aynı ürün olduğu kesin
+        değildir, bağlantıdan kontrol edin). İlan yoksa Türkiye&apos;de henüz rakip yok demektir: erken girme fırsatı.
+      </p>
+      {!checkedAt ? (
+        <p className="text-sm text-muted">Henüz aranmadı; doğrulanmış ve takip edilen ürünler her gün sırayla aranır (14 günde bir yenilenir).</p>
+      ) : !listings?.length ? (
+        <p className="rounded-xl bg-emerald-500/10 px-3 py-2 text-sm">✅ Türk pazaryerlerinde benzer ilan bulunamadı.</p>
+      ) : (
+        <>
+          <p className="mb-3 rounded-xl bg-red-500/10 px-3 py-2 text-sm">
+            {listings.length} benzer ilan bulundu{median !== null ? ` · ortanca fiyat ${tl(median)}` : ""}
+            {median !== null && priceUsd !== null && usdTry ? ` · rakip mağazanın fiyatı ≈ ${tl(priceUsd * usdTry)}` : ""}
+          </p>
+          <ul className="divide-y divide-line rounded-xl border border-line">
+            {listings.map((l) => (
+              <li key={l.url}>
+                <a href={l.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-surface-muted">
+                  <span className="w-24 shrink-0 text-xs font-semibold text-muted">{l.site}</span>
+                  <span className="min-w-0 flex-1 truncate">{l.title}</span>
+                  <span className="shrink-0 font-semibold tabular-nums">{l.price !== null ? tl(l.price) : "—"}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </section>
   );
 }

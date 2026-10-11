@@ -101,8 +101,17 @@ export function ProfitCalculator({
   const good = r.profit > 0 && !missingCost;
 
   return (
-    <section className="card mt-5 p-5">
-      <h2 className="card-title">Kâr hesabı — kendi sitenden satış</h2>
+    <details className="card group mt-5">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 [&::-webkit-details-marker]:hidden">
+        <span>
+          <span className="card-title">Kâr hesabı — kendi sitenden satış</span>
+          <span className="mt-0.5 block text-xs text-muted">Açmak için tıklayın · satış fiyatı, toptan fiyat, kargo, gümrük, KDV ve reklam maliyetiyle adet başı kâr</span>
+        </span>
+        <span className="text-muted transition group-open:rotate-180" aria-hidden>
+          ▾
+        </span>
+      </summary>
+      <div className="border-t border-line px-5 pt-4 pb-5">
       <p className="card-note mb-4">
         Varsayılanlar tahmindir; kendi teklif ve fiyatlarınızla değiştirin. Gümrük oranı ürünün GTİP koduna göre değişir: kesin oran için gümrük
         müşavirine danışın. Gelir vergisi ve sabit giderler (site, abonelik) dahil değildir.
@@ -220,6 +229,7 @@ export function ProfitCalculator({
           {!abroad && !usdTry && <p className="text-xs text-amber-700 dark:text-amber-400">Güncel kur henüz alınmadı; 1 USD karşılığını elle girin.</p>}
         </div>
       </div>
-    </section>
+      </div>
+    </details>
   );
 }

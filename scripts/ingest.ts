@@ -60,7 +60,8 @@ import { enabledAdapters } from "../sources/index.ts";
 import { adSignals } from "./ads.ts";
 import { discoverFromAds } from "./adDiscovery.ts";
 import { rdapLookups } from "./rdap.ts";
-import { findSocialHandles, instagramPosts } from "./instagram.ts";
+import { findSocialHandles, guessSocial, instagramPosts } from "./instagram.ts";
+import { turkeyChecks } from "./turkey.ts";
 import { brandAges, checkStores, copyClusters, discoverStores, promoteMovers, promoteStores } from "./stores.ts";
 
 async function collect(): Promise<boolean> {
@@ -330,7 +331,9 @@ async function main() {
   if (process.argv.includes("detay")) {
     const checked = await checkStores("detay");
     await findSocialHandles(300, 35);
+    await guessSocial(60);
     await rdapLookups(200);
+    await turkeyChecks();
     await writeJobSummary((Date.now() - started) / 1000);
     if (!checked) process.exitCode = 1;
     return;
@@ -338,6 +341,7 @@ async function main() {
   // Yalnızca Instagram: hesabı bilinmeyen mağazaların ana sayfası + çok tutan gönderiler (~5 dk).
   if (process.argv.includes("instagram")) {
     await findSocialHandles();
+    await guessSocial();
     await instagramPosts();
     await writeJobSummary((Date.now() - started) / 1000);
     return;
@@ -377,6 +381,11 @@ async function main() {
   const copied = skipStores ? true : await copyClusters();
   // Reklam sinyali aday seçiminden önce: reklam veren mağazaların toplam puanı yükselir.
   const advertised = await adSignals();
+  try {
+    await guessSocial(30, 90);
+  } catch (err) {
+    console.error(`\n▶ Hesap tahmini yapılamadı: ${(err as Error).message}`);
+  }
   await instagramPosts();
   const promotedHero = skipStores ? true : await promoteStores();
   // Öne çıkan ürün dışında, mağazada stoğu tekrar tekrar azalan (asıl satan) ürünler.
@@ -393,6 +402,11 @@ async function main() {
   }
   const measured = await snapshots();
   const fx = await exchangeRates();
+  try {
+    await turkeyChecks();
+  } catch (err) {
+    console.error(`\n▶ Türkiye araması yapılamadı: ${(err as Error).message}`);
+  }
   const sourced = await suppliers();
   const aged = await brandAges();
   const scores = await updateTrendScores();

@@ -37,7 +37,8 @@ export function isThirdPartyAccessory(title: string, brands: string[]): boolean 
 
 export type SearchFn = (query: string) => Promise<SearchOutcome>;
 
-export function tavilySearch(apiKey: string): SearchFn {
+/** domains: aramanın sınırlandığı siteler (varsayılan: pazaryeri listesi). */
+export function tavilySearch(apiKey: string, domains: string[] = marketplaceSearchDomains()): SearchFn {
   return async (query) => {
     let res: Response;
     try {
@@ -49,7 +50,7 @@ export function tavilySearch(apiKey: string): SearchFn {
           query,
           search_depth: "basic",
           max_results: 10,
-          include_domains: marketplaceSearchDomains(),
+          include_domains: domains,
         }),
       });
     } catch (err) {

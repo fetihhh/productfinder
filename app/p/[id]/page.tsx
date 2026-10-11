@@ -10,7 +10,7 @@ import { SOURCE_NAMES as SUPPLIER_SOURCES } from "@/dtc/suppliers";
 import { REVIEW_TO_SALES, toUsd, visitsFromRank } from "@/lib/winner";
 import { getFx } from "@/lib/fx";
 import { copiesOf, offerComparison, storeExtras } from "@/lib/newStores";
-import { BrandCard, ProductDetailsCard, SellerNetwork } from "@/components/BrandDetails";
+import { BrandCard, ProductDetailsCard, SellerNetwork, TurkeyCard } from "@/components/BrandDetails";
 import { sellerNetwork } from "@/lib/stores";
 import { InstagramSection } from "@/components/IgPostCard";
 import { igPostsFor, videosFor } from "@/lib/instagram";
@@ -146,6 +146,7 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
       )}
 
       {detail && <ProductDetailsCard d={detail} currency={p.currency} url={p.product_url} />}
+      <TurkeyCard listings={p.tr_listings} checkedAt={p.tr_checked_at} priceUsd={toUsd(p.price, currency)} usdTry={fx?.rates.USD ?? null} />
 
       <section className="card mt-5 p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">

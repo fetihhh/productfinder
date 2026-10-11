@@ -1,9 +1,28 @@
 // Günlük işin "Instagram" adımı: mağazaların Instagram hesaplarındaki çok tutan gönderiler (resmi Business Discovery API).
 import { GRAPH_API_VERSION, IG_CHECKS_PER_RUN } from "../config/limits.ts";
-import { instagramClient, instagramHandle, rankPosts, tiktokHandle } from "../dtc/instagram.ts";
+import {
+  accountMatchesStore,
+  handleCandidates,
+  instagramClient,
+  instagramHandle,
+  parseTiktokOembed,
+  rankPosts,
+  tiktokHandle,
+  tiktokMatchesStore,
+  tiktokOembedUrl,
+} from "../dtc/instagram.ts";
 import { storeTech } from "../dtc/storeTech.ts";
 import { politeFetch } from "../lib/http.ts";
-import { igTargets, saveIgAccount, saveIgError, setStoreSocial, storesWithoutSocial, type InstagramState } from "../lib/instagram.ts";
+import {
+  igTargets,
+  saveIgAccount,
+  saveIgError,
+  saveSocialGuess,
+  setStoreSocial,
+  storesForSocialGuess,
+  storesWithoutSocial,
+  type InstagramState,
+} from "../lib/instagram.ts";
 import { setJobState } from "../lib/stores.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -106,4 +125,70 @@ export async function instagramPosts(): Promise<boolean> {
   console.log(`  özet: ${checked} hesap okundu, ${found} tanesinde çok tutan gönderi var`);
   await setJobState("instagram", { status: stopped ? "stopped" : "ok", reason: stopped ?? undefined, checked, found, at } satisfies InstagramState);
   return true;
+}
+
+/**
+ * Ana sayfasında bağlantı olmayan mağazalar için hesap tahmini. Instagram: olası kullanıcı adları resmi Business Discovery
+ * API'siyle denenir, profil web sitesi/açıklamasında mağazanın alan adı geçen hesap kabul edilir (ve gönderileri hemen
+ * okunur). TikTok: resmi oEmbed API'siyle hesap varlığı ve yazar adı kontrol edilir; ad mağazayla eşleşirse kabul edilir.
+ */
+export async function guessSocial(limit = 40, maxIgCalls = 150): Promise<void> {
+  console.log("\n▶ Instagram/TikTok hesabı tahmini (resmi API'lerle doğrulanır)");
+  const token = process.env.META_ACCESS_TOKEN;
+  const ig = token ? instagramClient(token, GRAPH_API_VERSION) : null;
+  let igUserId = process.env.IG_USER_ID || null;
+  if (ig && !igUserId) {
+    const own = await ig.ownAccountId();
+    igUserId = own.ok && own.data ? own.data.id : null;
+  }
+  const targets = await storesForSocialGuess(limit);
+  console.log(`  ${targets.length} mağaza`);
+  let igCalls = 0;
+  let igFound = 0;
+  let ttFound = 0;
+  let igStopped = false;
+  for (const t of targets) {
+    const found: { instagram?: string; tiktok?: string } = {};
+    const candidates = handleCandidates(t.domain, t.shop_name);
+    if (t.instagram === "" && ig && igUserId && !igStopped) {
+      for (const c of candidates) {
+        if (igCalls >= maxIgCalls) break;
+        if (igCalls > 0) await sleep(1000);
+        igCalls++;
+        const r = await ig.discover(igUserId, c);
+        if (!r.ok) {
+          if (r.fatal) {
+            igStopped = true;
+            console.log(`  ! Instagram durduruldu: ${r.reason}`);
+            break;
+          }
+          continue;
+        }
+        if (!accountMatchesStore(r.data, t.domain)) continue;
+        found.instagram = r.data.username.toLowerCase();
+        const { posts, medianEngagement } = rankPosts(r.data.media?.data ?? []);
+        await saveIgAccount({ username: found.instagram, domain: t.domain }, r.data, posts, medianEngagement);
+        igFound++;
+        console.log(`  📸 ${t.domain} → @${found.instagram} (${r.data.website ?? "açıklamada"})`);
+        break;
+      }
+    }
+    if (t.tiktok === "") {
+      for (const c of candidates.slice(0, 4)) {
+        const r = await politeFetch(tiktokOembedUrl(c), "application/json");
+        if (!r.ok) continue;
+        const o = parseTiktokOembed(r.text);
+        if (o && tiktokMatchesStore(o.author, t.domain, t.shop_name)) {
+          found.tiktok = o.handle;
+          ttFound++;
+          console.log(`  🎵 ${t.domain} → TikTok @${o.handle} (${o.author})`);
+          break;
+        }
+      }
+    }
+    // Instagram API'si durduysa bu mağaza tekrar denensin diye işaretlenmez.
+    if (igStopped && t.instagram === "" && !found.instagram) continue;
+    await saveSocialGuess(t.domain, found);
+  }
+  console.log(`  özet: ${igFound} Instagram, ${ttFound} TikTok hesabı doğrulandı (${igCalls} Instagram sorgusu)`);
 }

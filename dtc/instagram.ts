@@ -79,8 +79,53 @@ export type IgAccount = {
   followers_count?: number;
   media_count?: number;
   profile_picture_url?: string;
+  website?: string;
+  biography?: string;
   media?: { data?: IgMedia[] };
 };
+
+/**
+ * Ana sayfasında bağlantı olmayan mağaza için olası kullanıcı adları: alan adı etiketi ("getcosmora"), ön/son ekleri
+ * atılmış hali ("cosmora"), mağaza adı ("Cosmora Shop" → "cosmorashop", "cosmora") ve yaygın ekler (.official, _shop…).
+ */
+export function handleCandidates(domain: string, shopName: string | null, max = 6): string[] {
+  const label = domain.split(".")[0].toLowerCase().replace(/[^a-z0-9._]/g, "");
+  const core = label.replace(/^(get|try|shop|the|my|buy|use)(?=[a-z]{3})/, "").replace(/(shop|store|official|online|co|hq)$/, "");
+  const name = (shopName ?? "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  const out = [label, core, name, `${core}.official`, `${core}_official`, `${core}shop`, `${core}.shop`, `${core}store`, `get${core}`, `${core}official`];
+  return [...new Set(out.filter((h) => h.length >= 3 && h.length <= 30))].slice(0, max);
+}
+
+/** Hesap gerçekten bu mağazanın mı: profil web sitesi ya da açıklamada mağazanın alan adı geçiyor. */
+export function accountMatchesStore(acc: Pick<IgAccount, "website" | "biography">, domain: string): boolean {
+  const d = domain.toLowerCase();
+  const label = d.split(".")[0];
+  const site = (acc.website ?? "").toLowerCase();
+  const bio = (acc.biography ?? "").toLowerCase();
+  return site.includes(d) || bio.includes(d) || (label.length >= 5 && site.replace(/^https?:\/\/(www\.)?/, "").startsWith(`${label}.`));
+}
+
+/** TikTok'un resmi oEmbed API'si: hesap varsa yazar adı ve kullanıcı adı döner (robots.txt /oembed'e izin verir). */
+export const tiktokOembedUrl = (handle: string) => `https://www.tiktok.com/oembed?url=${encodeURIComponent(`https://www.tiktok.com/@${handle}`)}`;
+
+export function parseTiktokOembed(text: string): { author: string; handle: string } | null {
+  try {
+    const j = JSON.parse(text) as { author_name?: string; author_url?: string; embed_product_id?: string; type?: string };
+    const handle = j.embed_product_id ?? j.author_url?.match(/@([A-Za-z0-9._]+)/)?.[1];
+    return handle && j.author_name ? { author: j.author_name, handle: handle.toLowerCase() } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** TikTok hesabı mağazaya ait sayılır mı: yazar adı mağaza adını ya da alan adı çekirdeğini içeriyor (sesli harf/boşluk duyarsız). */
+export function tiktokMatchesStore(author: string, domain: string, shopName: string | null): boolean {
+  const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  const a = norm(author);
+  const core = domain.split(".")[0].toLowerCase().replace(/^(get|try|shop|the|my|buy|use)(?=[a-z]{3})/, "").replace(/(shop|store|official|online|co|hq)$/, "");
+  const name = norm(shopName ?? "");
+  return (core.length >= 4 && a.includes(core)) || (name.length >= 4 && (a.includes(name) || name.includes(a) && a.length >= 4));
+}
 
 const GIVEAWAY =
   /\b(giveaways?|gewinnspiel|sorteo|sorteio|concours|concorso|winactie|konkurs|çekiliş|cekilis)\b|tag\s+(?:a|your|\d+)\s+friends?|etiketle|menciona\s+a|identifie\s+\d*\s*amis?/i;
@@ -119,7 +164,7 @@ export type IgResult<T> = { ok: true; data: T } | { ok: false; fatal: boolean; r
 const MEDIA_FIELDS = "id,caption,like_count,comments_count,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp";
 
 export function discoveryUrl(igUserId: string, username: string, version: string, limit = 30): string {
-  const fields = `business_discovery.username(${username}){id,username,name,followers_count,media_count,profile_picture_url,media.limit(${limit}){${MEDIA_FIELDS}}}`;
+  const fields = `business_discovery.username(${username}){id,username,name,website,biography,followers_count,media_count,profile_picture_url,media.limit(${limit}){${MEDIA_FIELDS}}}`;
   return `https://graph.facebook.com/${version}/${encodeURIComponent(igUserId)}?fields=${encodeURIComponent(fields)}`;
 }
 

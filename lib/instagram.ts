@@ -216,3 +216,29 @@ export async function videosFor(domain: string, limit = 8): Promise<{ instagram:
     .limit(limit);
   return { instagram: (store?.instagram as string | null) || null, igVideos: await withFollowers((data ?? []) as Omit<IgPostRow, "followers">[]), tiktok };
 }
+
+export type GuessTarget = { domain: string; shop_name: string | null; instagram: string | null; tiktok: string | null };
+
+/** Ana sayfasında Instagram/TikTok bağlantısı olmayan, reklam veren ya da puanı yüksek açık mağazalar (tahmin bir kez yapılır). */
+export async function storesForSocialGuess(limit: number): Promise<GuessTarget[]> {
+  const { data, error } = await db()
+    .from("stores")
+    .select("domain, shop_name, instagram, tiktok")
+    .eq("status", "live")
+    .is("social_guess_at", null)
+    .or("instagram.eq.,tiktok.eq.")
+    .or("ad_points.gt.0,total_score.gte.55")
+    .order("ad_points", { ascending: false })
+    .order("total_score", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`stores okunamadı: ${error.message}`);
+  return (data ?? []) as GuessTarget[];
+}
+
+export async function saveSocialGuess(domain: string, found: { instagram?: string; tiktok?: string }): Promise<void> {
+  const { error } = await db()
+    .from("stores")
+    .update({ ...found, social_guess_at: new Date().toISOString() })
+    .eq("domain", domain);
+  if (error) throw new Error(`stores güncellenemedi: ${error.message}`);
+}

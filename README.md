@@ -29,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0028`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0029`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -324,6 +324,16 @@ Reklamı olan her ürün ve mağaza sayfasında:
 - **Ürün ayrıntıları**: Shopify `products.json`'dan öne çıkan ürün, aday ürünler ve stoğu en çok azalan 3 ürün için (mağaza başına en fazla 6) seçenekler, varyantlar (fiyat, indirim öncesi fiyat, stok, ağırlık), 10 fotoğraf, açıklama maddeleri. Kontroller arasında stokta → tükendi olan varyantın günü tutulur (**ilk tükenen renk/beden genelde en çok satandır**), yeniden stoğa girenler ayrıca işaretlenir. Açıklama Google Çeviri bağlantısıyla Türkçe okunabilir.
 - Mağaza puanı ≥ 35 olan mağazalarda her kontrolde güncellenir. Hemen doldurmak için Actions → **Run workflow** → `detay`: aday ürünü ya da reklamı olan en fazla 400 açık mağaza zamanı beklemeden kontrol edilir, ana sayfası okunmamış mağazaların künyesi doldurulur.
 - **Niş**: öne çıkan ürün belirsizse mağazanın tüm ürünlerinin (başlık + ürün türü) oyuyla (en az 2 ürün ve %40) belirlenir; anahtar kelimeler 14 dilde genişletildi.
+
+## Türkiye (`dtc/turkey.ts`, `scripts/turkey.ts`, `/turkiye`)
+
+- **Türkiye'de satılıyor mu:** doğrulanmış ve takip edilen ürünler her gün sırayla (günde en fazla 12, 14 günde bir yenilenir) Tavily arama API'siyle Türk pazaryerlerinde ve fiyat karşılaştırma sitelerinde aranır: Trendyol, Hepsiburada, n11, Amazon TR, Çiçeksepeti, Pazarama, Akakçe, Cimri. Siteler kazınmaz (robots.txt/403). İngilizce olmayan ürün adları için kayıtlı İngilizce çeviri kullanılır; marka kelimeleri atılır. Sonuç ürün sayfasında "🇹🇷 Türkiye'de satılıyor mu?" bölümü (site, başlık, ₺ fiyat, bağlantı; ortanca fiyat ve rakip mağazanın fiyatının TL karşılığı) ve kartlarda "TR'de N ilan / TR'de yok" etiketi. Sonuçlar "benzer ilan"dır, aynı ürün olduğu kesin değildir. Tavily'nin aylık ortak kotasından (950) düşer, doğrulamanın payını yememek için ayrı günlük sınırı vardır.
+- **Türkiye sayfası** (`/turkiye`): Türkiye'de rakibi olmayan winner'lar (fırsat), Türkiye'de satılanlar (siteler ve fiyatlar), Türk mağazaları (ülke TR ya da para birimi TL) ve Türkiye'ye gönderen yeni mağazalara bağlantı.
+- **Kâr hesabı** ürün sayfasında kapalı açılır bölümdedir.
+
+## Instagram/TikTok hesabı tahmini (`guessSocial`)
+
+Ana sayfasında bağlantı olmayan, reklam veren ya da puanı ≥ 55 olan mağazalar için alan adı ve mağaza adından olası kullanıcı adları üretilir ("getcosmora", "cosmora", "cosmora.official"…). **Instagram:** her aday resmi Business Discovery API'siyle denenir; profilin web sitesi ya da açıklamasında mağazanın alan adı geçen hesap kabul edilir ve gönderileri hemen okunur. **TikTok:** TikTok'un resmi oEmbed API'siyle (robots.txt izin verir) hesabın varlığı ve yazar adı kontrol edilir; ad mağazanın adıyla eşleşirse kabul edilir. Her mağaza için bir kez yapılır (`stores.social_guess_at`); çalıştırma başına en fazla 90–150 Instagram sorgusu.
 
 ## Videolar (`components/VideosSection.tsx`, `components/TikTokEmbed.tsx`)
 

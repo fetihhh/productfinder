@@ -39,25 +39,21 @@ function CopyText({ text }: { text: string }) {
   );
 }
 
-/** Reklamın Meta önizlemesi (görsel/video): yalnızca ekrana gelince yüklenir. */
-function AdPreview({ id }: { id: string }) {
-  return (
-    <div className="w-full shrink-0 overflow-hidden rounded-xl border border-line bg-white sm:w-[300px]">
-      <iframe
-        src={`/reklam/${id}`}
-        title="Reklam önizlemesi"
-        loading="lazy"
-        referrerPolicy="no-referrer"
-        allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-        className="block h-[520px] w-full"
-      />
-    </div>
-  );
+/**
+ * Reklamın videosu/görseli: Meta'nın resmi önizleme sayfası sayfaya gömülemez (X-Frame-Options: deny), bu yüzden ekranın
+ * sağında tek bir izleme penceresinde açılır; başka bir reklama basınca aynı pencere o reklama geçer.
+ */
+function openViewer(id: string) {
+  const w = 560;
+  const h = Math.min(window.screen.availHeight - 40, 980);
+  const left = Math.max(0, window.screen.availWidth - w - 16);
+  const win = window.open(`/reklam/${id}`, "pf-reklam-izle", `popup,width=${w},height=${h},left=${left},top=16`);
+  win?.focus();
 }
 
 /** Mağazanın tüm Meta reklamları: sıralama, yayındakiler, aynı metnin kopyalarını birleştirme ve arama. */
-export function AdList({ items, previews = true }: { items: AdItemView[]; previews?: boolean }) {
-  const [showPreview, setShowPreview] = useState(previews);
+export function AdList({ items }: { items: AdItemView[] }) {
+  const [watched, setWatched] = useState<Set<string>>(() => new Set());
   const [sort, setSort] = useState<SortKey>("score");
   const [activeOnly, setActiveOnly] = useState(false);
   const [merge, setMerge] = useState(true);
@@ -101,10 +97,6 @@ export function AdList({ items, previews = true }: { items: AdItemView[]; previe
           <input type="checkbox" className="check" checked={merge} onChange={(e) => setMerge(e.target.checked)} />
           Aynı metni birleştir
         </label>
-        <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm select-none has-checked:border-amber-500/60 has-checked:bg-amber-500/10">
-          <input type="checkbox" className="check" checked={showPreview} onChange={(e) => setShowPreview(e.target.checked)} />
-          Video / görsel önizleme
-        </label>
         <span className="text-xs text-muted">
           {rows.length} / {items.length} reklam
         </span>
@@ -112,9 +104,8 @@ export function AdList({ items, previews = true }: { items: AdItemView[]; previe
 
       <ol className="mt-4 space-y-3">
         {rows.slice(0, limit).map((i, n) => (
-          <li key={i.id} className="flex flex-col gap-4 rounded-2xl border border-line p-4 sm:flex-row">
-            {showPreview && <AdPreview id={i.id} />}
-            <div className="min-w-0 flex-1">
+          <li key={i.id} className={`rounded-2xl border p-4 ${watched.has(i.id) ? "border-amber-500/50 bg-amber-500/5" : "border-line"}`}>
+            <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <span className="grid h-6 w-6 place-items-center rounded-full bg-surface-muted text-[11px] font-semibold tabular-nums">{n + 1}</span>
                 <span className={`inline-flex items-center gap-1 font-medium ${i.active ? "text-emerald-600 dark:text-emerald-400" : "text-muted"}`}>
@@ -167,11 +158,19 @@ export function AdList({ items, previews = true }: { items: AdItemView[]; previe
                 {i.page_name && <span>Sayfa: {i.page_name}</span>}
               </div>
               <div className="mt-3 flex flex-wrap gap-1.5">
-                <a href={`https://www.facebook.com/ads/library/?id=${encodeURIComponent(i.id)}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary">
-                  Reklamı aç ↗
-                </a>
-                <a href={`/reklam/${i.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">
-                  Önizlemeyi büyüt ↗
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  title="Reklamın videosunu/görselini yandaki izleme penceresinde açar"
+                  onClick={() => {
+                    openViewer(i.id);
+                    setWatched((s) => new Set(s).add(i.id));
+                  }}
+                >
+                  ▶ {watched.has(i.id) ? "Tekrar izle" : "Videoyu izle"}
+                </button>
+                <a href={`https://www.facebook.com/ads/library/?id=${encodeURIComponent(i.id)}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">
+                  Reklam Kütüphanesi ↗
                 </a>
                 {(i.title || i.body) && <CopyText text={[i.title, i.body].filter(Boolean).join("\n\n")} />}
               </div>

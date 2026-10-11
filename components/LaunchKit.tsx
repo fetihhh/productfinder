@@ -171,7 +171,8 @@ export function AdItemsSection({ items, libraryUrl }: { items: AdItemView[]; lib
       </div>
       <p className="card-note mb-4">
         Son 150 günde AB&apos;de yayınlanan reklamlar. &quot;En çok tutan&quot; sırası: yayında olan reklam önce, yayında kalma süresi (kârsız reklam birkaç günde
-        kapatılır), aynı metnin yayındaki kopya sayısı (ölçekleme) ve erişim. Görsel ve videoyu &quot;Reklamı aç&quot; ile görün.
+        kapatılır), aynı metnin yayındaki kopya sayısı (ölçekleme) ve erişim. &quot;▶ Videoyu izle&quot; reklamın videosunu/görselini ekranın sağındaki izleme
+        penceresinde açar (Facebook önizlemenin sayfaya gömülmesine izin vermez); sıradaki reklama basınca aynı pencere ona geçer.
       </p>
       <AdList items={items} />
     </section>

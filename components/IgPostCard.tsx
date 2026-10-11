@@ -7,19 +7,25 @@ import type { IgPostRow } from "@/lib/instagram";
 export function IgPostCard({ p, showStore = true }: { p: IgPostRow; showStore?: boolean }) {
   const video = p.media_type === "VIDEO";
   const preview = video ? (p.thumb_url ?? null) : p.media_url;
+  // API video dosyasını vermediyse (çoğu zaman telifli müzik): Instagram'ın resmi gömme penceresi sayfada oynatır.
+  const embed = video && !p.media_url && p.permalink ? `${p.permalink.replace(/\/$/, "")}/embed/` : null;
   return (
     <article className="card flex flex-col overflow-hidden">
-      <div className="relative aspect-[4/5] bg-surface-muted">
-        {video && p.media_url ? (
+      <div className={`relative bg-surface-muted ${embed ? "h-[640px] bg-white" : "aspect-[4/5]"}`}>
+        {embed ? (
+          <iframe src={embed} title="Instagram videosu" loading="lazy" allowFullScreen scrolling="no" className="block h-full w-full border-0" />
+        ) : video && p.media_url ? (
           <video src={p.media_url} poster={preview ?? undefined} controls preload="none" playsInline className="h-full w-full object-cover" />
         ) : preview ? (
           <img src={preview} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
         ) : (
           <div className="grid h-full place-items-center text-sm text-muted">Önizleme yok</div>
         )}
-        <span className="absolute top-2 left-2 badge bg-black/70 text-white shadow-sm">
-          {video ? (p.product_type === "REELS" ? "▶ Reels" : "▶ Video") : p.media_type === "CAROUSEL_ALBUM" ? "▦ Albüm" : "◻ Görsel"}
-        </span>
+        {!embed && (
+          <span className="absolute top-2 left-2 badge bg-black/70 text-white shadow-sm">
+            {video ? (p.product_type === "REELS" ? "▶ Reels" : "▶ Video") : p.media_type === "CAROUSEL_ALBUM" ? "▦ Albüm" : "◻ Görsel"}
+          </span>
+        )}
         {isGiveaway(p.caption) && (
           <span className="absolute top-10 left-2 badge bg-violet-600 text-white shadow-sm" title="Çekiliş: yorumlar katılım koşulu, gerçek ilgiyi abartır">
             🎁 Çekiliş

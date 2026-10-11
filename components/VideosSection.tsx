@@ -28,13 +28,13 @@ export function VideosSection({ data }: { data: { instagram: string | null; igVi
       </div>
       <p className="card-note mb-4">
         Mağazanın Instagram ve TikTok videoları; reklam videoları çoğu zaman burada da paylaşılır. Instagram videoları etkileşime göre sıralıdır ve
-        indirilebilir. Fikir ve açı için kullanın: başkasının videosunu olduğu gibi yayınlamak telif hakkını ihlal eder.
+        indirilebilir (dosyası gelmeyenler Instagram oynatıcısıyla oynar). Fikir ve açı için kullanın: başkasının videosunu olduğu gibi yayınlamak telif hakkını ihlal eder.
       </p>
 
       {igVideos.length > 0 && (
         <>
           <h3 className="mb-2 text-sm font-semibold">Instagram</h3>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {igVideos.map((p) => (
               <IgPostCard key={p.id} p={p} showStore={false} />
             ))}

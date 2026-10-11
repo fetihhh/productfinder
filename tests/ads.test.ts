@@ -96,8 +96,9 @@ test("adLibraryClient: anahtar Authorization başlığında, hata kodları sın�
 
 test("reklam winner ve yükseliş skorlarına eklenir, toplam en fazla 100", () => {
   const base = { reviewCount: null, rating: null, price: null, currency: null, trendScore: 0, ranks: [], snapshots: [] };
-  assert.equal(winnerScore({ ...base, adPoints: 25 }).breakdown.parts.reklam, 15);
-  assert.equal(winnerScore({ ...base, adPoints: 10 }).score, 6);
+  assert.equal(winnerScore({ ...base, adPoints: 25 }).breakdown.parts.reklam, 30);
+  assert.equal(winnerScore({ ...base, adScore: 80 }).breakdown.parts.reklam, 30);
+  assert.equal(winnerScore({ ...base, adPoints: 10 }).score, 15);
   // Yeni mağaza sinyalleri: stok azalması ve bağımsız rakip mağazalar.
   assert.deepEqual(
     [1, 2, 5].map((d) => winnerScore({ ...base, stockDrops: d }).breakdown.parts.hareket),

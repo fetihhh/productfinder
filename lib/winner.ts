@@ -5,19 +5,21 @@
 // Tahmini satış          = yorum sayısı × 10 – 50  (alıcıların %2–%10'u yorum bırakır varsayımı)
 // Tahmini aylık satış    = son ≤30 günde eklenen yorum (aylığa ölçeklenmiş, en az 7 günlük veri) × 10 – 50
 //
-// Winner skoru:
-//   talep   25 × min(1, log10(1 + yorum) / 3) × puan katsayısı   (1000 yorum = tam; ★<4 → ×0,6, ★4–4,5 → ×0,85)
-//           yorum yoksa toptancı satışı: 15 × min(1, log10(1 + satış) / 4) (10.000 satış = 15; ilan fotoğrafla eşleşmediyse ×0,5)
-//   ivme    20 × min(1, aylık yeni yorum / 30)                      (en az 7 günlük ölçüm gerekir)
-//           yorum ölçümü yoksa toptancı satış hızı: 20 × min(1, haftalık satış / 100)
-//   trafik  12 × sıra puanı + 3 × sıra iyileşmesi                   (1 M → 0,1; ≤150 B → 1; 30 günde %20 iyileşme = 3)
-//   gündem  10 × trend skoru / 100                                  (bloglarda anılma)
-//   fiyat   10 → 25–150 $, 5 → 15–25 $ veya 150–300 $, 0 → diğer   (yeniden satış için uygun fiyat bandı)
-//   tedarik 20 → toptancıda benzer ürün (benzerlik ≥ %70) 8 + marj puanı (perakende / toptan ≥ 4 → 12, ≥ 3 → 9, ≥ 2 → 5)
-//   reklam  15 × reklam puanı / 25   (Meta Reklam Kütüphanesi: yayındaki reklam sayısı ve en eski reklamın yaşı)
-//   hareket 10 → mağazada stok azalması (satış işareti): 1 → 4, ≥ 2 → 7, ≥ 5 → 10   (yeni mağaza keşfinden gelen ürünler)
+// Winner skoru = KANIT (ürün satıyor mu?) + UYGUNLUK (satılabilir mi?) × kanıt kapısı. Toplam en fazla 100.
+//  Kanıt (en fazla 100):
+//   reklam  30 × min(1, reklam kanıt skoru / 80)   (Meta Reklam Kütüphanesi: süreklilik, ölçekleme, kopya, erişim, ülke; en güçlü işaret)
+//   talep   20 × min(1, log10(1 + yorum) / 3) × puan katsayısı   (1000 yorum = tam; ★<4 → ×0,6, ★4–4,5 → ×0,85)
+//           Yorum artışı henüz ölçülmediyse ×0,5: yeni mağazalar yorumları çoğu zaman toplu içe aktarır.
+//           Yorum yoksa toptancı satışı: 10 × min(1, log10(1 + satış) / 4) (ilan fotoğrafla eşleşmediyse ×0,5)
+//   ivme    15 × min(1, aylık yeni yorum / 30) (en az 7 günlük ölçüm); yoksa toptancı satış hızı 15 × min(1, haftalık / 100)
+//   trafik  8 × sıra puanı + 2 × sıra iyileşmesi   (1 M → 0,1; ≤150 B → 1; 30 günde %20 iyileşme = 2)
+//   gündem  5 × trend skoru / 100                  (bloglarda anılma)
+//   hareket 10 → mağazada stok azalması (satış işareti): 1 → 4, ≥ 2 → 7, ≥ 5 → 10
 //   kopya   10 → aynı ürünü satan bağımsız yeni mağaza: 1 → 5, 2–4 → 8, ≥ 5 → 10   (aynı satıcı ağı sayılmaz)
-//   Toplam en fazla 100.
+//  Uygunluk (en fazla 25), kanıt kapısıyla çarpılır: min(1, kanıt / 30). Kanıtı olmayan ürün yalnızca ucuz toptancısı ve
+//  uygun fiyatı olduğu için üste çıkamaz.
+//   fiyat   10 → 25–150 $, 5 → 15–25 $ veya 150–300 $, 0 → diğer
+//   tedarik 15 → toptancıda benzer ürün (benzerlik ≥ %70) 6 + marj puanı (perakende / toptan ≥ 4 → 9, ≥ 3 → 7, ≥ 2 → 4)
 //
 // Yükseliş skoru ("Yükselenler" görünümü, 0–100): büyüklükten bağımsız, HIZ ölçer.
 //   yorum   45 × min(1, aylık büyüme / %30)     aylık büyüme = aylık yeni yorum / max(20, toplam yorum); en az 3 yeni yorum/ay
@@ -44,7 +46,8 @@ export type WinnerInput = {
   /** Toptancı araması: en iyi eşleşmelerin en düşük birim fiyatı (USD) ve kâr marjı (perakende / toptan). */
   supplierMinUsd?: number | null;
   marginRatio?: number | null;
-  /** Reklam puanı (0–25) ve son 14 günde açılan reklam sayısı (Meta Reklam Kütüphanesi). */
+  /** Reklam kanıt skoru (0–100); yoksa reklam puanından (0–25) × 4. Son 14 günde açılan reklam sayısı. */
+  adScore?: number;
   adPoints?: number;
   newAds14d?: number;
   /** Ürünün mağazasında toplam stok azalması ve aynı ürünü satan bağımsız mağaza sayısı (yeni mağaza keşfi). */
@@ -74,6 +77,9 @@ export type WinnerBreakdown = {
   revenuePerMonth: Range | null;
   priceUsd: number | null;
   historyDays: number;
+  /** Kanıt puanı (reklam, talep, ivme, trafik, gündem, hareket, kopya) ve uygunluk kapısı (0–1). */
+  evidence?: number;
+  gate?: number;
   momentum: Momentum;
 };
 
@@ -162,8 +168,11 @@ export function soldPerWeek(points: { day: string; sold: number | null }[]): num
 export function supplyPoints(supplierMinUsd: number | null, margin: number | null): number {
   if (supplierMinUsd === null) return 0;
   const m = margin ?? 0;
-  return 8 + (m >= 4 ? 12 : m >= 3 ? 9 : m >= 2 ? 5 : 0);
+  return 6 + (m >= 4 ? 9 : m >= 3 ? 7 : m >= 2 ? 4 : 0);
 }
+
+/** Uygunluk puanının (fiyat + tedarik) tam sayılması için gereken kanıt puanı. */
+export const EVIDENCE_GATE = 30;
 
 /** Yalnızca metin benzerliğiyle bulunan ilanlarda kabul edilen en yüksek perakende/toptan oranı. */
 export const MAX_TEXT_MARGIN = 50;
@@ -213,24 +222,28 @@ export function winnerScore(input: WinnerInput): { score: number; breakdown: Win
   const rpm = reviewsPerMonth(input.snapshots);
   const priceUsd = toUsd(input.price, input.currency);
 
-  const reviewTalep = reviews ? 25 * clamp01(Math.log10(1 + reviews) / 3) * ratingFactor(input.rating) : 0;
-  const supplierTalep = input.supplierSold ? 15 * clamp01(Math.log10(1 + input.supplierSold) / 4) * (input.supplierByImage ? 1 : 0.5) : 0;
+  // Artışı ölçülmemiş yorumlar yarım sayılır (toplu içe aktarılmış olabilir).
+  const reviewTalep = reviews ? 20 * clamp01(Math.log10(1 + reviews) / 3) * ratingFactor(input.rating) * (rpm === null ? 0.5 : 1) : 0;
+  const supplierTalep = input.supplierSold ? 10 * clamp01(Math.log10(1 + input.supplierSold) / 4) * (input.supplierByImage ? 1 : 0.5) : 0;
   const talep = Math.max(reviewTalep, supplierTalep);
   const perWeek = input.supplierSoldPerWeek ?? null;
-  const ivme = rpm !== null ? 20 * clamp01(rpm / 30) : perWeek !== null ? 20 * clamp01(perWeek / 100) * (input.supplierByImage ? 1 : 0.5) : 0;
-  const trafik = 12 * rankPoints(latestRank) + (change === null ? 0 : 3 * clamp01((change - 1) / 0.2));
-  const gundem = 10 * clamp01(Number(input.trendScore) / 100);
-  const fiyat = pricePoints(priceUsd);
-  const tedarik = supplyPoints(input.supplierMinUsd ?? null, input.marginRatio ?? null);
-  const reklam = 15 * clamp01((input.adPoints ?? 0) / 25);
+  const ivme = rpm !== null ? 15 * clamp01(rpm / 30) : perWeek !== null ? 15 * clamp01(perWeek / 100) * (input.supplierByImage ? 1 : 0.5) : 0;
+  const trafik = 8 * rankPoints(latestRank) + (change === null ? 0 : 2 * clamp01((change - 1) / 0.2));
+  const gundem = 5 * clamp01(Number(input.trendScore) / 100);
+  const adScore = input.adScore ?? (input.adPoints ?? 0) * 4;
+  const reklam = 30 * clamp01(adScore / 80);
   const drops = input.stockDrops ?? 0;
   const hareket = drops >= 5 ? 10 : drops >= 2 ? 7 : drops >= 1 ? 4 : 0;
   const copies = input.independentCopies ?? 0;
   const kopya = copies >= 5 ? 10 : copies >= 2 ? 8 : copies >= 1 ? 5 : 0;
+  const evidence = talep + ivme + trafik + gundem + reklam + hareket + kopya;
+  const gate = clamp01(evidence / EVIDENCE_GATE);
+  const fiyat = pricePoints(priceUsd) * gate;
+  const tedarik = supplyPoints(input.supplierMinUsd ?? null, input.marginRatio ?? null) * gate;
 
   const salesPerMonth = rpm === null ? null : scale(rpm, REVIEW_TO_SALES);
   const days = new Set([...input.snapshots.map((s) => s.day), ...input.ranks.map((r) => r.day)]);
-  const parts = { talep: round1(talep), ivme: round1(ivme), trafik: round1(trafik), gundem: round1(gundem), fiyat, tedarik, reklam: round1(reklam), hareket, kopya };
+  const parts = { talep: round1(talep), ivme: round1(ivme), trafik: round1(trafik), gundem: round1(gundem), fiyat: round1(fiyat), tedarik: round1(tedarik), reklam: round1(reklam), hareket, kopya };
   return {
     score: round1(Math.min(100, parts.talep + parts.ivme + parts.trafik + parts.gundem + parts.fiyat + parts.tedarik + parts.reklam + parts.hareket + parts.kopya)),
     breakdown: {
@@ -244,6 +257,8 @@ export function winnerScore(input: WinnerInput): { score: number; breakdown: Win
       revenuePerMonth: salesPerMonth && input.price !== null ? scale(Number(input.price), salesPerMonth) : null,
       priceUsd: priceUsd === null ? null : round1(priceUsd),
       historyDays: days.size,
+      evidence: round1(evidence),
+      gate: Math.round(gate * 100) / 100,
       momentum: momentumScore(reviews, rpm, change, input.mentions7d ?? 0, input.newAds14d ?? 0),
     },
   };

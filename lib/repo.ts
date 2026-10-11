@@ -294,6 +294,7 @@ export async function updateWinnerScores(): Promise<number> {
       supplierMinUsd: p.supplier_min_usd === null ? null : Number(p.supplier_min_usd),
       marginRatio: p.margin_ratio === null ? null : Number(p.margin_ratio),
       adPoints: ads.get(p.brand_domain)?.points ?? 0,
+      adScore: ads.get(p.brand_domain)?.score ?? 0,
       newAds14d: ads.get(p.brand_domain)?.newAds14d ?? 0,
       stockDrops: storeBy.get(p.brand_domain)?.stock_drops ?? 0,
       supplierSold: p.supplier_sold,

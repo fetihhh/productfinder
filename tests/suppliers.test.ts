@@ -149,9 +149,9 @@ test("supplierEconomics ve supplyPoints: en düşük toptan fiyat ve marj", () =
   assert.deepEqual(supplierEconomics([{ similarity: 1, priceMin: 0.07, currency: "USD" }], 22, "USD"), { minUsd: null, margin: null });
   assert.deepEqual(supplierEconomics([{ similarity: 0.95, priceMin: 0.3, currency: "USD", imageDistance: 4 }], 22, "USD"), { minUsd: 0.3, margin: 73.3 });
   assert.equal(supplyPoints(null, null), 0);
-  assert.equal(supplyPoints(6.8, 36.6), 20);
-  assert.equal(supplyPoints(50, 2.5), 13);
-  assert.equal(supplyPoints(80, 1.2), 8);
+  assert.equal(supplyPoints(6.8, 36.6), 15);
+  assert.equal(supplyPoints(50, 2.5), 10);
+  assert.equal(supplyPoints(80, 1.2), 6);
 });
 
 test("Büyük marka: Tranco sırası sınırın üstündeyse ağa çıkmadan elenir", async () => {

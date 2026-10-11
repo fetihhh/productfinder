@@ -100,8 +100,10 @@ test("winnerScore: bileşenler ve satış tahminleri", () => {
     supplierMinUsd: 20,
     marginRatio: 5,
   });
-  assert.deepEqual(breakdown.parts, { talep: 25, ivme: 20, trafik: 15, gundem: 4, fiyat: 10, tedarik: 20, reklam: 0, hareket: 0, kopya: 0 });
-  assert.equal(score, 94);
+  assert.deepEqual(breakdown.parts, { talep: 20, ivme: 15, trafik: 10, gundem: 2, fiyat: 10, tedarik: 15, reklam: 0, hareket: 0, kopya: 0 });
+  assert.equal(score, 72);
+  assert.equal(breakdown.evidence, 47);
+  assert.equal(breakdown.gate, 1);
   assert.deepEqual(breakdown.sales, { low: 9990, high: 49950 });
   assert.equal(breakdown.reviewsPerMonth, 90);
   assert.deepEqual(breakdown.salesPerMonth, { low: 900, high: 4500 });
@@ -113,7 +115,7 @@ test("winnerScore: veri yoksa yalnızca gündem puanı", () => {
   const { score, breakdown } = winnerScore({
     reviewCount: null, rating: null, price: null, currency: null, trendScore: 20, ranks: [], snapshots: [],
   });
-  assert.equal(score, 2);
+  assert.equal(score, 1);
   assert.equal(breakdown.visits, null);
   assert.equal(breakdown.sales, null);
   assert.equal(breakdown.salesPerMonth, null);
@@ -156,11 +158,25 @@ test("soldPerWeek ve toptancı satışı: yorumu olmayan ürünlerde talep ve iv
 
   const base = { reviewCount: null, rating: null, price: null, currency: null, trendScore: 0, ranks: [], snapshots: [] };
   const exact = winnerScore({ ...base, supplierSold: 9999, supplierSoldPerWeek: 50, supplierByImage: true }).breakdown.parts;
-  assert.equal(exact.talep, 15);
-  assert.equal(exact.ivme, 10);
+  assert.equal(exact.talep, 10);
+  assert.equal(exact.ivme, 7.5);
   const textOnly = winnerScore({ ...base, supplierSold: 9999, supplierSoldPerWeek: 50, supplierByImage: false }).breakdown.parts;
-  assert.equal(textOnly.talep, 7.5);
-  assert.equal(textOnly.ivme, 5);
-  // Yorum varsa yorum tabanlı talep/ivme önceliklidir (toptancı satışı yalnızca daha yüksekse talebe girer).
-  assert.equal(winnerScore({ ...base, reviewCount: 999, supplierSold: 10 }).breakdown.parts.talep, 25);
+  assert.equal(textOnly.talep, 5);
+  assert.equal(textOnly.ivme, 3.8);
+  // Yorum varsa yorum tabanlı talep önceliklidir; artışı ölçülmemiş yorum yarım sayılır (toplu içe aktarılmış olabilir).
+  assert.equal(winnerScore({ ...base, reviewCount: 999, supplierSold: 10 }).breakdown.parts.talep, 10);
+  const measured = { ...base, reviewCount: 999, snapshots: [{ day: "2026-09-29", review_count: 990 }, { day: "2026-10-09", review_count: 999 }] };
+  assert.equal(winnerScore(measured).breakdown.parts.talep, 20);
+});
+
+test("winnerScore: kanıtı olmayan ürün yalnızca uygun fiyat ve ucuz toptancıyla üste çıkamaz; reklamı tutan ürün öne geçer", () => {
+  const base = { reviewCount: null, rating: null, price: 35, currency: "USD", trendScore: 19, ranks: [], snapshots: [], supplierMinUsd: 0.99, marginRatio: 35 };
+  // Reklam yok, 219 içe aktarılmış yorum (artış ölçülmedi): eski hesapta 51 puan alıp 1. sıradaydı.
+  const noAds = winnerScore({ ...base, reviewCount: 219, rating: 4.5 });
+  assert.ok(noAds.score < 20, `kanıtsız ürün ${noAds.score}`);
+  assert.ok((noAds.breakdown.gate ?? 1) < 0.4);
+  // Reklamı ölçeklenen ürün (reklam kanıt skoru 65).
+  const ads = winnerScore({ ...base, adScore: 65 });
+  assert.equal(ads.breakdown.parts.reklam, 24.4);
+  assert.ok(ads.score > noAds.score + 15, `reklamlı ${ads.score} / reklamsız ${noAds.score}`);
 });

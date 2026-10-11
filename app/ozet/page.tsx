@@ -118,7 +118,7 @@ export default async function SummaryPage() {
           )}
         </Section>
 
-        <Section title="En yüksek winner skorlu ürünler" note="Doğrulanmış ürünler: talep, ivme, trafik, gündem, fiyat, tedarik, reklam, stok hareketi ve rakip mağaza." href="/?sort=winner">
+        <Section title="En yüksek winner skorlu ürünler" note="Doğrulanmış ürünler: önce kanıt (reklam, talep, ivme, stok hareketi, rakip mağaza), sonra fiyat ve tedarik." href="/?sort=winner">
           {s.winners.length === 0 ? (
             <Empty text="Henüz doğrulanmış ürün yok." />
           ) : (

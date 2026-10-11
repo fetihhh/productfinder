@@ -178,10 +178,10 @@ export async function adHistory(domain: string): Promise<AdHistoryPoint[]> {
 }
 
 /** Winner/yükseliş skorları için: alan adı → reklam puanı ve son 14 günde açılan reklam sayısı. */
-export async function adPointsByDomain(): Promise<Map<string, { points: number; newAds14d: number }>> {
-  const { data, error } = await db().from("ad_signals").select("domain, ad_points, new_ads_14d").gt("total_ads", 0);
+export async function adPointsByDomain(): Promise<Map<string, { points: number; score: number; newAds14d: number }>> {
+  const { data, error } = await db().from("ad_signals").select("domain, ad_points, ad_score, new_ads_14d").gt("total_ads", 0);
   if (error) throw new Error(`ad_signals okunamadı: ${error.message}`);
-  return new Map(data.map((r) => [r.domain as string, { points: Number(r.ad_points), newAds14d: r.new_ads_14d as number }]));
+  return new Map(data.map((r) => [r.domain as string, { points: Number(r.ad_points), score: Number(r.ad_score), newAds14d: r.new_ads_14d as number }]));
 }
 
 export type AdStoreContext = { shop_name: string | null; hero_handle: string | null; first_product_at: string | null; products: { h: string; t: string; img: string | null; c: string | null }[] };

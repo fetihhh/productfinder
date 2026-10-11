@@ -255,19 +255,22 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
             empty="Fiyat okunamadı"
           />
         </Panel>
-        <Panel title="Winner skoru nasıl oluştu?" note="Her çubuk kendi azami puanına göre dolar; toplam en fazla 100. Ayrıntılar README'de.">
+        <Panel
+          title="Winner skoru nasıl oluştu?"
+          note={`Kanıt (reklam, talep, ivme, trafik, gündem, stok, rakip) ${w?.evidence ?? "?"} puan. Fiyat ve tedarik yalnızca kanıt 30'u geçince tam sayılır${w?.gate !== undefined && w.gate < 1 ? ` (şu an %${Math.round(w.gate * 100)})` : ""}. Toplam en fazla 100.`}
+        >
           {w ? (
             <ScoreBars
               parts={[
-                { label: "Talep", value: w.parts.talep, max: 25, hint: "Toplam yorum (1000 yorum = tam), düşük puanda azalır" },
-                { label: "İvme", value: w.parts.ivme, max: 20, hint: "Aylık yeni yorum (30/ay = tam); 7 günlük ölçüm gerekir" },
-                { label: "Trafik", value: w.parts.trafik, max: 15, hint: "Tranco sırası + 30 günlük iyileşme" },
-                { label: "Gündem", value: w.parts.gundem, max: 10, hint: "Bloglarda anılma (trend skoru)" },
-                { label: "Fiyat", value: w.parts.fiyat, max: 10, hint: "25–150 $ bandı tam puan" },
-                { label: "Tedarik", value: w.parts.tedarik ?? 0, max: 20, hint: "Toptancıda benzer ürün 8 + kâr marjı (≥4× = 12)" },
-                { label: "Reklam", value: w.parts.reklam ?? 0, max: 15, hint: "Meta'da yayındaki reklam sayısı ve en eski reklamın yaşı" },
+                { label: "Reklam", value: w.parts.reklam ?? 0, max: 30, hint: "Meta reklam kanıt skoru (80+ = tam): süreklilik, ölçekleme, kopya, erişim" },
+                { label: "Talep", value: w.parts.talep, max: 20, hint: "Toplam yorum (1000 = tam); artışı ölçülmemiş yorum yarım sayılır" },
+                { label: "İvme", value: w.parts.ivme, max: 15, hint: "Aylık yeni yorum (30/ay = tam); 7 günlük ölçüm gerekir" },
+                { label: "Trafik", value: w.parts.trafik, max: 10, hint: "Tranco sırası + 30 günlük iyileşme" },
+                { label: "Gündem", value: w.parts.gundem, max: 5, hint: "Bloglarda anılma (trend skoru)" },
                 { label: "Stok hareketi", value: w.parts.hareket ?? 0, max: 10, hint: "Mağazada stokta olan varyant sayısının azalması (satış işareti)" },
                 { label: "Rakip mağaza", value: w.parts.kopya ?? 0, max: 10, hint: "Aynı ürünü satan bağımsız yeni mağazalar (talep kanıtı)" },
+                { label: "Fiyat", value: w.parts.fiyat, max: 10, hint: "25–150 $ bandı tam puan; kanıt puanı 30'un altındaysa orantılı azalır" },
+                { label: "Tedarik", value: w.parts.tedarik ?? 0, max: 15, hint: "Toptancıda benzer ürün 6 + kâr marjı (≥4× = 9); kanıt puanı 30'un altındaysa orantılı azalır" },
               ]}
             />
           ) : (

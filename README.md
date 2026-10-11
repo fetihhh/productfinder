@@ -254,21 +254,23 @@ Hiçbir ücretsiz kaynak bir sitenin gerçek ziyaret ya da satış sayısını v
 
 Günlük iş doğrulanmış ürünlerin (ve favori/incelenecek listesindekilerin) fiyat, yorum ve stok bilgisini her gün kaydeder; Tranco sırası her marka için günlük tutulur (`traffic_ranks`). Grafikler bu geçmişten çizilir ve her gün dolar.
 
-**Winner skoru (0–100)**, varsayılan sıralamadır:
+**Winner skoru (0–100)**, varsayılan sıralamadır. İki kısımdan oluşur: **kanıt** (ürün gerçekten satıyor mu?) ve **uygunluk** (satılabilir mi?). Uygunluk puanı kanıt puanı 30'u geçmedikçe orantılı azalır: reklamı, satış hareketi ya da rakibi olmayan bir ürün yalnızca uygun fiyatlı ve ucuz toptancılı olduğu için üst sıralara çıkamaz.
 
 | Bileşen | Puan | Formül |
 |---|---|---|
-| Talep | 25 | `25 × min(1, log10(1 + yorum) / 3)` × puan katsayısı (★ ≥ 4,5 → 1; 4–4,5 → 0,85; < 4 → 0,6). 1.000 yorum = tam puan. Yorumu olmayan ürünlerde **toptancı satışı**: `15 × min(1, log10(1 + satış) / 4)` (10.000 satış = 15; ilan fotoğrafla eşleşmediyse ×0,5) |
-| İvme | 20 | `20 × min(1, aylık yeni yorum / 30)` (en az 7 günlük ölçüm). Yorum ölçümü yoksa **toptancı satış hızı**: `20 × min(1, haftalık satış / 100)` (fotoğrafla eşleşmediyse ×0,5) |
-| Trafik | 15 | `12 × sıra puanı` (1 Mn → 0,1, ≤ 150 B → 1, logaritmik) `+ 3 × min(1, (eski sıra / yeni sıra − 1) / 0,2)` (30 günde %20 iyileşme = tam) |
-| Gündem | 10 | `10 × trend skoru / 100` |
-| Fiyat | 10 | 25–150 $ → 10; 15–25 $ veya 150–300 $ → 5; diğer → 0 (yaklaşık sabit kurlarla dolara çevrilir) |
-| Tedarik | 20 | Toptancıda benzer ürün (≥ %70) → 8; kâr marjı ≥ 4× → +12, ≥ 3× → +9, ≥ 2× → +5 |
-| Reklam | 15 | `15 × reklam puanı / 25` (Meta'da yayındaki reklam sayısı ve en eski reklamın yaşı; aşağıda **Reklam sinyali**) |
+| **Kanıt** | | |
+| Reklam | 30 | `30 × min(1, reklam kanıt skoru / 80)`: süreklilik, ölçekleme, kopya reklam, erişim, ülke genişlemesi (aşağıda **Reklam sinyali**). En güçlü işaret: kârsız reklam birkaç günde kapatılır |
+| Talep | 20 | `20 × min(1, log10(1 + yorum) / 3)` × puan katsayısı (★ ≥ 4,5 → 1; 4–4,5 → 0,85; < 4 → 0,6). Yorum artışı henüz ölçülmediyse **×0,5**: yeni mağazalar yorumları çoğu zaman toplu içe aktarır. Yorumu olmayan ürünlerde **toptancı satışı**: `10 × min(1, log10(1 + satış) / 4)` (ilan fotoğrafla eşleşmediyse ×0,5) |
+| İvme | 15 | `15 × min(1, aylık yeni yorum / 30)` (en az 7 günlük ölçüm). Yorum ölçümü yoksa **toptancı satış hızı**: `15 × min(1, haftalık satış / 100)` (fotoğrafla eşleşmediyse ×0,5) |
+| Trafik | 10 | `8 × sıra puanı` (1 Mn → 0,1, ≤ 150 B → 1, logaritmik) `+ 2 × min(1, (eski sıra / yeni sıra − 1) / 0,2)` |
+| Gündem | 5 | `5 × trend skoru / 100` |
 | Stok hareketi | 10 | Ürünün mağazasında toplam stok azalması (yeni mağaza keşfi): 1 → 4, ≥ 2 → 7, ≥ 5 → 10 |
 | Rakip mağaza | 10 | Aynı ürünü satan bağımsız yeni mağaza: 1 → 5, 2–4 → 8, ≥ 5 → 10 (aynı satıcının ağı sayılmaz) |
+| **Uygunluk** (× `min(1, kanıt / 30)`) | | |
+| Fiyat | 10 | 25–150 $ → 10; 15–25 $ veya 150–300 $ → 5; diğer → 0 (yaklaşık sabit kurlarla dolara çevrilir) |
+| Tedarik | 15 | Toptancıda benzer ürün (≥ %70) → 6; kâr marjı ≥ 4× → +9, ≥ 3× → +7, ≥ 2× → +4 |
 
-Toplam en fazla 100.
+Toplam en fazla 100. Ürün sayfasındaki "Winner skoru nasıl oluştu?" panelinde kanıt puanı ve uygunluk kapısı gösterilir.
 
 "İvme" ve trafik değişimi ilk hafta 0'dır; ölçümler biriktikçe hızla büyüyen ürünler öne çıkar.
 

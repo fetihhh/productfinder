@@ -35,13 +35,13 @@ export const RISING_BADGE = 40;
 
 /** Winner skorunun en çok katkı veren bileşenleri (kendi azami puanına oranla), kısa gerekçe etiketleri olarak. */
 const WINNER_PARTS: { key: keyof NonNullable<ProductRow["winner_breakdown"]>["parts"]; max: number; label: (p: ProductRow) => string }[] = [
-  { key: "talep", max: 25, label: (p) => (p.review_count ? `${p.review_count.toLocaleString("tr-TR")} yorum` : "Tedarikçide çok satıyor") },
-  { key: "ivme", max: 20, label: () => "Satışı hızlanıyor" },
-  { key: "trafik", max: 15, label: () => "Site trafiği" },
-  { key: "gundem", max: 10, label: () => "Bloglarda gündemde" },
+  { key: "talep", max: 20, label: (p) => (p.review_count ? `${p.review_count.toLocaleString("tr-TR")} yorum` : "Tedarikçide çok satıyor") },
+  { key: "ivme", max: 15, label: () => "Satışı hızlanıyor" },
+  { key: "trafik", max: 10, label: () => "Site trafiği" },
+  { key: "gundem", max: 5, label: () => "Bloglarda gündemde" },
   { key: "fiyat", max: 10, label: () => "Uygun fiyat bandı" },
-  { key: "tedarik", max: 20, label: (p) => (p.margin_ratio ? `Marj ${Number(p.margin_ratio).toLocaleString("tr-TR")}×` : "Toptancısı var") },
-  { key: "reklam", max: 15, label: () => "Reklam veriyor" },
+  { key: "tedarik", max: 15, label: (p) => (p.margin_ratio ? `Marj ${Number(p.margin_ratio).toLocaleString("tr-TR")}×` : "Toptancısı var") },
+  { key: "reklam", max: 30, label: () => "Reklamı tutuyor" },
   { key: "hareket", max: 10, label: () => "📉 Stok hareketi" },
   { key: "kopya", max: 10, label: (p) => `${p.copy_count} rakip mağaza` },
 ];

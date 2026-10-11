@@ -29,7 +29,7 @@ npm install
 cp .env.example .env.local   # değerleri doldurun
 ```
 
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0030`).
+1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0031`).
 2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
 3. `npm run ingest` → ilk veriyi çeker ve doğrular.
 4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
@@ -146,7 +146,7 @@ Amaç: **son 5 ayda açılmış küçük dropshipping mağazalarını** yakalama
 ## Reklamdan mağaza keşfi (`config/adDiscovery.ts`, `dtc/adDiscovery.ts`, `scripts/adDiscovery.ts`)
 
 Yeni kayıtlı alan adı listeleri yalnızca son günlerde alınan alan adlarını verir. Bu adım tersinden gider: Meta Reklam Kütüphanesi'nde **AB'de yayındaki, son 45 günde başlamış** reklamlarda dropshipping reklamlarının sık kullandığı ifadeler aranır (14 dilde ~50 ifade: "envío gratis", "livraison gratuite", "perfect gift for her", "Rückenschmerzen"…; tam ifade araması). Reklamların bağlantı başlığındaki site adresi ("GETCOSMORA.COM") ayıklanır; pazaryerleri, sosyal ağlar ve barındırma alan adları atlanır. Bilinmeyen siteler `source = "reklam"` ile mağaza listesine eklenir ve aynı çalıştırmada kontrol edilir; açık ve son 5 ayda ürün eklemeye başlamış olanların reklamları mağaza puanına bakılmadan önce analiz edilir.
-- Çalıştırma başına 20 ifade (ifade başına 1 istek, saniyede 1); liste birkaç günde bir baştan döner (`job_state.ad_discovery.cursor`).
+- Çalıştırma başına 40 ifade (ifade başına 1 istek, saniyede 1; teklif, ürün ve niş ifadeleri, ~80 ifade); liste iki günde bir baştan döner (`job_state.ad_discovery.cursor`).
 - Tam günlük işte yeni alan adı keşfinden sonra çalışır. Ayrıca Actions → **Run workflow** → `kesif` modu: keşif + yalnızca bu mağazaların kontrolü + reklam analizi + aday seçimi.
 - `/yeni` sayfasında **📣 Reklamdan bulunanlar** filtresi ve kartlarda "📣 Reklamdan" etiketi.
 
@@ -179,7 +179,13 @@ Bir dropshipping mağazası bir ürüne haftalarca reklam veriyorsa ürün büy�
 5. Anahtarı ekleyin: `gh secret set META_ACCESS_TOKEN` (GitHub) ve yerelde `.env.local` içine `META_ACCESS_TOKEN=`.
 
 **Yenileme (~60 günde bir):** 3–5. adımları tekrarlayın. `/yeni` sayfası son 10 günde uyarır; anahtar geçersizse günlük iş başarısız görünür ve sayfada kırmızı uyarı çıkar.
+## Türk altyapıları: ikas ve Ticimax (`lib/nrd.ts`, `dtc/trPlatform.ts`)
+
+Türkiye'deki e-ticaret sitelerinin çoğu Shopify yerine yerli altyapılarda kuruludur. Yeni alan adı keşfi DNS'ten tespit eder (yalnızca DNS sorgusu): Shopify (A kaydı 23.227.38.x), **ikas** (Cloudflare'e çözülen alan adında `www` CNAME'i `*.myikas.com`), **Ticimax** (`www` CNAME'i `*.ticimax.cloud`); altyapı `stores.platform`'a yazılır. ikas/Ticimax mağazasının kontrolü: `sitemap.xml` → ürün site haritası (ürün adresleri, son güncelleme, görsel; en fazla 300 ürün), ana sayfadan öne çıkan ürün, öne çıkan ürünün sayfasındaki schema.org JSON-LD'den ad, fiyat, para birimi ve stok; ana sayfadan marka künyesi ve Instagram/TikTok. Mağaza başına ~5 istek, robots.txt'ye uyulur. TL ile satan mağazanın öne çıkan ürünü puana bakılmadan aday olur ve "Mağaza ülkesi → Türkiye" filtresinde görünür. Son 60 günün listesinin daha önce yalnızca Shopify için taranan kısmı bir kez de ikas/Ticimax için taranır (çalıştırma başına 300 bin alan adı). IdeaSoft (ad sunucusu `ns*.myideasoft.com`) henüz desteklenmiyor.
+
 ## DTC doğrulama (`dtc/verify.ts`)
+
+**Doğrulama nedir?** Bir ürünün sizin için gerçek bir fırsat olup olmadığının kontrolüdür: ürün **markanın kendi sitesinde** (Amazon, Trendyol gibi bir pazaryerinde değil) **satın alınabilen fiziksel bir ürün** mü ve **pazaryerlerinde satılmıyor** mu? Pazaryerinde satılan ürün herkesin erişebildiği, fiyat rekabetine açık bir üründür; "winner"ın değeri henüz yalnızca kendi sitesinde satılmasındadır. Sırasıyla: site açılıyor mu → büyük bir marka mı (trafik sırası) → sayfada satın alma (sepete ekle) var mı → fiziksel ürün mü (kargo bilgisi) → Amazon/AliExpress/Otto'da doğrudan arama → Tavily ile ~126 pazaryeri/perakendecide geniş arama. Doğrudan arama temizse ürün doğrulanmış sayılır; Tavily'nin günlük kotası dolduysa geniş arama 2 günde bir arka planda denenir ve ürün kuyruğu meşgul etmez. Reklamı kanıtlanmış/ölçeklenen ürünler sıranın başına alınır ve doğrulanırken de listede "⏳ Doğrulanıyor" etiketiyle görünür. Çalıştırma başına 120 ürün.
 
 **Dil:** İngilizce konuşulmayan ülkelerdeki yeni mağazaların ürünleri pazaryerlerinde İngilizce adıyla (MyMemory çevirisi) aranır; ürünün görünen adı değişmez.
 

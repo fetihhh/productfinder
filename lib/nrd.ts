@@ -57,3 +57,55 @@ export async function findShopifyDomains(domains: string[], concurrency: number,
   await Promise.all(Array.from({ length: Math.min(concurrency, domains.length) }, worker));
   return hits;
 }
+
+export type StorePlatform = "shopify" | "ikas" | "ticimax";
+export type DnsCname = (host: string) => Promise<string[]>;
+export const systemCname: DnsCname = (h) => resolver.resolveCname(h);
+
+/** Cloudflare adres blokları: Türk altyapıları (ikas, Ticimax) alan adlarını Cloudflare üzerinden yayınlar. */
+export function isCloudflareIp(ip: string): boolean {
+  const [a, b] = ip.split(".").map(Number);
+  return (a === 104 && b >= 16 && b <= 31) || (a === 172 && b >= 64 && b <= 71) || (a === 162 && b === 159);
+}
+
+/** www alt alan adının CNAME hedefinden Türk altyapısı: ikas (*.myikas.com), Ticimax (*.ticimax.cloud). */
+export function platformFromCname(targets: string[]): StorePlatform | null {
+  for (const t of targets.map((x) => x.toLowerCase().replace(/\.$/, ""))) {
+    if (t === "myikas.com" || t.endsWith(".myikas.com")) return "ikas";
+    if (t === "ticimax.cloud" || t.endsWith(".ticimax.cloud")) return "ticimax";
+  }
+  return null;
+}
+
+/**
+ * Alan adlarından mağazalar ve altyapıları: Shopify (23.227.38.x) ya da Cloudflare'e çözülen alan adlarında www CNAME'i
+ * ikas/Ticimax olanlar. Yalnızca DNS sorgusu; sitelere istek gönderilmez.
+ */
+export async function findStoreDomains(
+  domains: string[],
+  concurrency: number,
+  resolve: DnsResolve = systemResolve,
+  cname: DnsCname = systemCname,
+): Promise<{ domain: string; platform: StorePlatform }[]> {
+  const hits: { domain: string; platform: StorePlatform }[] = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < domains.length) {
+      const d = domains[next++];
+      try {
+        const ips = await resolve(d);
+        if (ips.some(isShopifyIp)) {
+          hits.push({ domain: d, platform: "shopify" });
+          continue;
+        }
+        if (!ips.some(isCloudflareIp)) continue;
+        const p = platformFromCname(await cname(`www.${d}`).catch(() => []));
+        if (p) hits.push({ domain: d, platform: p });
+      } catch {
+        // kayıt yok / zaman aşımı: mağaza değil
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, domains.length) }, worker));
+  return hits;
+}

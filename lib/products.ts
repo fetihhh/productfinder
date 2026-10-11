@@ -40,6 +40,8 @@ export type ProductRow = {
   image_url: string | null;
   category: string | null;
   dtc_status: DtcStatus;
+  /** Boş = henüz doğrulanmadı (sırada). */
+  dtc_checked_at: string | null;
   dtc_reason: string | null;
   trend_score: number;
   score_breakdown: ScoreBreakdown | null;
@@ -143,7 +145,7 @@ function safeLike(s: string): string {
 export async function listProducts(f: Filters): Promise<{ rows: ProductRow[]; error: string | null }> {
   const brandFilter = Boolean(f.platform || f.country || f.shipsTr || f.age || f.ads);
   const select = [
-    "id, name, brand_domain, product_url, image_url, category, dtc_status, dtc_reason, trend_score, score_breakdown, winner_score, winner_breakdown, momentum_score, first_seen_at",
+    "id, name, brand_domain, product_url, image_url, category, dtc_status, dtc_reason, dtc_checked_at, trend_score, score_breakdown, winner_score, winner_breakdown, momentum_score, first_seen_at",
     "price, currency, review_count, rating, availability, launched_at, variant_count, product_type, supplier_count, supplier_min_usd, margin_ratio, supplier_checked_at, supplier_image_match, copy_count, supplier_sold, supplier_sold_per_week, timing, timing_reason, tr_listings, tr_checked_at, ig_tags, ig_tag_posts, ig_tag_checked_at",
     `brands${brandFilter ? "!inner" : ""}(platform, country, ships_to_tr, tranco_rank, registered_at, first_product_at, ads_active, ad_points)`,
     "mentions(source, url, title, posted_at)",
@@ -151,7 +153,9 @@ export async function listProducts(f: Filters): Promise<{ rows: ProductRow[]; er
   ].join(", ");
 
   let query = db().from("products").select(select);
-  if (f.status !== "all") query = query.eq("dtc_status", f.status);
+  // Varsayılan görünüm: doğrulanmışlar + reklamı kanıtlanmış/ölçeklenen ama sırası gelmemiş ürünler ("Doğrulanıyor").
+  if (f.status === "verified") query = query.or("dtc_status.eq.verified,and(dtc_checked_at.is.null,verify_priority.gte.95)");
+  else if (f.status !== "all") query = query.eq("dtc_status", f.status);
   if (f.category) query = query.eq("category", f.category);
   if (f.platform) query = query.eq("brands.platform", f.platform);
   if (f.country) query = query.eq("brands.country", f.country);
@@ -256,7 +260,7 @@ export async function getProduct(
     .from("products")
     .select(
       [
-        "id, name, brand_domain, product_url, image_url, category, dtc_status, dtc_reason, trend_score, score_breakdown, winner_score, winner_breakdown, momentum_score, first_seen_at",
+        "id, name, brand_domain, product_url, image_url, category, dtc_status, dtc_reason, dtc_checked_at, trend_score, score_breakdown, winner_score, winner_breakdown, momentum_score, first_seen_at",
         "price, currency, review_count, rating, availability, launched_at, variant_count, product_type, supplier_count, supplier_min_usd, margin_ratio, supplier_checked_at, supplier_image_match, copy_count, supplier_sold, supplier_sold_per_week, timing, timing_reason, tr_listings, tr_checked_at, ig_tags, ig_tag_posts, ig_tag_checked_at",
         "brands(platform, country, ships_to_tr, tranco_rank, tranco_day, marketplace_evidence, registered_at, first_product_at, ads_active, ad_points)",
         "mentions(source, url, title, posted_at)",

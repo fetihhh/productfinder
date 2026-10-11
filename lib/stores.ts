@@ -24,11 +24,11 @@ export async function setJobState(key: string, value: unknown): Promise<void> {
  * Keşfedilen mağazaları ekler (var olanlara dokunmaz); yeni eklenen sayısını döndürür.
  * Günlük listeden gelenler kayıttan 5 gün sonra ilk kez kontrol edilir (ilk günlerde mağazalar genelde kapalıdır).
  */
-export async function insertStores(domains: string[], source: string, registeredOn: string | null): Promise<number> {
+export async function insertStores(domains: string[], source: string, registeredOn: string | null, platform = "shopify"): Promise<number> {
   const firstCheck = registeredOn ? new Date(Date.parse(registeredOn) + 5 * DAY).toISOString() : new Date().toISOString();
   let inserted = 0;
   for (let i = 0; i < domains.length; i += 500) {
-    const rows = domains.slice(i, i + 500).map((domain) => ({ domain, source, registered_on: registeredOn, next_check_at: firstCheck }));
+    const rows = domains.slice(i, i + 500).map((domain) => ({ domain, source, registered_on: registeredOn, next_check_at: firstCheck, platform }));
     const { data, error } = await db().from("stores").upsert(rows, { onConflict: "domain", ignoreDuplicates: true }).select("domain");
     if (error) throw new Error(`stores yazılamadı: ${error.message}`);
     inserted += data.length;
@@ -36,13 +36,13 @@ export async function insertStores(domains: string[], source: string, registered
   return inserted;
 }
 
-export type StoreToCheck = { domain: string; registered_on: string | null; discovered_at: string; first_product_at: string | null; status?: string };
+export type StoreToCheck = { domain: string; registered_on: string | null; discovered_at: string; first_product_at: string | null; status?: string; platform?: string };
 
 /** Aday ürünü ya da reklamı olan açık mağazalar (kontrol zamanı beklenmez): ürün ayrıntılarını hemen doldurmak için. */
 export async function storesForDetail(limit: number): Promise<StoreToCheck[]> {
   const { data, error } = await db()
     .from("stores")
-    .select("domain, registered_on, discovered_at, first_product_at, status")
+    .select("domain, registered_on, discovered_at, first_product_at, status, platform")
     .eq("status", "live")
     .or("product_id.not.is.null,ad_points.gt.0")
     .order("total_score", { ascending: false })
@@ -54,7 +54,7 @@ export async function storesForDetail(limit: number): Promise<StoreToCheck[]> {
 export async function storesToCheck(limit: number, source?: string): Promise<StoreToCheck[]> {
   let query = db()
     .from("stores")
-    .select("domain, registered_on, discovered_at, first_product_at, status")
+    .select("domain, registered_on, discovered_at, first_product_at, status, platform")
     .in("status", ["pending", "closed", "live"]);
   if (source) query = query.eq("source", source);
   const { data, error } = await query

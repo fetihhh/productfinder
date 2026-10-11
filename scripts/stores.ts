@@ -20,7 +20,8 @@ import { parseStoreProducts, probeStore } from "../dtc/storeProbe.ts";
 import { saveHeroHash, storesToHash, updateCopies } from "../lib/copies.ts";
 import { registrableDomain } from "../lib/domain.ts";
 import { politeFetch, politeFetchBytes } from "../lib/http.ts";
-import { findShopifyDomains, NRD60_MAX_BYTES, NRD60_URL, parseDomainList, whoisdsUrl } from "../lib/nrd.ts";
+import { findStoreDomains, NRD60_MAX_BYTES, NRD60_URL, parseDomainList, whoisdsUrl, type StorePlatform } from "../lib/nrd.ts";
+import { probeTrStore } from "../dtc/trPlatform.ts";
 import { saveCandidate } from "../lib/repo.ts";
 import {
   brandsWithoutAge,
@@ -42,6 +43,21 @@ const isoDay = (msAgo: number) => new Date(Date.now() - msAgo).toISOString().sli
 const secs = (t0: number) => ((Date.now() - t0) / 1000).toFixed(0);
 
 /** Yeni kayıtlı alan adlarından Shopify mağazalarını bulur (son 3 günün WhoisDS listesi + ilk kurulumda son 60 gün). */
+/** Bulunan mağazaları altyapısıyla ekler (Shopify, ikas, Ticimax). */
+async function insertByPlatform(found: { domain: string; platform: StorePlatform }[], source: string, day: string | null): Promise<number> {
+  let added = 0;
+  for (const p of ["shopify", "ikas", "ticimax"] as const) {
+    const ds = found.filter((f) => f.platform === p).map((f) => f.domain);
+    if (ds.length) added += await insertStores(ds, source, day, p);
+  }
+  return added;
+}
+
+const platformSummary = (found: { platform: StorePlatform }[]) => {
+  const n = (p: StorePlatform) => found.filter((f) => f.platform === p).length;
+  return `${n("shopify")} Shopify${n("ikas") ? `, ${n("ikas")} ikas` : ""}${n("ticimax") ? `, ${n("ticimax")} Ticimax` : ""} mağazası`;
+};
+
 export async function discoverStores(): Promise<boolean> {
   console.log("\n▶ Yeni mağaza keşfi (yeni kayıtlı alan adları → DNS → Shopify)");
   let ok = true;
@@ -55,9 +71,9 @@ export async function discoverStores(): Promise<boolean> {
     try {
       const domains = parseDomainList(unzipFirst(res.bytes).data.toString("utf8"));
       const t0 = Date.now();
-      const hits = await findShopifyDomains(domains, DNS_CONCURRENCY);
-      const added = await insertStores(hits, "whoisds", day);
-      console.log(`  ${day}: ${domains.length} alan adı → ${hits.length} Shopify mağazası, ${added} yeni (${secs(t0)} sn)`);
+      const found = await findStoreDomains(domains, DNS_CONCURRENCY);
+      const added = await insertByPlatform(found, "whoisds", day);
+      console.log(`  ${day}: ${domains.length} alan adı → ${platformSummary(found)}, ${added} yeni (${secs(t0)} sn)`);
       done.push(day);
     } catch (err) {
       // Liste yerine HTML dönmüş olabilir (gün henüz yayımlanmadı); ertesi gün yeniden denenir.
@@ -67,7 +83,11 @@ export async function discoverStores(): Promise<boolean> {
   await setJobState("whoisds_days", done.slice(-30));
 
   const boot = (await getJobState<{ offset: number; done: boolean }>("nrd60")) ?? { offset: 0, done: false };
-  if (!boot.done) {
+  // Türk altyapıları (ikas, Ticimax) eklenmeden önce yalnızca Shopify için taranan kısım bir kez daha, bu kez yalnızca
+  // ikas/Ticimax için taranır (TR_RESCAN_UNTIL'e kadar; çalıştırma başına NRD_BOOTSTRAP_PER_RUN alan adı).
+  const TR_RESCAN_UNTIL = 1_820_000;
+  const tr = (await getJobState<{ offset: number }>("nrd60_tr")) ?? { offset: 0 };
+  if (!boot.done || tr.offset < TR_RESCAN_UNTIL) {
     const res = await politeFetchBytes(NRD60_URL, NRD60_MAX_BYTES);
     if (!res.ok) {
       console.error(`  ✖ 60 günlük liste indirilemedi: ${res.reason}`);
@@ -75,13 +95,23 @@ export async function discoverStores(): Promise<boolean> {
     }
     try {
       const all = parseDomainList(Buffer.from(res.bytes).toString("utf8"));
-      const chunk = all.slice(boot.offset, boot.offset + NRD_BOOTSTRAP_PER_RUN);
-      const t0 = Date.now();
-      const hits = await findShopifyDomains(chunk, DNS_CONCURRENCY);
-      const added = await insertStores(hits, "nrd60", null);
-      const offset = boot.offset + chunk.length;
-      await setJobState("nrd60", { offset, done: offset >= all.length, total: all.length });
-      console.log(`  son 60 gün: ${boot.offset}–${offset} / ${all.length} → ${hits.length} Shopify mağazası, ${added} yeni (${secs(t0)} sn)`);
+      if (!boot.done) {
+        const chunk = all.slice(boot.offset, boot.offset + NRD_BOOTSTRAP_PER_RUN);
+        const t0 = Date.now();
+        const found = await findStoreDomains(chunk, DNS_CONCURRENCY);
+        const added = await insertByPlatform(found, "nrd60", null);
+        const offset = boot.offset + chunk.length;
+        await setJobState("nrd60", { offset, done: offset >= all.length, total: all.length });
+        console.log(`  son 60 gün: ${boot.offset}–${offset} / ${all.length} → ${platformSummary(found)}, ${added} yeni (${secs(t0)} sn)`);
+      }
+      if (tr.offset < TR_RESCAN_UNTIL) {
+        const end = Math.min(TR_RESCAN_UNTIL, all.length, tr.offset + NRD_BOOTSTRAP_PER_RUN);
+        const t0 = Date.now();
+        const found = (await findStoreDomains(all.slice(tr.offset, end), DNS_CONCURRENCY)).filter((f) => f.platform !== "shopify");
+        const added = await insertByPlatform(found, "nrd60", null);
+        await setJobState("nrd60_tr", { offset: end });
+        console.log(`  Türk altyapıları (geriye dönük): ${tr.offset}–${end} → ${platformSummary(found)}, ${added} yeni (${secs(t0)} sn)`);
+      }
     } catch (err) {
       ok = false;
       console.error(`  ✖ ${(err as Error).message}`);
@@ -110,7 +140,8 @@ export async function checkStores(source?: string): Promise<boolean> {
     while (next < list.length && !tripped) {
       const s = list[next++];
       try {
-        const probe = await probeStore(s.domain, politeFetch);
+        const probe =
+          s.platform === "ikas" || s.platform === "ticimax" ? await probeTrStore(s.domain, s.platform, politeFetch) : await probeStore(s.domain, politeFetch);
         if (probe.state === "error" && /429|robots\.txt geçici/.test(probe.why)) {
           if (++throttled >= THROTTLE_LIMIT) tripped = true;
         } else if (probe.state !== "error") throttled = 0;

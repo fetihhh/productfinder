@@ -1,8 +1,8 @@
 // Toplama işinin veritabanı yazma katmanı (yalnızca sunucu/cron).
-import { BIG_BRAND_MAX_RANK, REVERIFY_AFTER_DAYS, SUPPLIER_REFRESH_DAYS } from "../config/limits.ts";
+import { BIG_BRAND_MAX_RANK, REVERIFY_AFTER_DAYS, SUPPLIER_REFRESH_DAYS, WIDE_RETRY_DAYS } from "../config/limits.ts";
 import type { SalesSnapshot } from "../dtc/sales.ts";
 import { isImageMatch, type SupplierResult } from "../dtc/suppliers.ts";
-import { bigBrandReason, type VerifyResult } from "../dtc/verify.ts";
+import { bigBrandReason, WIDE_PENDING, type VerifyResult } from "../dtc/verify.ts";
 import type { Candidate, SeenItem } from "../sources/types.ts";
 import { adPointsByDomain } from "./ads.ts";
 import { db } from "./db.ts";
@@ -10,6 +10,9 @@ import { normalizeName } from "./productName.ts";
 import { clip } from "./text.ts";
 import { trendScore, type MentionLite } from "./score.ts";
 import { soldPerWeek, supplierEconomics, winnerScore } from "./winner.ts";
+
+/** Geniş arama bekleyen doğrulamaların gerekçesindeki ayırt edici parça ("Geniş arama bekliyor"). */
+const WIDE_PENDING_TAG = WIDE_PENDING.split(" (")[0];
 
 export async function filterNewItemIds(source: string, ids: string[]): Promise<Set<string>> {
   const fresh = new Set(ids);
@@ -129,10 +132,12 @@ export type ProductToVerify = {
  */
 export async function productsToVerify(limit: number, recheckAll = false): Promise<ProductToVerify[]> {
   const stale = new Date(recheckAll ? Date.now() + 86_400_000 : Date.now() - REVERIFY_AFTER_DAYS * 86_400_000).toISOString();
+  const wideDue = new Date(Date.now() - WIDE_RETRY_DAYS * 86_400_000).toISOString();
   const { data, error } = await db()
     .from("products")
     .select("id, name, brand_domain, product_url, dtc_status, brands(marketplace_status, marketplace_evidence, marketplace_checked_at, tranco_rank, country), mentions(source)")
-    .or(`dtc_checked_at.is.null,and(dtc_status.eq.verified,dtc_checked_at.lt.${stale})`)
+    // Yeni ürünler önce (tarihi boş); sonra geniş araması kotadan dolayı bekleyen doğrulanmışlar (2 günde bir) ve süresi dolanlar.
+    .or(`dtc_checked_at.is.null,and(dtc_status.eq.verified,dtc_checked_at.lt.${stale}),and(dtc_status.eq.verified,dtc_reason.like.*${WIDE_PENDING_TAG}*,dtc_checked_at.lt.${wideDue})`)
     .order("dtc_checked_at", { ascending: true, nullsFirst: true })
     .order("verify_priority", { ascending: false })
     .order("first_seen_at", { ascending: false })
@@ -145,10 +150,14 @@ export async function saveVerification(p: ProductToVerify, r: VerifyResult): Pro
   const now = new Date().toISOString();
   // Geçici sonuçlarda (kota, ağ hatası) tarih boş kalır → sonraki çalıştırmada yeniden denenir.
   // Önceden doğrulanmış bir ürün yalnızca geçici bir hata yüzünden listeden düşmez: durumu ve gerekçesi korunur.
-  const keepPrevious = r.retryable && p.dtc_status === "verified";
+  // Doğrudan pazaryeri araması temiz, yalnızca Tavily geniş araması kotadan dolayı bekliyor: ürün doğrulanmış sayılır ve
+  // kuyruktan çıkar (tarih yazılır); geniş arama 2 günde bir arka planda denenir. Eskiden tarih boş kalıyor, bu ürünler her
+  // gün kuyruğun başına dönüp yeni ürünlerin sırasını yiyordu.
+  const widePending = r.status === "verified" && r.reason.includes(WIDE_PENDING_TAG);
+  const keepPrevious = r.retryable && !widePending && p.dtc_status === "verified";
   const update: Record<string, unknown> = keepPrevious
     ? { dtc_checked_at: null }
-    : { dtc_status: r.status, dtc_reason: r.reason, dtc_checked_at: r.retryable ? null : now };
+    : { dtc_status: r.status, dtc_reason: r.reason, dtc_checked_at: r.retryable && !widePending ? null : now };
   if (r.name && r.name.length >= 3 && r.name.length <= 150) update.name = r.name;
   if (r.productUrl) update.product_url = r.productUrl;
   if (r.productType) update.product_type = r.productType;

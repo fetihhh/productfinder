@@ -148,8 +148,17 @@ export function ProductCard({ p, ad }: { p: ProductRow; ad?: { stage: AdStage; s
         <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-2.5">
           <div className="flex flex-col items-start gap-1">
             <span className="badge bg-white/90 text-zinc-800 shadow-sm backdrop-blur dark:bg-zinc-900/85 dark:text-zinc-100">
-              <span className={`h-1.5 w-1.5 rounded-full ${STATUS[p.dtc_status].dot}`} />
-              {STATUS[p.dtc_status].label}
+              {!p.dtc_checked_at && p.dtc_status !== "verified" ? (
+                <>
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+                  ⏳ Doğrulanıyor
+                </>
+              ) : (
+                <>
+                  <span className={`h-1.5 w-1.5 rounded-full ${STATUS[p.dtc_status].dot}`} />
+                  {STATUS[p.dtc_status].label}
+                </>
+              )}
             </span>
             {partial && (
               <span title={WIDE_PENDING} className="badge pointer-events-auto bg-amber-100/95 text-amber-900 shadow-sm backdrop-blur dark:bg-amber-950/90 dark:text-amber-200">

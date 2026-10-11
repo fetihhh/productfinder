@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { accountMatchesStore, handleCandidates, parseTiktokOembed, tiktokMatchesStore } from "../dtc/instagram.ts";
 import { trListings, trQuery, tryPrice } from "../dtc/turkey.ts";
-import { productHashtags, rankTagPosts } from "../dtc/hashtags.ts";
+import { productHashtags, productWords, rankTagPosts, relevantToProduct } from "../dtc/hashtags.ts";
 
 test("tryPrice: Türk fiyat yazımları", () => {
   assert.equal(tryPrice("Galaksi Projektör 1.299,90 TL kargo bedava"), 1299.9);
@@ -65,4 +65,13 @@ test("productHashtags ve rankTagPosts: ürün adından etiket; videolar önce, e
   ]);
   assert.deepEqual(r.map((p) => p.id), ["3", "2", "1"]);
   assert.equal(r[1].engagement, 130);
+});
+
+test("relevantToProduct: genel etiketteki ilgisiz gönderiler atılır", () => {
+  const w = productWords("M15 Wireless TV Game Console", []);
+  assert.deepEqual(w, ["m15", "wireless", "game", "console"]);
+  assert.equal(relevantToProduct("#musevrclub #plastation4 #dance #wirelessgame", w), false);
+  assert.equal(relevantToProduct("M15 wireless game console unboxing! 10.000 retro games 🎮", w), true);
+  assert.equal(relevantToProduct("Galaxy projector in my bedroom 🌌", productWords("Galaxy Projector", [])), true);
+  assert.equal(rankTagPosts("x", [{ id: "1", caption: "dance #wirelessgame" }, { id: "2", caption: "my new wireless game console" }], 12, w).map((p) => p.id).join(), "2");
 });

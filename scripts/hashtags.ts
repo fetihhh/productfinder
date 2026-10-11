@@ -1,7 +1,7 @@
 // Günlük işin "ürünün Instagram gönderileri" adımı: ürün adından etiketler, resmi Hashtag Search API'siyle en popüler
 // gönderiler. Instagram hesap başına 7 günde 30 farklı etiket sınırı: günde en fazla IG_TAGS_PER_DAY etiket.
 import { GRAPH_API_VERSION } from "../config/limits.ts";
-import { productHashtags, rankTagPosts, type TagPost } from "../dtc/hashtags.ts";
+import { productHashtags, productWords, rankTagPosts, type TagPost } from "../dtc/hashtags.ts";
 import { instagramClient } from "../dtc/instagram.ts";
 import { productsForTags, saveTagPosts, type HashtagState } from "../lib/hashtags.ts";
 import { tryConsumeQuota } from "../lib/repo.ts";
@@ -64,7 +64,7 @@ export async function productTagPosts(tagsPerDay = IG_TAGS_PER_DAY): Promise<voi
         console.log(`  ✖ #${tag} gönderileri: ${m.reason}`);
         continue;
       }
-      posts.push(...rankTagPosts(tag, m.data));
+      posts.push(...rankTagPosts(tag, m.data, 12, productWords(p.name, brandWords(p.brand_domain))));
       await sleep(1000);
     }
     if (posts.length === 0 && failed > 0) {

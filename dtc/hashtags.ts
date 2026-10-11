@@ -48,9 +48,32 @@ type TopMedia = {
   timestamp?: string;
 };
 
-/** En çok etkileşim alan videolar önce (Reels/video), sonra görseller; en fazla 12. */
-export function rankTagPosts(tag: string, media: TopMedia[], max = 12): TagPost[] {
+/** Ürün adının ayırt edici kelimeleri (etiket süzgeci için). */
+export function productWords(name: string, brandWords: string[] = []): string[] {
+  return [
+    ...new Set(
+      normalizeName(name.split(/\s+[—–|·:-]\s+|\s*[|(]/)[0])
+        .split(" ")
+        .filter((w) => w.length >= 3 && !STOP.has(w) && !brandWords.includes(w)),
+    ),
+  ];
+}
+
+/**
+ * Gönderi ürünle ilgili mi: açıklamasında ürün adının ayırt edici kelimelerinden en az ikisi (adda 2 ya da daha az kelime
+ * varsa biri) ayrı kelime olarak geçiyor. Genel etiketlerdeki (#wirelessgame) ilgisiz gönderiler atılır.
+ */
+export function relevantToProduct(caption: string | null | undefined, words: string[]): boolean {
+  if (words.length === 0) return true;
+  const text = ` ${normalizeName(caption ?? "")} `;
+  const hits = words.filter((w) => text.includes(` ${w} `)).length;
+  return hits >= Math.min(2, words.length);
+}
+
+/** En çok etkileşim alan videolar önce (Reels/video), sonra görseller; en fazla 12. words verilirse ilgisizler atılır. */
+export function rankTagPosts(tag: string, media: TopMedia[], max = 12, words: string[] = []): TagPost[] {
   return media
+    .filter((m) => relevantToProduct(m.caption, words))
     .map((m) => ({
       id: m.id,
       tag,

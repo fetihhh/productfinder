@@ -194,8 +194,9 @@ export async function storesToPromote(limit: number, minScore: number): Promise<
     .eq("status", "live")
     .is("product_id", null)
     .not("hero_handle", "is", null)
-    // Türkiye'de açılan mağazalar (ülke TR ya da para birimi TL) puana bakılmadan aday olur: kendi pazarınızdaki rakipler.
-    .or(`total_score.gte.${minScore},country.eq.TR,currency.eq.TRY`)
+    // Türkiye pazarına satan mağazalar (TL ile satış) puana bakılmadan aday olur: kendi pazarınızdaki rakipler.
+    // Türkiye'de kayıtlı ama euro/dolarla yurt dışına satan mağazalar bu kurala girmez.
+    .or(`total_score.gte.${minScore},currency.eq.TRY`)
     .gte("first_product_at", since)
     .order("total_score", { ascending: false })
     .limit(limit);
@@ -281,9 +282,12 @@ export async function sellerNetwork(domain: string): Promise<NetworkStore[]> {
   return (data ?? []) as NetworkStore[];
 }
 
-/** Mağazadan gelen ürünün markasına mağazanın ülkesini yazar (ürün listesindeki "Mağaza ülkesi" filtresi için). */
+/**
+ * Mağazadan gelen ürünün markasına mağazanın ülkesini yazar ("Mağaza ülkesi" filtresi için). Türkiye yalnızca TL ile
+ * satan (Türkiye pazarına satan) mağazalara yazılır; Türkiye'de kayıtlı ama euro/dolarla satan mağaza Türk sayılmaz.
+ */
 export async function setBrandCountry(domain: string, country: string | null, currency: string | null): Promise<void> {
-  const c = country ?? (currency === "TRY" ? "TR" : null);
+  const c = currency === "TRY" ? "TR" : country === "TR" ? null : country;
   if (!c) return;
   const { error } = await db().from("brands").update({ country: c }).eq("domain", domain).is("country", null);
   if (error) throw new Error(`brands güncellenemedi: ${error.message}`);

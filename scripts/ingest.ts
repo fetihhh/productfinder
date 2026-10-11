@@ -58,6 +58,7 @@ import { setJobState } from "../lib/stores.ts";
 import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranco.ts";
 import { enabledAdapters } from "../sources/index.ts";
 import { adSignals } from "./ads.ts";
+import { prioritizeAdWinners } from "../lib/ads.ts";
 import { discoverFromAds } from "./adDiscovery.ts";
 import { rdapLookups } from "./rdap.ts";
 import { findSocialHandles, guessSocial, instagramPosts } from "./instagram.ts";
@@ -112,6 +113,9 @@ function quotaGuardedSearch(): SearchFn | null {
 const translateQuota = () => tryConsumeQuota("mymemory", TRANSLATE_DAILY_LIMIT, TRANSLATE_MONTHLY_LIMIT);
 
 async function verify(): Promise<boolean> {
+  const bumped = await prioritizeAdWinners();
+  if (bumped) console.log(`
+▶ Reklamı tutan ${bumped} ürün doğrulama sırasının başına alındı`);
   const products = await productsToVerify(VERIFY_PER_RUN, process.argv.includes("recheck"));
   console.log(`\n▶ DTC doğrulama: ${products.length} ürün`);
   const deps = { fetchPage: politeFetch, searchMarketplaces: quotaGuardedSearch(), directSearch: directSearch(politeFetch) };

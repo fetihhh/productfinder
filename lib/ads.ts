@@ -248,3 +248,26 @@ export async function adItemsFor(domain: string): Promise<AdItemView[]> {
     ((data ?? []) as AdItem[]).map((r) => ({ ...r, eu_reach: r.eu_reach === null ? null : Number(r.eu_reach), female_share: r.female_share === null ? null : Number(r.female_share) })),
   );
 }
+
+/**
+ * Reklamı kanıtlanmış ya da ölçeklenen markaların doğrulanmamış ürünleri doğrulama sırasının başına alınır: en güçlü
+ * kanıtı olan ürünler, doğrulamanın günlük kotası yüzünden listede görünmeden beklemesin.
+ */
+export async function prioritizeAdWinners(): Promise<number> {
+  const { data, error } = await db().from("ad_signals").select("domain").in("ad_stage", ["proven", "scaling"]);
+  if (error) throw new Error(`ad_signals okunamadı: ${error.message}`);
+  const domains = (data ?? []).map((r) => r.domain as string);
+  let n = 0;
+  for (let i = 0; i < domains.length; i += 150) {
+    const { data: up, error: e2 } = await db()
+      .from("products")
+      .update({ verify_priority: 95 })
+      .in("brand_domain", domains.slice(i, i + 150))
+      .is("dtc_checked_at", null)
+      .lt("verify_priority", 95)
+      .select("id");
+    if (e2) throw new Error(`products güncellenemedi: ${e2.message}`);
+    n += up?.length ?? 0;
+  }
+  return n;
+}

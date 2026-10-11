@@ -176,7 +176,8 @@ export async function saveVerification(p: ProductToVerify, r: VerifyResult): Pro
 
   const brand: Record<string, unknown> = {};
   if (r.platform) Object.assign(brand, { platform: r.platform, has_checkout: r.hasCheckout, check_reason: r.reason, checked_at: now });
-  if (r.store.country) brand.country = r.store.country;
+  // Türkiye yalnızca TL ile satan (Türkiye pazarına satan) markalara yazılır; Türkiye'de kayıtlı ama euro/dolarla satan marka Türk sayılmaz.
+  if (r.store.country) brand.country = r.store.country === "TR" && r.sales.currency && r.sales.currency !== "TRY" ? null : r.store.country;
   if (r.store.shipsToTr !== null) brand.ships_to_tr = r.store.shipsToTr;
   if (r.brandCheck) {
     Object.assign(brand, {

@@ -298,7 +298,7 @@ async function writeJobSummary(seconds: number): Promise<void> {
   if (!file) return;
   try {
     const s = await getSummary();
-    const site = process.env.APP_URL ?? "https://productfinder-phi.vercel.app";
+    // Depo herkese açık: iş özeti GitHub'da herkese görünür, bu yüzden yalnızca sayılar yazılır (ürün, mağaza, adres yok).
     const lines = [
       `## Product Finder — ${today()}`,
       "",
@@ -306,13 +306,9 @@ async function writeJobSummary(seconds: number): Promise<void> {
       `|---|---|---|---|---|`,
       `| ${s.counts.storesFound24h} | ${s.counts.storesOpened7d} | ${s.counts.liveNew} | ${s.counts.candidates24h} | ${Math.round(seconds / 60)} dk |`,
       "",
-      "### En yüksek winner skorlu ürünler",
-      ...s.winners.slice(0, 5).map((p) => `- **${Math.round(Number(p.winner_score))}** · [${p.name.replace(/[[\]|]/g, " ")}](${site}/p/${p.id}) · ${p.brand_domain}${p.margin_ratio !== null ? ` · marj ≈ ${p.margin_ratio}×` : ""}`),
+      `Winner skoru ≥ 40 ürün: ${s.winners.filter((p) => Number(p.winner_score) >= 40).length} · satış hareketi olan yeni mağaza: ${s.movers.length}`,
       "",
-      "### En çok satış hareketi olan yeni mağazalar",
-      ...(s.movers.length ? s.movers.slice(0, 5).map((m) => `- 📉 ${m.stock_drops} · [${m.shop_name ?? m.domain}](${site}/m/${m.domain}) · ${m.moving_products} ürün`) : ["- Henüz yok"]),
-      "",
-      `[Özet sayfası](${site}/ozet)`,
+      "Ayrıntılar sitede (giriş gerekir) ve Supabase'deki iş kaydında (`job_logs`).",
       "",
     ];
     appendFileSync(file, lines.join("\n"));
@@ -407,7 +403,10 @@ async function main() {
     }
   }
   const onlyVerify = process.argv.includes("verify") || process.argv.includes("recheck");
-  const collected = onlyVerify ? true : await collect();
+  // Gün içi devam çalıştırması: toplama dışında her şey (yeni alan adı taraması kaldığı yerden sürer, bekleyen mağazalar
+  // kontrol edilir, yenilenen kotalarla reklam/Instagram/doğrulama devam eder). Kotalar sayaçlarla korunur.
+  const resume = process.argv.includes("devam");
+  const collected = onlyVerify || resume ? true : await collect();
   // Yeni mağazalar: keşif (yeni kayıtlı alan adları) → kontrol → puanı yüksek olanların öne çıkan ürünü aday olur.
   const skipStores = process.argv.includes("no-stores");
   const discovered = onlyVerify || skipStores ? true : await discoverStores();

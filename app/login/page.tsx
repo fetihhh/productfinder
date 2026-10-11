@@ -52,7 +52,11 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           {misconfigured && (
             <p className="mt-4 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-400">APP_PASSWORD ve AUTH_SECRET tanımlı değil (.env.local).</p>
           )}
-          {error && <p className="mt-4 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-400">Şifre hatalı, tekrar dene.</p>}
+          {error && (
+            <p className="mt-4 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-400">
+              {error === "locked" ? "Çok fazla hatalı deneme: giriş geçici olarak kilitlendi. 15 dakika sonra tekrar deneyin." : "Şifre hatalı, tekrar dene."}
+            </p>
+          )}
           <label className="label mt-6" htmlFor="password">
             Şifre
           </label>

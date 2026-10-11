@@ -5,7 +5,7 @@
 ## Nasıl çalışır
 
 ```
-GitHub Actions (her gün 05:00 UTC)  →  npm run ingest
+GitHub Actions (05:00 UTC tam iş; 11:00, 17:00, 23:00 devam)  →  npm run ingest
   0) Yeni mağaza keşfi: yeni kayıtlı alan adları (WhoisDS) → DNS ile Shopify mağazaları → haftalık kontrol
      → son 5 ayda açılmış, puanı yüksek mağazaların öne çıkan ürünü aday olur
   1) Ürün bloglarının RSS beslemeleri → aday ürünler (marka alan adı + ürün sayfası)
@@ -69,7 +69,7 @@ cp .env.example .env.local   # değerleri doldurun
 | Servis | Ücretsiz limit | Bu projedeki kullanım |
 |---|---|---|
 | **Supabase Free** | 500 MB veritabanı, 5 GB çıkış/ay, 2 aktif proje. 7 gün işlem olmazsa proje duraklar | Birkaç MB. Günlük iş projeyi aktif tutar |
-| **GitHub Actions** (private repo) | 2.000 dakika/ay (public repoda sınırsız) | Ölçülen: ~30 dk/gün (mağaza kontrolü, görsel özetleri, 150 reklam araması, 60 doğrulama, 40 toptancı araması) ≈ 900 dk/ay. Public repolarda 60 gün commit olmazsa zamanlanmış iş durur |
+| **GitHub Actions** (public repo) | Herkese açık depolarda standart çalıştırıcılar sınırsız ve ücretsiz (özel depoda 2.000 dakika/ay) | Günde 4 çalıştırma (1 tam + 3 devam, her biri ~30–60 dk) ≈ 3.000–6.000 dk/ay: yalnızca depo herkese açıkken ücretsiz. Depo özel yapılırsa devam saatleri (11, 17, 23) iş akışından silinmeli. 60 gün commit olmazsa zamanlanmış iş durur |
 | **Vercel Hobby** | 100 GB veri aktarımı, 1M fonksiyon çağrısı, 4 CPU-saat/ay; fonksiyon süresi 300 sn. **Yalnızca kişisel, ticari olmayan kullanım** | Tek kullanıcı, çok düşük trafik |
 | **Tavily Free** | 1.000 kredi/ay, kart istemez (basic arama = 1 kredi) | Kod sınırı (kotanın %70'i): günde 23, ayda 700. Kota dolarsa sıradaki yedek servise geçilir, ücretli kullanıma **asla** geçilmez |
 | **Exa Free** (yedek, isteğe bağlı) | Her ay ~10 $ ücretsiz kredi, kart istemez; arama ~0,007 $ (~1.400 arama/ay) | Kod sınırı (kotanın %70'i): günde 32, ayda 980. Yalnızca başlık/adres istenir (içerik ek kredi tüketir) |
@@ -103,7 +103,9 @@ gh secret set FIRECRAWL_API_KEY      # isteğe bağlı: ikinci yedek
 gh secret set META_ACCESS_TOKEN        # isteğe bağlı: reklam sinyali
 ```
 
-İş akışı: `.github/workflows/daily-ingest.yml` (her gün 05:00 UTC = 08:00 TR). Elle çalıştırmak için GitHub → Actions → "Günlük toplama ve doğrulama" → **Run workflow**.
+İş akışı: `.github/workflows/daily-ingest.yml`: 05:00 UTC (08:00 TR) tam iş; 11:00, 17:00 ve 23:00 UTC'de `devam` (toplama hariç her şey: bekleyen mağaza kontrolleri, alan adı taraması kaldığı yerden, gün içinde yenilenen kotalarla reklam/Instagram/doğrulama; kotalar sayaçlarla korunur).
+
+**Depo herkese açık:** GitHub kaydında yalnızca adım başlıkları ve sayılar görünür (`scripts/publicLog.ts`); ürün, mağaza ve adres içeren ayrıntılı kayıt Supabase'deki `job_logs` tablosuna yazılır (son 120 çalıştırma; yalnızca gizli anahtarla okunur). Anahtarlar GitHub Secrets'tadır, kodda yoktur. Tüm Supabase tabloları RLS ile kapalıdır (politika yok = herkese açık anahtarla okunamaz). Elle çalıştırmak için GitHub → Actions → "Günlük toplama ve doğrulama" → **Run workflow**.
 
 ### 2. Vercel (arayüz)
 
@@ -113,7 +115,7 @@ gh secret set META_ACCESS_TOKEN        # isteğe bağlı: reklam sinyali
 
 Komut satırından aynısı: `npx vercel login` → `npx vercel link` → `npx vercel env add <AD> production` → `npx vercel deploy --prod`.
 
-Canlı adres: https://productfinder-phi.vercel.app (Vercel projesi `fetihh/productfinder`, GitHub reposuna bağlı).
+Canlı adres Vercel projesindedir (GitHub reposuna bağlı); şifreyle korunur (aynı IP'den 15 dakikada 5, tüm IP'lerden saatte 50 hatalı denemede giriş kilitlenir).
 
 Toplama işi Vercel'de değil GitHub Actions'ta çalışır: alan adı başına 1 istek/sn kuralı nedeniyle iş dakikalar sürebilir.
 

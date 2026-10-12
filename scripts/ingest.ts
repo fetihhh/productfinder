@@ -406,12 +406,20 @@ async function main() {
   // Gün içi devam çalıştırması: toplama dışında her şey (yeni alan adı taraması kaldığı yerden sürer, bekleyen mağazalar
   // kontrol edilir, yenilenen kotalarla reklam/Instagram/doğrulama devam eder). Kotalar sayaçlarla korunur.
   const resume = process.argv.includes("devam");
+  // Devam çalıştırmaları günde 11 kez: hız sınırlı dış servisler (Meta, Instagram, RDAP) günde birkaç kezle sınırlanır,
+  // geri kalanlar (DNS taraması, mağaza kontrolü, doğrulama) her çalıştırmada sürer. Tam iş her zaman hepsini yapar.
+  const allowed = async (step: string, perDay: number): Promise<boolean> => {
+    if (!resume) return true;
+    const ok = await tryConsumeQuota(`devam_${step}`, perDay, perDay * 31).catch(() => false);
+    if (!ok) console.log(`\n▶ ${step}: bugünkü devam sınırı (${perDay}) doldu, sonraki çalıştırmalarda`);
+    return ok;
+  };
   const collected = onlyVerify || resume ? true : await collect();
   // Yeni mağazalar: keşif (yeni kayıtlı alan adları) → kontrol → puanı yüksek olanların öne çıkan ürünü aday olur.
   const skipStores = process.argv.includes("no-stores");
   const discovered = onlyVerify || skipStores ? true : await discoverStores();
   // Reklam Kütüphanesi'nden keşif: zaten reklam veren mağazalar (aynı çalıştırmada kontrol edilir).
-  if (!onlyVerify && !skipStores) {
+  if (!onlyVerify && !skipStores && (await allowed("reklamdan_kesif", 2))) {
     try {
       await discoverFromAds();
     } catch (err) {
@@ -419,7 +427,7 @@ async function main() {
     }
   }
   const checked = skipStores ? true : await checkStores();
-  if (!skipStores) {
+  if (!skipStores && (await allowed("rdap", 3))) {
     try {
       await rdapLookups();
     } catch (err) {
@@ -430,13 +438,15 @@ async function main() {
   // Aynı ürünü satan mağazalar (kopya puanı aday seçiminden önce toplam puana eklenir).
   const copied = skipStores ? true : await copyClusters();
   // Reklam sinyali aday seçiminden önce: reklam veren mağazaların toplam puanı yükselir.
-  const advertised = await adSignals();
-  try {
-    await guessSocial(30, 90);
-  } catch (err) {
-    console.error(`\n▶ Hesap tahmini yapılamadı: ${(err as Error).message}`);
+  const advertised = (await allowed("reklam_sinyali", 3)) ? await adSignals() : true;
+  if (await allowed("instagram", 3)) {
+    try {
+      await guessSocial(30, 90);
+    } catch (err) {
+      console.error(`\n▶ Hesap tahmini yapılamadı: ${(err as Error).message}`);
+    }
+    await instagramPosts();
   }
-  await instagramPosts();
   try {
     await productTagPosts();
   } catch (err) {

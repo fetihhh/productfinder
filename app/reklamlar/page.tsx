@@ -20,26 +20,15 @@ function IgNotice({ state, empty }: { state: InstagramState | null; empty: boole
   if (!state || state.status === "no_permission" || state.status === "no_account" || state.status === "no_token") {
     return (
       <div className={`${box} border-amber-400/60 bg-amber-500/5`}>
-        <p className="font-semibold">Instagram gönderileri için bir kerelik kurulum gerekiyor</p>
+        <p className="font-semibold">Instagram gönderileri okunamıyor</p>
         <p className="mt-1 text-muted">
           {state?.status === "no_account"
             ? "Meta anahtarınızın Facebook sayfalarına bağlı bir Instagram profesyonel hesabı bulunamadı."
             : state?.status === "no_permission"
               ? "Meta anahtarında Instagram izni yok."
               : "Instagram adımı henüz çalışmadı."}{" "}
-          Resmi Instagram API&apos;si başka hesapların gönderilerini yalnızca sizin de bir Instagram profesyonel hesabınız varsa verir (ücretsiz):
+          Meta erişim anahtarını yenilemek gerekiyor.
         </p>
-        <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted">
-          <li>Instagram uygulaması → Ayarlar → Hesap türü → <b>Profesyonel hesaba geç</b> (İşletme ya da İçerik üreticisi).</li>
-          <li>Bir Facebook sayfası açın (ücretsiz) ve Instagram hesabını bu sayfaya bağlayın (Sayfa ayarları → Bağlı hesaplar → Instagram).</li>
-          <li>
-            Graph API Explorer&apos;da uygulamanızı seçin → izinlere <code>instagram_basic</code>, <code>instagram_manage_insights</code>, <code>pages_show_list</code>, <code>pages_read_engagement</code>,{" "}
-            <code>business_management</code> ekleyin → <b>Generate Access Token</b> → Access Token Debugger&apos;da <b>Extend</b>.
-          </li>
-          <li>
-            Yeni anahtarı <code>META_ACCESS_TOKEN</code> olarak GitHub&apos;a kaydedin (reklam araması da aynı anahtarla çalışmaya devam eder).
-          </li>
-        </ol>
         {state?.reason && <p className="mt-2 text-xs text-muted">Son hata: {state.reason}</p>}
       </div>
     );
@@ -67,7 +56,7 @@ export default async function AdsGalleryPage({ searchParams }: PageProps<"/rekla
     nicheDomains = (data ?? []).map((d) => d.domain as string);
   }
   const [ads, posts, igState] = await Promise.all([
-    tab === "meta" ? galleryAds({ niche, activeOnly: !all, limit: 60 }) : Promise.resolve([]),
+    tab === "meta" ? galleryAds({ niche, activeOnly: !all, limit: 60, withMedia: video }) : Promise.resolve([]),
     tab === "ig" ? topIgPosts({ days, video, domains: nicheDomains, limit: 60 }) : Promise.resolve([]),
     getJobState<InstagramState>("instagram"),
   ]);
@@ -105,7 +94,10 @@ export default async function AdsGalleryPage({ searchParams }: PageProps<"/rekla
             <option value="other">Diğer</option>
           </select>
           {tab === "meta" ? (
-            <Toggle name="all" checked={all} label="Durmuş reklamlar da" />
+            <>
+              <Toggle name="all" checked={all} label="Durmuş reklamlar da" />
+              <Toggle name="video" checked={video} label="Videosu burada oynayanlar" />
+            </>
           ) : (
             <>
               <select name="days" defaultValue={String(days)} className="field w-36" aria-label="Dönem">
@@ -123,8 +115,9 @@ export default async function AdsGalleryPage({ searchParams }: PageProps<"/rekla
       {tab === "meta" ? (
         <>
           <p className="mt-4 text-xs text-muted">
-            Meta&apos;nın ücretsiz API&apos;si reklamın metnini, süresini ve erişimini verir ama görsel/video dosyasını vermez (facebook.com sayfaları otomatik
-            okunamaz). Görselde reklamı verilen ürünün fotoğrafı gösterilir; reklamın kendisini &quot;Reklamı aç&quot; ile Reklam Kütüphanesi&apos;nde izleyebilirsiniz.
+            Meta&apos;nın ücretsiz API&apos;si reklamın video dosyasını vermez ve facebook.com otomatik okunamaz. Reklam metni mağazanın bir Instagram gönderisiyle
+            aynıysa videosu doğrudan burada oynar ve indirilebilir (resmi Instagram API&apos;si); diğerlerinde &quot;▶ Videoyu izle&quot; Meta&apos;nın önizlemesini yan
+            pencerede açar.
           </p>
           {ads.length === 0 ? (
             <p className="card mt-5 p-6 text-sm text-muted">Bu filtrede reklam yok.</p>

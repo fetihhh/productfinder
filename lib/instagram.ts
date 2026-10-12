@@ -21,7 +21,7 @@ export async function igTargets(limit: number): Promise<IgTarget[]> {
     .in("status", ["live", "old"])
     .order("ad_points", { ascending: false })
     .order("total_score", { ascending: false })
-    .limit(400);
+    .limit(1000); // Supabase tek istekte en fazla 1.000 satır verir
   if (error) throw new Error(`stores okunamadı: ${error.message}`);
   // Birden çok mağazanın bağladığı hesap çoğu zaman temanın varsayılan bağlantısıdır (mağazanın hesabı değil): atlanır.
   const { data: shared } = await db().rpc("shared_instagram_handles");

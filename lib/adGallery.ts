@@ -1,5 +1,7 @@
 // Reklam galerisi: tüm mağazaların en çok tutan Meta reklamları (uzun süredir yayında + çok kopyalanmış reklam metinleri).
 import type { AdStage, CreativeGroup } from "../dtc/adAnalysis.ts";
+import { matchAdsToPosts, type AdMedia } from "../dtc/adMedia.ts";
+import { igMediaPosts } from "./ads.ts";
 import { db } from "./db.ts";
 
 const DAY = 86_400_000;
@@ -24,11 +26,13 @@ export type GalleryAd = {
   platforms: string[];
   /** Sıralama: yayındaki kopya, yayında kalma süresi ve mağazanın reklam skoru. */
   rank: number;
+  /** Reklamla aynı metinli Instagram gönderisi: videosu galeride oynar. */
+  media: AdMedia | null;
 };
 
 type Snap = { h: string; t: string; img: string | null };
 
-export async function galleryAds(opts: { niche: string; activeOnly: boolean; limit: number; domain?: string; perStore?: number }): Promise<GalleryAd[]> {
+export async function galleryAds(opts: { niche: string; activeOnly: boolean; limit: number; domain?: string; perStore?: number; withMedia?: boolean }): Promise<GalleryAd[]> {
   let q = db().from("ad_signals").select("domain, ad_stage, ad_score, creatives, top_products, active_ads").gt("total_ads", 0);
   if (opts.domain) q = q.eq("domain", opts.domain);
   const { data: sigs, error } = await q.order("ad_score", { ascending: false }).limit(300);
@@ -71,12 +75,24 @@ export async function galleryAds(opts: { niche: string; activeOnly: boolean; lim
         reach: c.reach ?? 0,
         platforms: c.platforms ?? [],
         rank: c.active * 4 + Math.min(days ?? 0, 60) * (c.active > 0 ? 1 : 0.2) + Number(sig.ad_score) / 4,
+        media: null,
       });
     }
+  }
+  // Reklam metni ↔ mağazanın Instagram gönderileri: eşleşen reklamın videosu galeride oynar.
+  const posts = await igMediaPosts([...new Set(out.map((a) => a.domain))]);
+  const byDomain = new Map<string, number[]>();
+  out.forEach((a, i) => byDomain.set(a.domain, [...(byDomain.get(a.domain) ?? []), i]));
+  for (const [domain, idx] of byDomain) {
+    const list = posts.get(domain);
+    if (!list?.length) continue;
+    const m = matchAdsToPosts(idx.map((i) => ({ id: String(i), title: out[i].title, body: out[i].text })), list);
+    for (const i of idx) out[i].media = m.get(String(i)) ?? null;
   }
   // Çeşitlilik: mağaza başına en fazla 2 reklam metni.
   const perStore = new Map<string, number>();
   return out
+    .filter((a) => !opts.withMedia || a.media)
     .sort((a, b) => b.rank - a.rank)
     .filter((a) => {
       const n = (perStore.get(a.domain) ?? 0) + 1;

@@ -238,6 +238,29 @@ export async function saveAdItems(domain: string, ads: ArchivedAd[]): Promise<vo
 }
 
 /** Ürün/mağaza sayfası: mağazanın tüm reklamları (önerilen sırada). */
+/** Mağazaların Instagram gönderileri (reklam ↔ gönderi eşleştirmesi için), alan adına göre; 1.000 satır sınırı için sayfalı. */
+export async function igMediaPosts(domains: string[]): Promise<Map<string, IgMediaPost[]>> {
+  const out = new Map<string, IgMediaPost[]>();
+  for (let i = 0; i < domains.length; i += 40) {
+    const chunk = domains.slice(i, i + 40);
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await db()
+        .from("ig_posts")
+        .select("id, domain, caption, media_type, media_url, thumb_url, permalink")
+        .in("domain", chunk)
+        .order("id")
+        .range(from, from + 999);
+      if (error) throw new Error(`ig_posts okunamadı: ${error.message}`);
+      for (const r of data ?? []) {
+        const d = r.domain as string;
+        out.set(d, [...(out.get(d) ?? []), r as IgMediaPost]);
+      }
+      if ((data ?? []).length < 1000) break;
+    }
+  }
+  return out;
+}
+
 export async function adItemsFor(domain: string): Promise<AdItemView[]> {
   const [{ data, error }, { data: posts }] = await Promise.all([
     db()
@@ -246,13 +269,13 @@ export async function adItemsFor(domain: string): Promise<AdItemView[]> {
       .eq("domain", domain)
       .limit(400),
     // Reklamın videosu: mağazanın aynı metinli Instagram gönderisi (resmi Business Discovery verisi).
-    db().from("ig_posts").select("id, caption, media_type, media_url, thumb_url, permalink").eq("domain", domain).limit(300),
+    igMediaPosts([domain]).then((m) => ({ data: m.get(domain) ?? [] })),
   ]);
   if (error) throw new Error(`ad_items okunamadı: ${error.message}`);
   const items = viewAdItems(
     ((data ?? []) as AdItem[]).map((r) => ({ ...r, eu_reach: r.eu_reach === null ? null : Number(r.eu_reach), female_share: r.female_share === null ? null : Number(r.female_share) })),
   );
-  const media = matchAdsToPosts(items, (posts ?? []) as IgMediaPost[]);
+  const media = matchAdsToPosts(items, posts);
   return items.map((i) => ({ ...i, media: media.get(i.id) ?? null }));
 }
 

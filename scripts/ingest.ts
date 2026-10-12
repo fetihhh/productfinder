@@ -439,9 +439,11 @@ async function main() {
   const copied = skipStores ? true : await copyClusters();
   // Reklam sinyali aday seçiminden önce: reklam veren mağazaların toplam puanı yükselir.
   const advertised = (await allowed("reklam_sinyali", 3)) ? await adSignals() : true;
-  if (await allowed("instagram", 3)) {
+  // Instagram her çalıştırmada (2 saatte bir): çalıştırma başına ~130 hesap okuma + 60 tahmin sorgusu = ~190 çağrı, Meta'nın
+  // saatlik ~200 çağrı sınırının altında. Hız sınırına takılınca adım kendiliğinden durur, kalanlar sonraki çalıştırmaya kalır.
+  if (await allowed("instagram", 11)) {
     try {
-      await guessSocial(30, 90);
+      await guessSocial(30, 60);
     } catch (err) {
       console.error(`\n▶ Hesap tahmini yapılamadı: ${(err as Error).message}`);
     }

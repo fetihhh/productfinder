@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AdPlayer, ViewerButton } from "@/components/AdPlayer";
 import { CopyButton } from "@/components/CopyButton";
 import { AdStageBadge } from "@/components/DetailSections";
 import { TimingBadge } from "@/components/ui";
@@ -31,6 +32,12 @@ export function AdCard({ a }: { a: GalleryAd }) {
           </div>
         </div>
       </div>
+      {a.media && (
+        <div className="border-b border-line bg-surface-muted p-2">
+          <AdPlayer m={a.media} className="max-h-[520px]" />
+          <p className="mt-1 px-1 text-[11px] text-muted">Instagram&apos;daki aynı gönderi · metin %{Math.round(a.media.match * 100)} eşleşiyor</p>
+        </div>
+      )}
       <div className="flex flex-1 flex-col p-3.5">
         <div className="grid grid-cols-3 gap-1.5 text-center">
           <div className="rounded-xl bg-surface-muted px-2 py-1.5" title="Bu metinle yayında olan reklam (kopya) sayısı">
@@ -52,9 +59,15 @@ export function AdCard({ a }: { a: GalleryAd }) {
         <p className="mt-1 line-clamp-5 text-sm whitespace-pre-line">{a.text}</p>
         {a.platforms.length > 0 && <p className="mt-2 text-xs text-muted">{a.platforms.map((p) => PLATFORM[p] ?? p).join(" · ")}</p>}
         <div className="mt-auto flex flex-wrap gap-1.5 pt-3">
+          {a.media?.url && (
+            <a href={`/medya/${encodeURIComponent(a.media.postId)}`} className="btn btn-sm btn-primary" title="Videoyu/görseli indir">
+              ⬇ İndir
+            </a>
+          )}
+          {a.adId && <ViewerButton adId={a.adId} primary={!a.media} label={a.media ? "▶ Meta önizlemesi" : "▶ Videoyu izle"} />}
           {a.adId && (
-            <a href={adLibraryAdUrl(a.adId)} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary">
-              Reklamı aç ↗
+            <a href={adLibraryAdUrl(a.adId)} target="_blank" rel="noopener noreferrer" className="btn btn-sm">
+              Kütüphane ↗
             </a>
           )}
           <CopyButton text={[a.title, a.text].filter(Boolean).join("\n\n")} />

@@ -125,9 +125,8 @@ export function ProductTagPosts({ tags, posts, checkedAt, state }: { tags: strin
         <div className="rounded-xl border border-amber-400/60 bg-amber-500/5 p-4 text-sm">
           <p className="font-semibold">Instagram etiket araması için Meta&apos;dan bir izin gerekiyor</p>
           <p className="mt-1 text-muted">
-            Ürün etiketlerindeki popüler gönderileri veren Hashtag Search API&apos;si, uygulamanıza &quot;Instagram Public Content Access&quot; özelliğinin eklenmesini
-            istiyor. developers.facebook.com → uygulamanız → App Review → Permissions and Features → &quot;Instagram Public Content Access&quot; → Request
-            (ücretsiz; Meta inceler). Onaylanınca bu bölüm kendiliğinden dolar.
+            Ürün etiketlerindeki popüler gönderileri veren Hashtag Search API&apos;si için Meta uygulamasında ek izin gerekiyor. İzin verilince bu bölüm
+            kendiliğinden dolar.
           </p>
           {state.reason && <p className="mt-2 text-xs text-muted">Meta&apos;nın yanıtı: {state.reason}</p>}
         </div>

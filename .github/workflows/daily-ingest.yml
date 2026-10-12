@@ -37,7 +37,7 @@ jobs:
     # Gün içi devam çalıştırmaları yalnızca depo herkese açıkken (sınırsız ücretsiz dakika); özel depoda 2.000 dk/ay aşılmasın.
     if: github.event_name != 'schedule' || github.event.schedule == '0 5 * * *' || !github.event.repository.private
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

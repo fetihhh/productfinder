@@ -52,17 +52,26 @@ export async function storesForDetail(limit: number): Promise<StoreToCheck[]> {
 }
 
 export async function storesToCheck(limit: number, source?: string): Promise<StoreToCheck[]> {
-  let query = db()
-    .from("stores")
-    .select("domain, registered_on, discovered_at, first_product_at, status, platform")
-    .in("status", ["pending", "closed", "live"]);
-  if (source) query = query.eq("source", source);
-  const { data, error } = await query
-    .lte("next_check_at", new Date().toISOString())
-    .order("next_check_at", { ascending: true })
-    .limit(limit);
-  if (error) throw new Error(`stores okunamadı: ${error.message}`);
-  return data as StoreToCheck[];
+  // Supabase tek istekte en fazla 1.000 satır döndürür: sınır 1.000'den büyükse sayfa sayfa okunur.
+  const PAGE = 1000;
+  const now = new Date().toISOString();
+  const out: StoreToCheck[] = [];
+  for (let from = 0; from < limit; from += PAGE) {
+    let query = db()
+      .from("stores")
+      .select("domain, registered_on, discovered_at, first_product_at, status, platform")
+      .in("status", ["pending", "closed", "live"]);
+    if (source) query = query.eq("source", source);
+    const { data, error } = await query
+      .lte("next_check_at", now)
+      .order("next_check_at", { ascending: true })
+      .order("domain", { ascending: true })
+      .range(from, Math.min(limit, from + PAGE) - 1);
+    if (error) throw new Error(`stores okunamadı: ${error.message}`);
+    out.push(...(data as StoreToCheck[]));
+    if ((data ?? []).length < Math.min(PAGE, limit - from)) break;
+  }
+  return out;
 }
 
 /** Mağaza yaşı (gün): alan adı kaydı, ilk ürün ya da keşif tarihinden en eskisi. */

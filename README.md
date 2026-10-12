@@ -2,6 +2,8 @@
 
 **Küçük markaların** yalnızca kendi sitelerinde satılan (pazaryerlerinde ve büyük perakendecilerde olmayan) fiziksel trend ürünlerini bulan, ardından aynısının/muadilinin **toptancısını** (AliExpress, Alibaba, Made-in-China) ve kâr marjını gösteren tek kullanıcılı araç. Amaç: toptan alıp Türkiye'de satılabilecek ürünler. Aylık maliyet: **0 $**.
 
+> **Kişisel, özel kullanım projesi.** Bu depo yalnızca sahibinin kendi kullanımı içindir; herkese açık olması GitHub Actions'ın ücretsiz çalışması içindir. Kurulum, kullanım ya da dağıtım için izin verilmez ve destek sunulmaz; kod için lisans verilmez, tüm hakları saklıdır (bkz. `LICENSE`). Canlı arayüz şifreyle korunur ve başkalarının kullanımına kapalıdır.
+
 ## Nasıl çalışır
 
 ```
@@ -20,50 +22,6 @@ Next.js (Vercel Hobby)  →  şifreli arayüz: arama, filtreler, kartlar, grafik
 Supabase (Postgres)     →  tüm veriler; yalnızca sunucu tarafından gizli anahtarla erişilir
 ```
 
-## Kurulum (yerel)
-
-Gereksinimler: Node.js ≥ 22.18 (TypeScript ek araç olmadan doğrudan `node` ile çalışır), ücretsiz Supabase projesi, ücretsiz Tavily hesabı.
-
-```bash
-npm install
-cp .env.example .env.local   # değerleri doldurun
-```
-
-1. Supabase SQL Editor'de `supabase/migrations/` altındaki dosyaları sırayla çalıştırın (`0001` → `0031`).
-2. `.env.local` değişkenlerini doldurun (aşağıdaki tablo).
-3. `npm run ingest` → ilk veriyi çeker ve doğrular.
-4. `npm run dev` → http://localhost:3000 → `APP_PASSWORD` ile giriş.
-
-### Ortam değişkenleri
-
-| Değişken | Nerede | Açıklama |
-|---|---|---|
-| `APP_PASSWORD` | Vercel, yerel | Giriş şifresi |
-| `AUTH_SECRET` | Vercel, yerel | Oturum imzası için uzun rastgele değer: `node -e "console.log(crypto.randomBytes(32).toString('base64url'))"` |
-| `SUPABASE_URL` | Vercel, GitHub, yerel | Supabase → Project Settings → API |
-| `SUPABASE_SECRET_KEY` | Vercel, GitHub, yerel | Supabase → API Keys → **secret** (`sb_secret_…`). RLS'i aşar, asla `NEXT_PUBLIC_` önekiyle tanımlamayın |
-| `TAVILY_API_KEY` | GitHub, yerel | tavily.com ücretsiz hesap (kart istemez) |
-| `EXA_API_KEY` | GitHub, isteğe bağlı | exa.ai ücretsiz hesap (kart istemez). Tavily kotası dolunca yedek geniş arama |
-| `FIRECRAWL_API_KEY` | GitHub, isteğe bağlı | firecrawl.dev ücretsiz hesap (kart istemez). Exa'dan sonra ikinci yedek |
-| `META_ACCESS_TOKEN` | GitHub, yerel | Meta Reklam Kütüphanesi erişim anahtarı (ücretsiz, ~60 günde bir yenilenir). Kurulum: aşağıda **Reklam sinyali**. Yoksa reklam adımı atlanır |
-| `TAVILY_DAILY_LIMIT` | isteğe bağlı | Tek seferlik toplu kontroller için günlük sınırı geçici olarak değiştirir (aylık 700 sınırı sabit) |
-| `REDDIT_CLIENT_ID/SECRET` | — | Kullanılmıyor; Reddit API onayı alınırsa ileride |
-
-## Komutlar
-
-| Komut | Açıklama |
-|---|---|
-| `npm run dev` | Geliştirme sunucusu |
-| `npm run build` | Üretim derlemesi |
-| `npm test` | Birim testleri (`node --test`) |
-| `npm run typecheck` | TypeScript kontrolü |
-| `npm run ingest` | Toplama + DTC doğrulama + trafik + satış ölçümü + skorlar (günlük iş) |
-| `npm run ingest -- verify` | Toplama hariç hepsi |
-| `npm run ingest -- no-stores` | Yeni mağaza keşfi ve kontrolleri atlanır |
-| `npm run ingest -- recheck` | Ayrıca tüm `verified` ürünleri tarihe bakmadan yeniden kontrol eder (doğrulama kuralları değişince) |
-| `npm run ingest -- ads` | Yalnızca reklam analizi: reklamı bilinen mağazalar zamanını beklemeden yeniden aranır (~5 dk). GitHub'da: Actions → Run workflow → tür `ads` |
-| `npm run ingest -- resupply` | Toptancı aramasını 7 günlük süreyi beklemeden tüm doğrulanmış/takip edilen ürünler için yeniler |
-
 ## Ücretsiz katman limitleri
 
 | Servis | Ücretsiz limit | Bu projedeki kullanım |
@@ -77,7 +35,7 @@ cp .env.example .env.local   # değerleri doldurun
 | **Meta Reklam Kütüphanesi API'si** (graph.facebook.com/ads_archive) | Ücretsiz, kart istemez; kimliği doğrulanmış Facebook hesabı gerekir. Hız sınırı API tarafından uygulanır (aşılırsa istek reddedilir, ücret çıkmaz) | Günde en fazla 150 arama, saniyede 1. Hız sınırına takılırsa kalan aramalar ertesi güne kalır |
 | **Instagram Graph API — Business Discovery** (graph.facebook.com) | Ücretsiz, kart istemez; Facebook sayfasına bağlı bir Instagram profesyonel hesabı ve `instagram_basic` + `instagram_manage_insights` + `pages_show_list` izinli anahtar gerekir. Kullanıcı başına saatlik ~200 çağrı | Çalıştırma başına en fazla 60 hesap, saniyede 1 istek |
 | **WhoisDS yeni kayıtlı alan adları** (ücretsiz günlük liste) | Ücretsiz, kayıt gerekmez; "ticari dahil yeniden kullanılabilir" | Günde 1 zip (~70 bin alan adı) |
-| **cenk/nrd** (WhoisDS listelerinin 60 günlük birikimi, dl.cenk.app) | Ücretsiz, robots.txt izinli | Yalnızca ilk kurulumda, liste bitene kadar günde 1 indirme (~75 MB) |
+| **cenk/nrd** (WhoisDS listelerinin 60 günlük birikimi, dl.cenk.app) | Ücretsiz, robots.txt izinli | Liste bitene kadar günde 1 indirme (~75 MB) |
 | **DNS** (sistem çözümleyicisi) | Ücretsiz | Günde ~35–300 bin sorgu; sitelere istek gönderilmez |
 | **RDAP** (rdap.org → kayıt kuruluşları) | Ücretsiz, resmi WHOIS halefi | Marka başına 1 sorgu (kayıt tarihi) |
 | **MyMemory çeviri API'si** (api.mymemory.translated.net) | Ücretsiz, anahtarsız 5.000 karakter/gün | Yalnızca İngilizce konuşulmayan ülkelerdeki mağaza ürünlerinin adı (toptancı araması için); kod sınırı günde 100 çeviri, çeviriler veritabanında saklanır |
@@ -88,36 +46,11 @@ cp .env.example .env.local   # değerleri doldurun
 
 > Ürün ticari bir hizmete dönüşürse Vercel Hobby (ticari kullanım yasak), Tavily ve Product Hunt benzeri kaynakların koşulları değişir; bu durumda yeniden değerlendirilmeli.
 
-## Deploy
+## Çalışma düzeni
 
-### 1. GitHub (otomatik günlük iş)
+İş akışı: `.github/workflows/daily-ingest.yml`: 05:00 UTC (08:00 TR) tam iş; 11:00, 17:00 ve 23:00 UTC'de `devam` (toplama hariç her şey: bekleyen mağaza kontrolleri, alan adı taraması kaldığı yerden, gün içinde yenilenen kotalarla reklam/Instagram/doğrulama; kotalar sayaçlarla korunur). Arayüz Vercel'de, veriler Supabase'de.
 
-```bash
-gh auth login                          # bir kez
-gh repo create productfinder --private --source . --push
-gh secret set SUPABASE_URL             # değeri yapıştırın
-gh secret set SUPABASE_SECRET_KEY
-gh secret set TAVILY_API_KEY
-gh secret set EXA_API_KEY            # isteğe bağlı: yedek arama
-gh secret set FIRECRAWL_API_KEY      # isteğe bağlı: ikinci yedek
-gh secret set META_ACCESS_TOKEN        # isteğe bağlı: reklam sinyali
-```
-
-İş akışı: `.github/workflows/daily-ingest.yml`: 05:00 UTC (08:00 TR) tam iş; 11:00, 17:00 ve 23:00 UTC'de `devam` (toplama hariç her şey: bekleyen mağaza kontrolleri, alan adı taraması kaldığı yerden, gün içinde yenilenen kotalarla reklam/Instagram/doğrulama; kotalar sayaçlarla korunur).
-
-**Depo herkese açık:** GitHub kaydında yalnızca adım başlıkları ve sayılar görünür (`scripts/publicLog.ts`); ürün, mağaza ve adres içeren ayrıntılı kayıt Supabase'deki `job_logs` tablosuna yazılır (son 120 çalıştırma; yalnızca gizli anahtarla okunur). Anahtarlar GitHub Secrets'tadır, kodda yoktur. Tüm Supabase tabloları RLS ile kapalıdır (politika yok = herkese açık anahtarla okunamaz). Elle çalıştırmak için GitHub → Actions → "Günlük toplama ve doğrulama" → **Run workflow**.
-
-### 2. Vercel (arayüz)
-
-1. vercel.com → **Add New Project** → GitHub'daki `productfinder` reposunu seçin (Hobby plan, kart gerekmez).
-2. **Environment Variables:** `APP_PASSWORD`, `AUTH_SECRET`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`.
-3. **Deploy.** Sonraki her `git push` otomatik deploy olur.
-
-Komut satırından aynısı: `npx vercel login` → `npx vercel link` → `npx vercel env add <AD> production` → `npx vercel deploy --prod`.
-
-Canlı adres Vercel projesindedir (GitHub reposuna bağlı); şifreyle korunur (aynı IP'den 15 dakikada 5, tüm IP'lerden saatte 50 hatalı denemede giriş kilitlenir).
-
-Toplama işi Vercel'de değil GitHub Actions'ta çalışır: alan adı başına 1 istek/sn kuralı nedeniyle iş dakikalar sürebilir.
+**Güvenlik:** GitHub kaydında yalnızca adım başlıkları ve sayılar görünür (`scripts/publicLog.ts`); ürün, mağaza ve adres içeren ayrıntılı kayıt Supabase'deki `job_logs` tablosuna yazılır (yalnızca gizli anahtarla okunur). Anahtarlar kodda yoktur. Tüm Supabase tabloları RLS ile kapalıdır. Arayüz şifreyle korunur; aynı IP'den 15 dakikada 5, tüm IP'lerden saatte 50 hatalı denemede giriş kilitlenir.
 
 ## Veri kaynakları
 
@@ -135,7 +68,7 @@ Kullanılmayan kaynaklar ve nedenleri: Gear Patrol ve Cool Material (robots.txt 
 
 Amaç: **son 5 ayda açılmış küçük dropshipping mağazalarını** yakalamak. Bloglar yeni mağazaları yazmadığı için mağazalar doğrudan alan adı kayıtlarından bulunur:
 
-1. **Yeni kayıtlı alan adları:** WhoisDS'nin ücretsiz günlük listesi (~70 bin/gün). İlk kurulumda cenk/nrd'nin son 60 günlük birikimi parça parça taranır (her çalıştırmada 300 bin alan adı). Spam ağırlıklı uzantılar (.xyz, .top…) atlanır.
+1. **Yeni kayıtlı alan adları:** WhoisDS'nin ücretsiz günlük listesi (~70 bin/gün). Başlangıçta cenk/nrd'nin son 60 günlük birikimi parça parça taranır (her çalıştırmada 300 bin alan adı). Spam ağırlıklı uzantılar (.xyz, .top…) atlanır.
 2. **DNS ile Shopify tespiti:** Shopify'a bağlı alan adları 23.227.38.x adresine çözülür (~%3: günde ~1.000 yeni mağaza). DNS sorgusu siteye istek göndermez.
 3. **Kontrol takvimi:** ilk kontrol kayıttan 5 gün sonra. Şifreli/boş mağaza 14 günde bir (90 günde açılmazsa bırakılır), açık mağaza **haftada bir**, puanı ≥ 55 olan açık mağaza **her gün** (stok tükenmesi ve yeni ürün günler içinde görünsün; ilk ürünü 150 günü geçince bırakılır). Her kontrol `/products.json` (gerekirse `/meta.json` ve ana sayfa) okur; şifre sayfasına girilmez, robots.txt'ye uyulur.
 4. **Mağaza puanı (0–100):** odak 25 (tek ürün mağazası tam), yenilik 15, **dropship işareti 20** (ürün açıklamasında "7-15 business days" gibi uzun teslimat aralığı, dünya geneli gönderim ya da **AliExpress görseli**: görselin dosya adı AliExpress görsel kimliği, ör. `S4f799d…edi.avif` — fotoğraf AliExpress'ten indirilip yüklenmiş), indirim 10 (compare-at fiyat), fiyat 10 (15–150), **hareket 20** (iki kontrol arasında yeni ürün eklendi +10, varyant stoğu tükendi +10). Baskılı giyim/merch mağazaları −20, dijital ağırlıklı mağazalar 0.
@@ -182,15 +115,8 @@ Bir dropshipping mağazası bir ürüne haftalarca reklam veriyorsa ürün büy�
 - **Gösterim:** ürün sayfasında reklam bölümü (yayındaki reklam sayısı, en eski reklamın yaşı, son 14 günde açılanlar, AB erişimi, örnek reklamlar ve geçmiş grafiği), yeni mağaza kartlarında "Reklam" satırı, iki listede de **Reklam verenler** filtresi.
 - Erişim anahtarı URL'ye değil `Authorization` başlığına konur. API'nin döndürdüğü `ad_snapshot_url` anahtarı içerdiği için saklanmaz; bağlantılar herkese açık `facebook.com/ads/library/?id=…` sayfasına gider.
 
-**Kurulum (bir kez, ücretsiz):**
+Erişim anahtarı ~60 günde bir yenilenir; `/yeni` sayfası son 10 günde uyarır, anahtar geçersizse sayfada kırmızı uyarı çıkar.
 
-1. https://www.facebook.com/ID adresinden kimlik ve konum doğrulaması yapın (Meta'nın onayı birkaç gün sürebilir).
-2. https://developers.facebook.com adresinde geliştirici hesabı açın → **My Apps → Create App** (ad: ör. "ProductFinder"; kullanım türü olarak reklam/işletme dışı bir seçenek yeterli).
-3. **Tools → Graph API Explorer**: uygulamanızı seçin → **Generate Access Token** (ek izin gerekmez). Bu anahtar ~1 saat geçerlidir.
-4. **Tools → Access Token Debugger**: anahtarı yapıştırın → **Debug** → **Extend Access Token**. Çıkan uzun süreli anahtar ~60 gün geçerlidir.
-5. Anahtarı ekleyin: `gh secret set META_ACCESS_TOKEN` (GitHub) ve yerelde `.env.local` içine `META_ACCESS_TOKEN=`.
-
-**Yenileme (~60 günde bir):** 3–5. adımları tekrarlayın. `/yeni` sayfası son 10 günde uyarır; anahtar geçersizse günlük iş başarısız görünür ve sayfada kırmızı uyarı çıkar.
 ## Türk altyapıları: ikas ve Ticimax (`lib/nrd.ts`, `dtc/trPlatform.ts`)
 
 Türkiye'deki e-ticaret sitelerinin çoğu Shopify yerine yerli altyapılarda kuruludur. **DNS:** çok sayıda eşzamanlı sorguda çözümleyici zaman aşımına düşebilir; önce sistemin çözümleyicisi, zaman aşımında ücretsiz genel çözümleyiciler (Cloudflare 1.1.1.1, Google 8.8.8.8, Quad9) denenir (eskiden zaman aşımı sessizce "mağaza değil" sayılıyor ve mağazalar kaçırılıyordu; son 60 günün listesi bu yüzden çalıştırma başına 500 bin alan adıyla baştan yeniden taranır). Yeni alan adı keşfi DNS'ten tespit eder (yalnızca DNS sorgusu): Shopify (A kaydı 23.227.38.x), **ikas** (Cloudflare'e çözülen alan adında `www` CNAME'i `*.myikas.com`), **Ticimax** (`www` CNAME'i `*.ticimax.cloud`); altyapı `stores.platform`'a yazılır. ikas/Ticimax mağazasının kontrolü: `sitemap.xml` → ürün site haritası (ürün adresleri, son güncelleme, görsel; en fazla 300 ürün), ana sayfadan öne çıkan ürün, öne çıkan ürünün sayfasındaki schema.org JSON-LD'den ad, fiyat, para birimi ve stok; ana sayfadan marka künyesi ve Instagram/TikTok. Mağaza başına ~5 istek, robots.txt'ye uyulur. TL ile satan mağazanın öne çıkan ürünü puana bakılmadan aday olur ve "Mağaza ülkesi → Türkiye" filtresinde görünür.  IdeaSoft (ad sunucusu `ns*.myideasoft.com`) henüz desteklenmiyor.
@@ -331,7 +257,7 @@ Reklamı olan her ürün ve mağaza sayfasında:
 
 ## Reklam önizlemesi (`app/reklam/[id]/route.ts`)
 
-"Bu sitenin reklamları" listesinde her reklamda **▶ Videoyu izle**: Meta'nın resmi önizleme sayfası (`render_ad`: reklamın videosu ya da görseli) ekranın sağında tek bir izleme penceresinde açılır; başka bir reklama basınca aynı pencere ona geçer, izlenen reklamlar listede işaretlenir. Facebook bu sayfanın başka bir siteye gömülmesine izin vermez (X-Frame-Options: deny), bu yüzden sayfa içinde değil ayrı pencerede açılır. Meta'nın API'si video dosyasını vermez; önizleme sayfası Reklam Kütüphanesi API'sinin verdiği resmi bağlantıdır ve **kullanıcının tarayıcısında** açılır (sunucu facebook.com'u okumaz). Bağlantı Meta erişim anahtarıyla çalıştığı için anahtar Vercel'e de eklenmelidir: `npx vercel env add META_ACCESS_TOKEN production` (değer GitHub'dakiyle aynı; anahtar yenilenince iki yerde de güncelleyin), ardından yeniden deploy. Anahtar yalnızca giriş yapmış kullanıcının tarayıcısına, yönlendirme adresinde gider.
+"Bu sitenin reklamları" listesinde her reklamda **▶ Videoyu izle**: Meta'nın resmi önizleme sayfası (`render_ad`: reklamın videosu ya da görseli) ekranın sağında tek bir izleme penceresinde açılır; başka bir reklama basınca aynı pencere ona geçer, izlenen reklamlar listede işaretlenir. Facebook bu sayfanın başka bir siteye gömülmesine izin vermez (X-Frame-Options: deny), bu yüzden sayfa içinde değil ayrı pencerede açılır. Meta'nın API'si video dosyasını vermez; önizleme sayfası Reklam Kütüphanesi API'sinin verdiği resmi bağlantıdır ve **kullanıcının tarayıcısında** açılır (sunucu facebook.com'u okumaz). Bağlantı Meta erişim anahtarıyla çalışır (anahtar sunucuda saklanır). Anahtar yalnızca giriş yapmış kullanıcının tarayıcısına, yönlendirme adresinde gider.
 
 ## Marka künyesi ve ürün ayrıntıları (`dtc/storeTech.ts`, `dtc/productDetail.ts`, `components/BrandDetails.tsx`)
 
@@ -370,7 +296,7 @@ Ana sayfasında bağlantı olmayan, reklam veren ya da puanı ≥ 55 olan mağaz
 
 - **Meta reklamları:** tüm mağazaların en çok tutan reklam metinleri: yayındaki kopya sayısı, ilk yayından beri geçen gün, AB erişimi, platformlar; reklamı verilen ürünün fotoğrafı, **Reklamı aç** (herkese açık Reklam Kütüphanesi sayfası), **Metni kopyala**. Mağaza başına en fazla 2 metin; niş filtresi. Meta'nın API'si reklamın görsel/video dosyasını vermez ve facebook.com robots.txt tüm botları engeller; bu yüzden reklam görseli otomatik indirilmez.
 - **Instagram gönderileri:** mağaza ana sayfasındaki `instagram.com/<hesap>` bağlantısından hesap bulunur; resmi Instagram Graph API **Business Discovery** ile hesabın son 30 gönderisi (beğeni, yorum, görsel/video adresi) okunur. instagram.com sayfaları kazınmaz. Etkileşim = beğeni + 3 × yorum; **🔥 N×** = hesabın ortanca gönderisinin kaç katı (≥ 2 = çok tutan). **İndir** (`/medya/<id>`) dosyayı yalnızca tıklandığında, veritabanındaki API adresinden (cdninstagram.com / fbcdn.net) indirir. Mağaza ve ürün sayfasında "Instagram'da en çok tutanlar". Çalıştırma başına 60 hesap; çok tutan gönderisi olan hesap 2 günde, diğerleri 5 günde, profesyonel olmayan hesap 30 günde bir. İzin yoksa adım atlanır, iş başarısız sayılmaz. Hesabı bilinmeyen mağazalar için Actions → "Günlük toplama" → **Run workflow** → `instagram` modu reklam veren ve puanı ≥ 50 olan en fazla 200 mağazanın ana sayfasına bir kez bakar (robots.txt'ye uyar, art arda 429'da durur) ve ardından gönderileri okur.
-- **Instagram kurulumu (bir kez, ücretsiz):** Business Discovery yalnızca sizin de bir Instagram profesyonel hesabınız varsa çalışır. 1) Instagram → Ayarlar → Hesap türü → Profesyonel hesaba geç. 2) Bir Facebook sayfası açıp Instagram hesabını bağlayın. 3) Graph API Explorer'da `instagram_basic`, `instagram_manage_insights`, `pages_show_list`, `pages_read_engagement`, `business_management` izinleriyle anahtar üretip uzatın. 4) `gh secret set META_ACCESS_TOKEN` (reklam araması aynı anahtarla çalışmaya devam eder). İsteğe bağlı: `IG_USER_ID`.
+- Business Discovery, Facebook sayfasına bağlı bir Instagram profesyonel hesabı ve aynı Meta erişim anahtarını kullanır.
 - Başkasının görselini/videosunu kendi reklamınızda olduğu gibi kullanmak telif hakkı ihlalidir; galeriyi açı, kanca ve teklif fikri için kullanın.
 
 ## Zamanlama, rakip teklifleri ve niş trendleri

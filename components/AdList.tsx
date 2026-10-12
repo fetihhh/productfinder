@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { AdItemView } from "@/dtc/adItems";
+import type { AdMedia } from "@/dtc/adMedia";
 
 const PLATFORM: Record<string, string> = { facebook: "Facebook", instagram: "Instagram", messenger: "Messenger", audience_network: "Audience Network", threads: "Threads", whatsapp: "WhatsApp" };
 
@@ -51,18 +52,38 @@ function openViewer(id: string) {
   win?.focus();
 }
 
+/**
+ * Reklamın videosu sayfanın içinde: reklamla aynı metne sahip Instagram gönderisinin dosyası (resmi API). Dosya adresinin
+ * süresi dolmuşsa (Instagram adresleri birkaç günde yenilenir) Instagram'ın resmi gömme oynatıcısına geçilir.
+ */
+function AdPlayer({ m }: { m: AdMedia }) {
+  const [embed, setEmbed] = useState(!m.url);
+  const embedUrl = m.permalink ? `${m.permalink.replace(/\/$/, "")}/embed/` : null;
+  if (embed || !m.url) {
+    return embedUrl ? (
+      <iframe src={embedUrl} title="Reklamın Instagram gönderisi" loading="lazy" allowFullScreen scrolling="no" className="block h-[560px] w-full rounded-xl border-0 bg-white" />
+    ) : null;
+  }
+  return m.video ? (
+    <video src={m.url} poster={m.thumb ?? undefined} controls preload="metadata" playsInline onError={() => setEmbed(true)} className="mx-auto aspect-[9/16] max-h-[70vh] w-full rounded-xl bg-black object-contain" />
+  ) : (
+    <img src={m.url} alt="Reklam görseli" loading="lazy" referrerPolicy="no-referrer" onError={() => setEmbed(true)} className="w-full rounded-xl object-cover" />
+  );
+}
+
 /** Mağazanın tüm Meta reklamları: sıralama, yayındakiler, aynı metnin kopyalarını birleştirme ve arama. */
 export function AdList({ items }: { items: AdItemView[] }) {
   const [watched, setWatched] = useState<Set<string>>(() => new Set());
   const [sort, setSort] = useState<SortKey>("score");
   const [activeOnly, setActiveOnly] = useState(false);
   const [merge, setMerge] = useState(true);
+  const [withMedia, setWithMedia] = useState(false);
   const [q, setQ] = useState("");
   const [limit, setLimit] = useState(20);
 
   const rows = useMemo(() => {
     const needle = q.trim().toLocaleLowerCase("tr");
-    let list = items.filter((i) => (!activeOnly || i.active) && (!needle || `${i.title ?? ""} ${i.body ?? ""} ${i.description ?? ""}`.toLocaleLowerCase("tr").includes(needle)));
+    let list = items.filter((i) => (!activeOnly || i.active) && (!withMedia || i.media) && (!needle || `${i.title ?? ""} ${i.body ?? ""} ${i.description ?? ""}`.toLocaleLowerCase("tr").includes(needle)));
     list = [...list].sort(SORTS[sort].fn);
     if (merge) {
       // Aynı metnin kopyalarından yalnızca sıralamada ilk geleni (en iyisi) gösterilir.
@@ -75,9 +96,10 @@ export function AdList({ items }: { items: AdItemView[] }) {
       });
     }
     return list;
-  }, [items, sort, activeOnly, merge, q]);
+  }, [items, sort, activeOnly, merge, withMedia, q]);
 
   const active = items.filter((i) => i.active).length;
+  const playable = items.filter((i) => i.media).length;
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2">
@@ -97,6 +119,12 @@ export function AdList({ items }: { items: AdItemView[] }) {
           <input type="checkbox" className="check" checked={merge} onChange={(e) => setMerge(e.target.checked)} />
           Aynı metni birleştir
         </label>
+        {playable > 0 && (
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm select-none has-checked:border-amber-500/60 has-checked:bg-amber-500/10">
+            <input type="checkbox" className="check" checked={withMedia} onChange={(e) => setWithMedia(e.target.checked)} />
+            Videosu burada oynayanlar ({playable})
+          </label>
+        )}
         <span className="text-xs text-muted">
           {rows.length} / {items.length} reklam
         </span>
@@ -105,6 +133,15 @@ export function AdList({ items }: { items: AdItemView[] }) {
       <ol className="mt-4 space-y-3">
         {rows.slice(0, limit).map((i, n) => (
           <li key={i.id} className={`rounded-2xl border p-4 ${watched.has(i.id) ? "border-amber-500/50 bg-amber-500/5" : "border-line"}`}>
+            <div className={i.media ? "grid gap-4 sm:grid-cols-[240px_1fr]" : ""}>
+            {i.media && (
+              <div className="min-w-0">
+                <AdPlayer m={i.media} />
+                <p className="mt-1 text-[11px] text-muted" title="Reklam metni mağazanın bu Instagram gönderisinin açıklamasıyla aynı">
+                  Instagram&apos;daki aynı gönderi · metin %{Math.round(i.media.match * 100)} eşleşiyor
+                </p>
+              </div>
+            )}
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <span className="grid h-6 w-6 place-items-center rounded-full bg-surface-muted text-[11px] font-semibold tabular-nums">{n + 1}</span>
@@ -158,22 +195,28 @@ export function AdList({ items }: { items: AdItemView[] }) {
                 {i.page_name && <span>Sayfa: {i.page_name}</span>}
               </div>
               <div className="mt-3 flex flex-wrap gap-1.5">
+                {i.media?.url && (
+                  <a href={`/medya/${encodeURIComponent(i.media.postId)}`} className="btn btn-sm btn-primary" title="Videoyu/görseli indir">
+                    ⬇ İndir
+                  </a>
+                )}
                 <button
                   type="button"
-                  className="btn btn-sm btn-primary"
+                  className={`btn btn-sm ${i.media ? "" : "btn-primary"}`}
                   title="Reklamın videosunu/görselini yandaki izleme penceresinde açar"
                   onClick={() => {
                     openViewer(i.id);
                     setWatched((s) => new Set(s).add(i.id));
                   }}
                 >
-                  ▶ {watched.has(i.id) ? "Tekrar izle" : "Videoyu izle"}
+                  ▶ {i.media ? "Meta önizlemesi" : watched.has(i.id) ? "Tekrar izle" : "Videoyu izle"}
                 </button>
                 <a href={`https://www.facebook.com/ads/library/?id=${encodeURIComponent(i.id)}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm">
                   Reklam Kütüphanesi ↗
                 </a>
                 {(i.title || i.body) && <CopyText text={[i.title, i.body].filter(Boolean).join("\n\n")} />}
               </div>
+            </div>
             </div>
           </li>
         ))}

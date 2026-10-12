@@ -5,6 +5,7 @@ import type { AdOffers } from "../dtc/offers.ts";
 import type { Audience } from "../dtc/audience.ts";
 import { guessLang } from "../dtc/adCopy.ts";
 import { adItemRow, viewAdItems, type AdItem, type AdItemView } from "../dtc/adItems.ts";
+import { matchAdsToPosts, type IgMediaPost } from "../dtc/adMedia.ts";
 import type { AdSummary, ArchivedAd } from "../dtc/adLibrary.ts";
 import { db } from "./db.ts";
 
@@ -238,15 +239,21 @@ export async function saveAdItems(domain: string, ads: ArchivedAd[]): Promise<vo
 
 /** Ürün/mağaza sayfası: mağazanın tüm reklamları (önerilen sırada). */
 export async function adItemsFor(domain: string): Promise<AdItemView[]> {
-  const { data, error } = await db()
-    .from("ad_items")
-    .select("id, domain, page_id, page_name, start_at, stop_at, title, body, description, platforms, eu_reach, countries, female_share, top_age, creative_key")
-    .eq("domain", domain)
-    .limit(400);
+  const [{ data, error }, { data: posts }] = await Promise.all([
+    db()
+      .from("ad_items")
+      .select("id, domain, page_id, page_name, start_at, stop_at, title, body, description, platforms, eu_reach, countries, female_share, top_age, creative_key")
+      .eq("domain", domain)
+      .limit(400),
+    // Reklamın videosu: mağazanın aynı metinli Instagram gönderisi (resmi Business Discovery verisi).
+    db().from("ig_posts").select("id, caption, media_type, media_url, thumb_url, permalink").eq("domain", domain).limit(300),
+  ]);
   if (error) throw new Error(`ad_items okunamadı: ${error.message}`);
-  return viewAdItems(
+  const items = viewAdItems(
     ((data ?? []) as AdItem[]).map((r) => ({ ...r, eu_reach: r.eu_reach === null ? null : Number(r.eu_reach), female_share: r.female_share === null ? null : Number(r.female_share) })),
   );
+  const media = matchAdsToPosts(items, (posts ?? []) as IgMediaPost[]);
+  return items.map((i) => ({ ...i, media: media.get(i.id) ?? null }));
 }
 
 /**

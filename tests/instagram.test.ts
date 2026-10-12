@@ -47,7 +47,7 @@ test("rankPosts: etkileşim = beğeni + 3 × yorum; ortancaya göre kaç kat", (
 });
 
 test("discoveryUrl: Business Discovery alanları, kullanıcı adı ve sınır", () => {
-  const u = decodeURIComponent(discoveryUrl("1784", "get.cosmora", "v24.0", 30));
+  const u = decodeURIComponent(discoveryUrl("1784", "get.cosmora", "v24.0", 30)); // varsayılan 50
   assert.ok(u.startsWith("https://graph.facebook.com/v24.0/1784?fields=business_discovery.username(get.cosmora){"));
   assert.ok(u.includes("media.limit(30){id,caption,like_count,comments_count,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp}"));
 });

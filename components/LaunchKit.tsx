@@ -184,8 +184,9 @@ export function AdItemsSection({
       {note && <p className="mb-2 rounded-xl bg-amber-500/10 px-3 py-2 text-sm">{note}</p>}
       <p className="card-note mb-4">
         Son 150 günde AB&apos;de yayınlanan reklamlar. &quot;En çok tutan&quot; sırası: yayında olan reklam önce, yayında kalma süresi (kârsız reklam birkaç günde
-        kapatılır), aynı metnin yayındaki kopya sayısı (ölçekleme) ve erişim. &quot;▶ Videoyu izle&quot; reklamın videosunu/görselini ekranın sağındaki izleme
-        penceresinde açar (Facebook önizlemenin sayfaya gömülmesine izin vermez); sıradaki reklama basınca aynı pencere ona geçer.
+        kapatılır), aynı metnin yayındaki kopya sayısı (ölçekleme) ve erişim. Reklam metni mağazanın bir Instagram gönderisiyle aynıysa videosu
+        doğrudan burada oynar ve indirilebilir (resmi Instagram API&apos;si). Diğerlerinde &quot;▶ Videoyu izle&quot; Meta&apos;nın önizlemesini ekranın sağındaki izleme
+        penceresinde açar: Facebook reklam önizlemesinin sayfaya gömülmesine ve otomatik okunmasına izin vermez.
       </p>
       <AdPages items={items} />
       <AdList items={items} />

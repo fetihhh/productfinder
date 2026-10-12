@@ -3,6 +3,7 @@ import { normalizeName } from "../lib/productName.ts";
 import { clip } from "../lib/text.ts";
 import { creativeKey } from "./adAnalysis.ts";
 import type { ArchivedAd } from "./adLibrary.ts";
+import type { AdMedia } from "./adMedia.ts";
 import { audienceOf } from "./audience.ts";
 
 export type AdItem = {
@@ -49,7 +50,15 @@ export function adItemRow(ad: ArchivedAd, domain: string): AdItem {
 const DAY = 86_400_000;
 
 /** Arayüzde gösterilen reklam: yayında mı, kaç gündür, aynı metnin kaç kopyası var, önerilen sıra puanı. */
-export type AdItemView = AdItem & { active: boolean; days: number | null; copies: number; activeCopies: number; score: number };
+export type AdItemView = AdItem & {
+  active: boolean;
+  days: number | null;
+  copies: number;
+  activeCopies: number;
+  score: number;
+  /** Reklamla aynı metne sahip Instagram gönderisi: videosu sayfada oynar (dtc/adMedia.ts). */
+  media?: AdMedia | null;
+};
 
 /**
  * Önerilen sıra ("en çok tutan" önce): yayında olan reklam önce, yayında kalma süresi (kârsız reklam birkaç günde kapatılır),

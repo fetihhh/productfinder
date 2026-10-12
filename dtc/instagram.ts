@@ -170,7 +170,7 @@ export type IgResult<T> = { ok: true; data: T } | { ok: false; fatal: boolean; r
 
 const MEDIA_FIELDS = "id,caption,like_count,comments_count,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp";
 
-export function discoveryUrl(igUserId: string, username: string, version: string, limit = 30): string {
+export function discoveryUrl(igUserId: string, username: string, version: string, limit = 50): string {
   const fields = `business_discovery.username(${username}){id,username,name,website,biography,followers_count,media_count,profile_picture_url,media.limit(${limit}){${MEDIA_FIELDS}}}`;
   return `https://graph.facebook.com/${version}/${encodeURIComponent(igUserId)}?fields=${encodeURIComponent(fields)}`;
 }

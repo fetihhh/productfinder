@@ -51,28 +51,44 @@ export async function storesForDetail(limit: number): Promise<StoreToCheck[]> {
   return data as StoreToCheck[];
 }
 
+/**
+ * Zamanı gelen mağazalar, değere göre sırayla (Shopify kısıtlaması yüzünden her çalıştırmada hepsine yetişilemeyebilir):
+ * 1) açık mağazaların takibi (stok/satış hareketi, ürün ayrıntısı), 2) reklam veren ya da aramayla bulunan mağazalar,
+ * 3) yeni kayıtlı alan adlarından gelenler. Her grupta en eski zamanlı önce.
+ */
 export async function storesToCheck(limit: number, source?: string): Promise<StoreToCheck[]> {
-  // Supabase tek istekte en fazla 1.000 satır döndürür: sınır 1.000'den büyükse sayfa sayfa okunur.
-  const PAGE = 1000;
   const now = new Date().toISOString();
+  const tiers: ((q: ReturnType<typeof dueStores>) => ReturnType<typeof dueStores>)[] = [
+    (q) => q.eq("status", "live"),
+    (q) => q.neq("status", "live").in("source", ["reklam", "arama"]),
+    (q) => q.neq("status", "live").not("source", "in", "(reklam,arama)"),
+  ];
   const out: StoreToCheck[] = [];
-  for (let from = 0; from < limit; from += PAGE) {
-    let query = db()
-      .from("stores")
-      .select("domain, registered_on, discovered_at, first_product_at, status, platform")
-      .in("status", ["pending", "closed", "live"]);
-    if (source) query = query.eq("source", source);
-    const { data, error } = await query
-      .lte("next_check_at", now)
-      .order("next_check_at", { ascending: true })
-      .order("domain", { ascending: true })
-      .range(from, Math.min(limit, from + PAGE) - 1);
-    if (error) throw new Error(`stores okunamadı: ${error.message}`);
-    out.push(...(data as StoreToCheck[]));
-    if ((data ?? []).length < Math.min(PAGE, limit - from)) break;
+  for (const tier of tiers) {
+    // Supabase tek istekte en fazla 1.000 satır döndürür: sayfa sayfa okunur.
+    for (let from = 0; out.length < limit; from += 1000) {
+      const want = Math.min(1000, limit - out.length);
+      let q = tier(dueStores(now));
+      if (source) q = q.eq("source", source);
+      const { data, error } = await q
+        .order("next_check_at", { ascending: true })
+        .order("domain", { ascending: true })
+        .range(from, from + want - 1);
+      if (error) throw new Error(`stores okunamadı: ${error.message}`);
+      out.push(...(data as StoreToCheck[]));
+      if ((data ?? []).length < want) break;
+    }
+    if (out.length >= limit) break;
   }
   return out;
 }
+
+const dueStores = (now: string) =>
+  db()
+    .from("stores")
+    .select("domain, registered_on, discovered_at, first_product_at, status, platform")
+    .in("status", ["pending", "closed", "live"])
+    .lte("next_check_at", now);
 
 /** Mağaza yaşı (gün): alan adı kaydı, ilk ürün ya da keşif tarihinden en eskisi. */
 export function storeAgeDays(s: { registered_on: string | null; discovered_at: string; first_product_at: string | null }, now = Date.now()): number {

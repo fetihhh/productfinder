@@ -28,6 +28,7 @@ on:
 
 permissions:
   contents: read
+  actions: write # zincir: iş bitince sonraki devam çalıştırmasını başlatır
 
 concurrency:
   group: ingest
@@ -40,6 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
+      - run: echo "START_TS=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
@@ -77,5 +79,18 @@ jobs:
           INGEST_OK: ${{ steps.ingest.outputs.code }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      # Zincir: GitHub zamanlayıcısı tetiklerin çoğunu geciktiriyor ya da atlıyor; bu yüzden her çalıştırma bitince bir sonraki
+      # devam çalıştırmasını kendisi başlatır (günde ~18 çalıştırma). Zamanlayıcı yalnızca yedek. 15 dakikadan kısa süren
+      # çalıştırma (hata ya da iş kalmadı) zinciri başlatmaz: döngüye girmez, sıradaki zamanlanmış çalıştırma devam ettirir.
+      # Durdurmak için: depo ayarlarında Actions değişkeni CHAIN_RUNS=off.
+      - name: Sonraki çalıştırmayı başlat (zincir)
+        if: always() && vars.CHAIN_RUNS != 'off' && !github.event.repository.private && (github.event_name == 'schedule' || contains(fromJSON('["devam","full","verify","buyut"]'), inputs.mode))
+        run: |
+          elapsed=$(( $(date +%s) - START_TS ))
+          if [ "$elapsed" -lt 900 ]; then echo "Çalıştırma $((elapsed / 60)) dakika sürdü: zincir başlatılmadı"; exit 0; fi
+          gh workflow run daily-ingest.yml -f mode=devam && echo "Sonraki devam çalıştırması sıraya alındı"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
       - name: Sonuç
         run: exit ${{ steps.ingest.outputs.code || 1 }}

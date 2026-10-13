@@ -127,6 +127,10 @@ export async function discoverStores(): Promise<boolean> {
  * Zamanı gelen mağazaları kontrol eder (farklı alan adları paralel; her alan adına 1 istek/sn). source: yalnızca bu
  * kaynaktakiler; "detay": aday ürünü ya da reklamı olan açık mağazalar zamanı beklemeden.
  */
+/** Son mağaza kontrolü Shopify kısıtlaması yüzünden yarıda kaldı mı (çalıştırmanın sonunda ikinci tur için). */
+let lastThrottled = false;
+export const storeChecksThrottled = () => lastThrottled;
+
 export async function checkStores(source?: string): Promise<boolean> {
   const list = source === "detay" ? await storesForDetail(400) : await storesToCheck(STORE_CHECKS_PER_RUN, source);
   console.log(`\n▶ Mağaza kontrolü: ${list.length} mağaza`);
@@ -134,11 +138,11 @@ export async function checkStores(source?: string): Promise<boolean> {
   let failures = 0;
   let next = 0;
   // Kısıtlamaya uyum: Shopify aynı IP'den çok istek gelince tüm mağazalar için 429 döner. Art arda bu kadar kısıtlama
-  // gelirse durulmaz; önce beklenir (90, 180, 270 sn) ve paralellik yarıya indirilir, kısıtlanan mağaza bir kez daha
-  // denenir. Üç beklemeden sonra hâlâ kısıtlanıyorsa kontroller durur, kalanlar ertesi güne kalır (siteleri zorlamamak ve
-  // yanlış "kapandı" dememek için).
+  // gelirse durulmaz; önce beklenir (90, 180 sn) ve paralellik yarıya indirilir, kısıtlanan mağaza bir kez daha denenir.
+  // İki beklemeden sonra hâlâ kısıtlanıyorsa kontroller durur (siteleri zorlamamak ve yanlış "kapandı" dememek için);
+  // kalanlar aynı çalıştırmanın sonunda ikinci turda, olmazsa sonraki çalıştırmada denenir.
   const THROTTLE_LIMIT = 25;
-  const MAX_PAUSES = 3;
+  const MAX_PAUSES = 2;
   let throttled = 0;
   let tripped = false;
   let pauses = 0;
@@ -189,7 +193,8 @@ export async function checkStores(source?: string): Promise<boolean> {
   };
   await Promise.all(Array.from({ length: STORE_CHECK_CONCURRENCY }, (_, i) => worker(i)));
   console.log(`  durum: ${JSON.stringify(counts)}${failures ? `, hata ${failures}` : ""} (${secs(t0)} sn)`);
-  if (tripped) console.log(`  ! Shopify ${MAX_PAUSES} beklemeden sonra da "çok fazla istek" (429) döndü: kontroller durduruldu, ${list.length - next} mağaza yarına kaldı`);
+  lastThrottled = tripped;
+  if (tripped) console.log(`  ! Shopify ${MAX_PAUSES} beklemeden sonra da "çok fazla istek" (429) döndü: kontroller durduruldu, ${list.length - next} mağaza sonraki tura kaldı`);
   return failures < Math.max(10, list.length * 0.2);
 }
 

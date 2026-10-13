@@ -7,7 +7,7 @@
 ## Nasıl çalışır
 
 ```
-GitHub Actions (05:17 UTC tam iş; 2 saatte bir devam)  →  npm run ingest
+GitHub Actions (zincirleme: biri biter, sonraki başlar; günde 1 tam iş)  →  npm run ingest
   0) Yeni mağaza keşfi: yeni kayıtlı alan adları (WhoisDS) → DNS ile Shopify mağazaları → haftalık kontrol
      → son 5 ayda açılmış, puanı yüksek mağazaların öne çıkan ürünü aday olur
   1) Ürün bloglarının RSS beslemeleri → aday ürünler (marka alan adı + ürün sayfası)
@@ -27,7 +27,7 @@ Supabase (Postgres)     →  tüm veriler; yalnızca sunucu tarafından gizli an
 | Servis | Ücretsiz limit | Bu projedeki kullanım |
 |---|---|---|
 | **Supabase Free** | 500 MB veritabanı, 5 GB çıkış/ay, 2 aktif proje. 7 gün işlem olmazsa proje duraklar | Birkaç MB. Günlük iş projeyi aktif tutar |
-| **GitHub Actions** (public repo) | Herkese açık depolarda standart çalıştırıcılar sınırsız ve ücretsiz (özel depoda 2.000 dakika/ay) | Günde 12 çalıştırma (1 tam + 11 devam; birikmiş iş bitince devam çalıştırmaları kısalır): yalnızca depo herkese açıkken ücretsiz. Depo özel kalırsa devam çalıştırmaları kendiliğinden atlanır. 60 gün commit olmazsa zamanlanmış iş durur |
+| **GitHub Actions** (public repo) | Herkese açık depolarda standart çalıştırıcılar sınırsız ve ücretsiz (özel depoda 2.000 dakika/ay) | Günde ~18 zincirleme çalıştırma (1 tam + devam; birikmiş iş bitince devam çalıştırmaları kısalır): yalnızca depo herkese açıkken ücretsiz. Depo özel kalırsa devam çalıştırmaları kendiliğinden atlanır. 60 gün commit olmazsa zamanlanmış iş durur |
 | **Vercel Hobby** | 100 GB veri aktarımı, 1M fonksiyon çağrısı, 4 CPU-saat/ay; fonksiyon süresi 300 sn. **Yalnızca kişisel, ticari olmayan kullanım** | Tek kullanıcı, çok düşük trafik |
 | **Tavily Free** | 1.000 kredi/ay, kart istemez (basic arama = 1 kredi) | Kod sınırı (kotanın %70'i): günde 23, ayda 700. Kota dolarsa sıradaki yedek servise geçilir, ücretli kullanıma **asla** geçilmez |
 | **Exa Free** (yedek, isteğe bağlı) | Her ay ~10 $ ücretsiz kredi, kart istemez; arama ~0,007 $ (~1.400 arama/ay) | Kod sınırı (kotanın %70'i): günde 32, ayda 980. Yalnızca başlık/adres istenir (içerik ek kredi tüketir) |
@@ -48,7 +48,7 @@ Supabase (Postgres)     →  tüm veriler; yalnızca sunucu tarafından gizli an
 
 ## Çalışma düzeni
 
-İş akışı: `.github/workflows/daily-ingest.yml`: 05:17 UTC (08:17 TR) tam iş; tek saatlerin 47. dakikasında (2 saatte bir, 11 kez) `devam` (toplama hariç her şey: bekleyen mağaza kontrolleri, alan adı taraması kaldığı yerden, gün içinde yenilenen kotalarla reklam/Instagram/doğrulama; kotalar sayaçlarla korunur). Arayüz Vercel'de, veriler Supabase'de.
+İş akışı: `.github/workflows/daily-ingest.yml`. **Zincirleme çalışır:** her çalıştırma bitince bir sonraki `devam` çalıştırmasını kendisi başlatır (günde ~18; GitHub zamanlayıcısı tetiklerin çoğunu atladığı için). 15 dakikadan kısa süren çalıştırma zinciri başlatmaz; zamanlayıcı (05:17 UTC tam iş, tek saatlerin 47. dakikasında devam) yedektir. Durdurmak için Actions değişkeni `CHAIN_RUNS=off`. Günün tam işi atlanırsa 05:00 UTC'den sonraki ilk devam çalıştırması tam iş yapar. `devam` (toplama hariç her şey: bekleyen mağaza kontrolleri, alan adı taraması kaldığı yerden, gün içinde yenilenen kotalarla reklam/Instagram/doğrulama; kotalar sayaçlarla korunur). Arayüz Vercel'de, veriler Supabase'de.
 
 **Güvenlik:** GitHub kaydında yalnızca adım başlıkları ve sayılar görünür (`scripts/publicLog.ts`); ürün, mağaza ve adres içeren ayrıntılı kayıt Supabase'deki `job_logs` tablosuna yazılır (yalnızca gizli anahtarla okunur). Anahtarlar kodda yoktur. Tüm Supabase tabloları RLS ile kapalıdır. Arayüz şifreyle korunur; aynı IP'den 15 dakikada 5, tüm IP'lerden saatte 50 hatalı denemede giriş kilitlenir.
 

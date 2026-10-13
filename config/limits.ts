@@ -59,7 +59,8 @@ export const NEW_STORE_MAX_AGE_DAYS = 150;
 export const DNS_CONCURRENCY = 300;
 export const NRD_BOOTSTRAP_PER_RUN = Number(process.env.NRD_BOOTSTRAP_PER_RUN) || 300_000;
 export const STORE_CHECKS_PER_RUN = Number(process.env.STORE_CHECKS_PER_RUN) || 3000;
-export const STORE_CHECK_CONCURRENCY = 12;
+// 12 eşzamanlı istek Shopify'ın IP kısıtlamasını sık tetikliyordu; 6 ile başlanır, 429 gelince yarıya inilir.
+export const STORE_CHECK_CONCURRENCY = 6;
 export const STORE_PROMOTE_PER_RUN = 40;
 export const STORE_PROMOTE_MIN_SCORE = 55;
 /** Bu puanın üstündeki açık mağazalar haftada bir yerine her gün kontrol edilir (satış hareketi için). */

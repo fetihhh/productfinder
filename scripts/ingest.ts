@@ -59,7 +59,7 @@ import { parseTcmb, TCMB_URL } from "../lib/fx.ts";
 import { getSummary } from "../lib/summary.ts";
 import { updateTiming } from "../lib/timing.ts";
 import { sourceLang, translateToEnglish } from "../lib/translate.ts";
-import { setJobState } from "../lib/stores.ts";
+import { getJobState, setJobState } from "../lib/stores.ts";
 import { ranksFor, TRANCO_MAX_BYTES, TRANCO_URL, unzipFirst } from "../lib/tranco.ts";
 import { enabledAdapters } from "../sources/index.ts";
 import { adSignals } from "./ads.ts";
@@ -70,7 +70,7 @@ import { rdapLookups } from "./rdap.ts";
 import { findSocialHandles, guessSocial, instagramPosts } from "./instagram.ts";
 import { turkeyChecks } from "./turkey.ts";
 import { productTagPosts } from "./hashtags.ts";
-import { brandAges, checkStores, copyClusters, discoverStores, promoteMovers, promoteStores } from "./stores.ts";
+import { brandAges, checkStores, copyClusters, discoverStores, promoteMovers, promoteStores, storeChecksThrottled } from "./stores.ts";
 
 async function collect(): Promise<boolean> {
   let ok = true;
@@ -405,8 +405,12 @@ async function main() {
   const onlyVerify = process.argv.includes("verify") || process.argv.includes("recheck");
   // Gün içi devam çalıştırması: toplama dışında her şey (yeni alan adı taraması kaldığı yerden sürer, bekleyen mağazalar
   // kontrol edilir, yenilenen kotalarla reklam/Instagram/doğrulama devam eder). Kotalar sayaçlarla korunur.
-  const resume = process.argv.includes("devam");
-  // Devam çalıştırmaları günde 11 kez: hız sınırlı dış servisler (Meta, Instagram, RDAP) günde birkaç kezle sınırlanır,
+  // Günün tam işi (05:17 zamanlaması) GitHub tarafından atlandıysa 05:00 UTC'den sonraki ilk devam çalıştırması tam iş yapar.
+  const lastFull = await getJobState<string>("last_full_day");
+  const fullDue = !onlyVerify && lastFull !== today() && new Date().getUTCHours() >= 5;
+  const resume = process.argv.includes("devam") && !fullDue;
+  if (process.argv.includes("devam") && fullDue) console.log("\n▶ Bugünün tam işi henüz yapılmadı: bu çalıştırma tam iş olarak sürüyor");
+  // Devam çalıştırmaları zincirleme (bir biter, sonraki başlar; günde ~18): hız sınırlı dış servisler (Meta, Instagram, RDAP) günde birkaç kezle sınırlanır,
   // geri kalanlar (DNS taraması, mağaza kontrolü, doğrulama) her çalıştırmada sürer. Tam iş her zaman hepsini yapar.
   const allowed = async (step: string, perDay: number): Promise<boolean> => {
     if (!resume) return true;
@@ -419,7 +423,7 @@ async function main() {
   const skipStores = process.argv.includes("no-stores");
   const discovered = onlyVerify || skipStores ? true : await discoverStores();
   // Reklam Kütüphanesi'nden keşif: zaten reklam veren mağazalar (aynı çalıştırmada kontrol edilir).
-  if (!onlyVerify && !skipStores && (await allowed("reklamdan_kesif", 2))) {
+  if (!onlyVerify && !skipStores && (await allowed("reklamdan_kesif", 4))) {
     try {
       await discoverFromAds();
     } catch (err) {
@@ -438,10 +442,10 @@ async function main() {
   // Aynı ürünü satan mağazalar (kopya puanı aday seçiminden önce toplam puana eklenir).
   const copied = skipStores ? true : await copyClusters();
   // Reklam sinyali aday seçiminden önce: reklam veren mağazaların toplam puanı yükselir.
-  const advertised = (await allowed("reklam_sinyali", 3)) ? await adSignals() : true;
+  const advertised = (await allowed("reklam_sinyali", 5)) ? await adSignals() : true;
   // Instagram her çalıştırmada (2 saatte bir): çalıştırma başına ~130 hesap okuma + 60 tahmin sorgusu = ~190 çağrı, Meta'nın
   // saatlik ~200 çağrı sınırının altında. Hız sınırına takılınca adım kendiliğinden durur, kalanlar sonraki çalıştırmaya kalır.
-  if (await allowed("instagram", 11)) {
+  if (await allowed("instagram", 18)) {
     try {
       await guessSocial(30, 60);
     } catch (err) {
@@ -476,10 +480,17 @@ async function main() {
   }
   const sourced = await suppliers();
   const aged = await brandAges();
+  // İlk turda Shopify kısıtladıysa: aradan geçen ~45 dakikada kısıtlama çoğu zaman kalkar; kalan mağazalar yeniden denenir.
+  if (!skipStores && storeChecksThrottled()) {
+    console.log("\n▶ Mağaza kontrolü ikinci tur (ilk turda Shopify kısıtladı)");
+    await checkStores();
+    await promoteStores();
+  }
   const scores = await updateTrendScores();
   console.log(`\n▶ Trend skoru: ${scores.total} ürün, ${scores.updated} değişti`);
   await timing();
   console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
+  if (!resume && !onlyVerify) await setJobState("last_full_day", today());
   console.log(`\nBitti: ${((Date.now() - started) / 1000).toFixed(1)} sn`);
   await writeJobSummary((Date.now() - started) / 1000);
   if (![collected, discovered, checked, copied, advertised, promoted, verified, ranked, measured, fx, sourced, aged].every(Boolean)) process.exitCode = 1;

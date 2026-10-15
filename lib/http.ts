@@ -128,13 +128,20 @@ export async function politeFetch(
   input: string,
   accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   extra: Record<string, string> = {},
+  maxBytes = MAX_BYTES,
 ): Promise<FetchResult> {
-  const r = await politeRequest(input, accept, MAX_BYTES, extra);
+  const r = await politeRequest(input, accept, maxBytes, extra);
   if (!r.ok) return r;
   const text = await r.res.text();
-  if (text.length > MAX_BYTES) return { ok: false, url: r.url.href, reason: "Yanıt çok büyük", retryable: false };
+  if (text.length > maxBytes) return { ok: false, url: r.url.href, reason: "Yanıt çok büyük", retryable: false };
   return { ok: true, status: r.res.status, url: r.url.href, contentType: r.res.headers.get("content-type") ?? "", text };
 }
+
+/**
+ * Mağaza kontrolü için: Shopify'ın /products.json?limit=250 yanıtı uzun ürün açıklamalarıyla 3 MB'ı sık aşıyor (kontrollerin
+ * ~%23'ü "Yanıt çok büyük" diye düşüyordu). Bu istekler için sınır 25 MB.
+ */
+export const politeFetchLarge = (input: string, accept?: string) => politeFetch(input, accept, {}, 25_000_000);
 
 /** İkili dosya indirme (ör. Tranco listesinin zip'i, ürün görselleri); aynı robots/hız kurallarıyla. */
 export async function politeFetchBytes(

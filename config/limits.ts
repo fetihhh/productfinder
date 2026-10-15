@@ -59,10 +59,11 @@ export const NEW_STORE_MAX_AGE_DAYS = 150;
 export const DNS_CONCURRENCY = 300;
 export const NRD_BOOTSTRAP_PER_RUN = Number(process.env.NRD_BOOTSTRAP_PER_RUN) || 300_000;
 export const STORE_CHECKS_PER_RUN = Number(process.env.STORE_CHECKS_PER_RUN) || 3000;
-// 12 eşzamanlı istek Shopify'ın IP kısıtlamasını sık tetikliyordu; 6 ile başlanır, 429 gelince yarıya inilir.
-export const STORE_CHECK_CONCURRENCY = 6;
-export const STORE_PROMOTE_PER_RUN = 40;
-export const STORE_PROMOTE_MIN_SCORE = 55;
+// Gerçek 429 oranı ~%1 (3.000 kontrolde 28); 10 eşzamanlı istekle başlanır, 429 art arda gelince yarıya inilir.
+export const STORE_CHECK_CONCURRENCY = 10;
+export const STORE_PROMOTE_PER_RUN = 60;
+// 55–60 puanlı mağazaların ürünlerinin %86'sı doğrulamadan geçti: eşik 50 (sıralamayı winner skoru yapar).
+export const STORE_PROMOTE_MIN_SCORE = 50;
 /** Bu puanın üstündeki açık mağazalar haftada bir yerine her gün kontrol edilir (satış hareketi için). */
 export const STORE_DAILY_MIN_SCORE = 55;
 

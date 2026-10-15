@@ -19,7 +19,7 @@ import { registrationDate } from "../dtc/rdap.ts";
 import { parseStoreProducts, probeStore } from "../dtc/storeProbe.ts";
 import { saveHeroHash, storesToHash, updateCopies } from "../lib/copies.ts";
 import { registrableDomain } from "../lib/domain.ts";
-import { politeFetch, politeFetchBytes } from "../lib/http.ts";
+import { politeFetch, politeFetchBytes, politeFetchLarge } from "../lib/http.ts";
 import { findStoreDomains, NRD60_MAX_BYTES, NRD60_URL, parseDomainList, whoisdsUrl, type StorePlatform } from "../lib/nrd.ts";
 import { probeTrStore } from "../dtc/trPlatform.ts";
 import { saveCandidate } from "../lib/repo.ts";
@@ -162,7 +162,7 @@ export async function checkStores(source?: string): Promise<boolean> {
       const s = list[next++];
       try {
         const probe =
-          s.platform === "ikas" || s.platform === "ticimax" ? await probeTrStore(s.domain, s.platform, politeFetch) : await probeStore(s.domain, politeFetch);
+          s.platform === "ikas" || s.platform === "ticimax" ? await probeTrStore(s.domain, s.platform, politeFetch) : await probeStore(s.domain, politeFetchLarge);
         if (probe.state === "error") reasons[probe.why.slice(0, 80)] = (reasons[probe.why.slice(0, 80)] ?? 0) + 1;
         // Yalnızca gerçek "çok fazla istek" yanıtı kısıtlama sayılır; ağ hatası (kapanmış alan adı, zaman aşımı) sayılmaz.
         if (probe.state === "error" && /HTTP 429/.test(probe.why)) {

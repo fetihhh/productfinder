@@ -149,6 +149,7 @@ export async function checkStores(source?: string): Promise<boolean> {
   let pauseUntil = 0;
   let allowed = STORE_CHECK_CONCURRENCY;
   const retried = new Set<string>();
+  const reasons: Record<string, number> = {};
   const t0 = Date.now();
   const worker = async (id: number) => {
     while (next < list.length && !tripped) {
@@ -162,7 +163,9 @@ export async function checkStores(source?: string): Promise<boolean> {
       try {
         const probe =
           s.platform === "ikas" || s.platform === "ticimax" ? await probeTrStore(s.domain, s.platform, politeFetch) : await probeStore(s.domain, politeFetch);
-        if (probe.state === "error" && /429|robots\.txt geçici/.test(probe.why)) {
+        if (probe.state === "error") reasons[probe.why.slice(0, 80)] = (reasons[probe.why.slice(0, 80)] ?? 0) + 1;
+        // Yalnızca gerçek "çok fazla istek" yanıtı kısıtlama sayılır; ağ hatası (kapanmış alan adı, zaman aşımı) sayılmaz.
+        if (probe.state === "error" && /HTTP 429/.test(probe.why)) {
           if (++throttled >= THROTTLE_LIMIT) {
             throttled = 0;
             if (pauses >= MAX_PAUSES) tripped = true;
@@ -193,6 +196,7 @@ export async function checkStores(source?: string): Promise<boolean> {
   };
   await Promise.all(Array.from({ length: STORE_CHECK_CONCURRENCY }, (_, i) => worker(i)));
   console.log(`  durum: ${JSON.stringify(counts)}${failures ? `, hata ${failures}` : ""} (${secs(t0)} sn)`);
+  if (Object.keys(reasons).length) console.log(`  hata nedenleri: ${JSON.stringify(reasons)}`);
   lastThrottled = tripped;
   if (tripped) console.log(`  ! Shopify ${MAX_PAUSES} beklemeden sonra da "çok fazla istek" (429) döndü: kontroller durduruldu, ${list.length - next} mağaza sonraki tura kaldı`);
   return failures < Math.max(10, list.length * 0.2);

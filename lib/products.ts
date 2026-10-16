@@ -3,7 +3,7 @@ import type { TrListing } from "../dtc/turkey.ts";
 import type { TagPost } from "../dtc/hashtags.ts";
 import { IMAGE_MATCH_MAX } from "../config/limits.ts";
 import { adHistory, adSignalsFor, type AdHistoryPoint, type AdSignalRow } from "./ads.ts";
-import { db } from "./db.ts";
+import { allRows, db } from "./db.ts";
 import type { ScoreBreakdown } from "./score.ts";
 import type { WinnerBreakdown } from "./winner.ts";
 
@@ -205,8 +205,8 @@ export async function newToday(): Promise<number> {
 /** Filtre seçenekleri: mevcut kategoriler, platformlar ve mağaza ülkeleri. */
 export async function facets(): Promise<{ categories: string[]; platforms: string[]; countries: string[] }> {
   const [cats, brands] = await Promise.all([
-    db().from("products").select("category").not("category", "is", null),
-    db().from("brands").select("platform, country"),
+    allRows((a, b) => db().from("products").select("category").not("category", "is", null).order("id").range(a, b)),
+    allRows((a, b) => db().from("brands").select("platform, country").order("domain").range(a, b)),
   ]);
   const uniq = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => Boolean(x)))].sort((a, b) => a.localeCompare(b, "tr"));
   return {
@@ -317,9 +317,9 @@ export type SiteRow = {
 export async function listSites(onlyVerified: boolean): Promise<SiteRow[]> {
   const since = new Date(Date.now() - 60 * 86_400_000).toISOString().slice(0, 10);
   const [brands, products, ranks] = await Promise.all([
-    db().from("brands").select("domain, platform, country, ships_to_tr, marketplace_status, tranco_rank"),
-    db().from("products").select("brand_domain, dtc_status"),
-    db().from("traffic_ranks").select("domain, day, rank").gte("day", since).order("day"),
+    allRows((a, b) => db().from("brands").select("domain, platform, country, ships_to_tr, marketplace_status, tranco_rank").order("domain").range(a, b)),
+    allRows((a, b) => db().from("products").select("brand_domain, dtc_status").order("id").range(a, b)),
+    allRows((a, b) => db().from("traffic_ranks").select("domain, day, rank").gte("day", since).order("day").order("domain").range(a, b)),
   ]);
   for (const r of [brands, products, ranks]) if (r.error) throw new Error(r.error.message);
   const counts = new Map<string, { verified: number; products: number }>();

@@ -7,7 +7,7 @@ import { guessLang } from "../dtc/adCopy.ts";
 import { adItemRow, viewAdItems, type AdItem, type AdItemView } from "../dtc/adItems.ts";
 import { matchAdsToPosts, type IgMediaPost } from "../dtc/adMedia.ts";
 import type { AdSummary, ArchivedAd } from "../dtc/adLibrary.ts";
-import { db } from "./db.ts";
+import { allRows, db } from "./db.ts";
 
 const DAY = 86_400_000;
 
@@ -35,7 +35,7 @@ export async function knownAdvertisers(limit: number): Promise<AdTarget[]> {
 export async function adTargets(limit: number, minStoreScore: number): Promise<AdTarget[]> {
   const since = new Date(Date.now() - NEW_STORE_MAX_AGE_DAYS * DAY).toISOString();
   const [verified, stores, fromAds] = await Promise.all([
-    db().from("products").select("brand_domain").eq("dtc_status", "verified").limit(1000),
+    allRows((a, b) => db().from("products").select("brand_domain").eq("dtc_status", "verified").order("id").range(a, b)),
     db()
       .from("stores")
       .select("domain, shop_name")
@@ -52,7 +52,7 @@ export async function adTargets(limit: number, minStoreScore: number): Promise<A
   if (stores.error) throw new Error(`stores okunamadı: ${stores.error.message}`);
 
   const shopNames = new Map<string, string | null>([...fromAds.data, ...stores.data].map((s) => [s.domain as string, s.shop_name as string | null]));
-  const ordered = [...new Set([...fromAds.data.map((s) => s.domain as string), ...verified.data.map((p) => p.brand_domain as string), ...shopNames.keys()])];
+  const ordered = [...new Set([...fromAds.data.map((s) => s.domain as string), ...verified.data!.map((p) => p.brand_domain as string), ...shopNames.keys()])];
   const known = await inChunks(ordered, async (chunk) => {
     const { data, error } = await db().from("ad_signals").select("domain, page_id, next_check_at").in("domain", chunk);
     if (error) throw new Error(`ad_signals okunamadı: ${error.message}`);
@@ -183,9 +183,11 @@ export async function adHistory(domain: string): Promise<AdHistoryPoint[]> {
 
 /** Winner/yükseliş skorları için: alan adı → reklam puanı ve son 14 günde açılan reklam sayısı. */
 export async function adPointsByDomain(): Promise<Map<string, { points: number; score: number; newAds14d: number }>> {
-  const { data, error } = await db().from("ad_signals").select("domain, ad_points, ad_score, new_ads_14d").gt("total_ads", 0);
+  const { data, error } = await allRows((a, b) =>
+    db().from("ad_signals").select("domain, ad_points, ad_score, new_ads_14d").gt("total_ads", 0).order("domain").range(a, b),
+  );
   if (error) throw new Error(`ad_signals okunamadı: ${error.message}`);
-  return new Map(data.map((r) => [r.domain as string, { points: Number(r.ad_points), score: Number(r.ad_score), newAds14d: r.new_ads_14d as number }]));
+  return new Map(data!.map((r) => [r.domain as string, { points: Number(r.ad_points), score: Number(r.ad_score), newAds14d: r.new_ads_14d as number }]));
 }
 
 export type AdStoreContext = { shop_name: string | null; hero_handle: string | null; first_product_at: string | null; products: { h: string; t: string; img: string | null; c: string | null }[] };
@@ -284,7 +286,7 @@ export async function adItemsFor(domain: string): Promise<AdItemView[]> {
  * kanıtı olan ürünler, doğrulamanın günlük kotası yüzünden listede görünmeden beklemesin.
  */
 export async function prioritizeAdWinners(): Promise<number> {
-  const { data, error } = await db().from("ad_signals").select("domain").in("ad_stage", ["proven", "scaling"]);
+  const { data, error } = await allRows((a, b) => db().from("ad_signals").select("domain").in("ad_stage", ["proven", "scaling"]).order("domain").range(a, b));
   if (error) throw new Error(`ad_signals okunamadı: ${error.message}`);
   const domains = (data ?? []).map((r) => r.domain as string);
   let n = 0;

@@ -5,7 +5,7 @@ import { isImageMatch, type SupplierResult } from "../dtc/suppliers.ts";
 import { bigBrandReason, WIDE_PENDING, type VerifyResult } from "../dtc/verify.ts";
 import type { Candidate, SeenItem } from "../sources/types.ts";
 import { adPointsByDomain } from "./ads.ts";
-import { db } from "./db.ts";
+import { allRows, db } from "./db.ts";
 import { normalizeName } from "./productName.ts";
 import { clip } from "./text.ts";
 import { trendScore, type MentionLite } from "./score.ts";
@@ -232,9 +232,9 @@ export async function saveSnapshot(productId: string, s: SalesSnapshot): Promise
 /** Bugün ölçümü alınmamış doğrulanmış ürünler ile favori/incelenecek listesindekiler. */
 export async function productsToSnapshot(limit: number): Promise<{ id: string; name: string; product_url: string }[]> {
   const [verified, tracked, done] = await Promise.all([
-    db().from("products").select("id, name, product_url").eq("dtc_status", "verified").not("product_url", "is", null),
+    allRows((a, b) => db().from("products").select("id, name, product_url").eq("dtc_status", "verified").not("product_url", "is", null).order("id").range(a, b)),
     db().from("products").select("id, name, product_url, tracking!inner(status)").in("tracking.status", ["favorite", "review"]).not("product_url", "is", null),
-    db().from("product_snapshots").select("product_id").eq("day", today()),
+    allRows((a, b) => db().from("product_snapshots").select("product_id").eq("day", today()).order("product_id").range(a, b)),
   ]);
   for (const r of [verified, tracked, done]) if (r.error) throw new Error(`ölçüm listesi okunamadı: ${r.error.message}`);
   const skip = new Set(done.data!.map((d) => d.product_id as string));
@@ -246,9 +246,9 @@ export async function productsToSnapshot(limit: number): Promise<{ id: string; n
 }
 
 export async function brandDomains(): Promise<string[]> {
-  const { data, error } = await db().from("brands").select("domain");
+  const { data, error } = await allRows((a, b) => db().from("brands").select("domain").order("domain").range(a, b));
   if (error) throw new Error(`brands okunamadı: ${error.message}`);
-  return data.map((b) => b.domain as string);
+  return data!.map((b) => b.domain as string);
 }
 
 export async function latestTrafficDay(): Promise<string | null> {
@@ -273,13 +273,17 @@ export async function saveTrafficRanks(day: string, domains: string[], ranks: Ma
 export async function updateWinnerScores(): Promise<number> {
   const since = new Date(Date.now() - 45 * 86_400_000).toISOString().slice(0, 10);
   const [products, snaps, ranks, ads, stores] = await Promise.all([
-    db()
-      .from("products")
-      .select("id, brand_domain, review_count, rating, price, currency, trend_score, score_breakdown, supplier_min_usd, margin_ratio, supplier_sold, supplier_sold_per_week, supplier_image_match"),
-    db().from("product_snapshots").select("product_id, day, review_count").gte("day", since),
-    db().from("traffic_ranks").select("domain, day, rank").gte("day", since),
+    allRows((a, b) =>
+      db()
+        .from("products")
+        .select("id, brand_domain, review_count, rating, price, currency, trend_score, score_breakdown, supplier_min_usd, margin_ratio, supplier_sold, supplier_sold_per_week, supplier_image_match")
+        .order("id")
+        .range(a, b),
+    ),
+    allRows((a, b) => db().from("product_snapshots").select("product_id, day, review_count").gte("day", since).order("product_id").order("day").range(a, b)),
+    allRows((a, b) => db().from("traffic_ranks").select("domain, day, rank").gte("day", since).order("domain").order("day").range(a, b)),
     adPointsByDomain(),
-    db().from("stores").select("domain, stock_drops, copy_count, copy_same_seller").or("stock_drops.gt.0,copy_count.gt.0"),
+    allRows((a, b) => db().from("stores").select("domain, stock_drops, copy_count, copy_same_seller").or("stock_drops.gt.0,copy_count.gt.0").order("domain").range(a, b)),
   ]);
   for (const r of [products, snaps, ranks, stores]) if (r.error) throw new Error(`winner verisi okunamadı: ${r.error.message}`);
   const storeBy = new Map((stores.data as { domain: string; stock_drops: number; copy_count: number; copy_same_seller: boolean }[]).map((s) => [s.domain, s]));
@@ -320,9 +324,12 @@ export async function updateWinnerScores(): Promise<number> {
 
 /** Verilen gün listesinde sırası kaydedilmemiş markalar (yeni eklenenler). */
 export async function brandsWithoutRank(day: string): Promise<string[]> {
-  const [all, ranked] = await Promise.all([brandDomains(), db().from("traffic_ranks").select("domain").eq("day", day)]);
+  const [all, ranked] = await Promise.all([
+    brandDomains(),
+    allRows((a, b) => db().from("traffic_ranks").select("domain").eq("day", day).order("domain").range(a, b)),
+  ]);
   if (ranked.error) throw new Error(`traffic_ranks okunamadı: ${ranked.error.message}`);
-  const have = new Set(ranked.data.map((r) => r.domain as string));
+  const have = new Set(ranked.data!.map((r) => r.domain as string));
   return all.filter((d) => !have.has(d));
 }
 
@@ -457,16 +464,16 @@ export async function tryConsumeQuota(provider: string, daily: number, monthly: 
 
 /** Tüm ürünlerin trend skorunu bahsedilmelerden yeniden hesaplar; yalnızca değişenleri yazar. */
 export async function updateTrendScores(): Promise<{ updated: number; total: number }> {
-  const { data, error } = await db().from("products").select("id, trend_score, mentions(source, posted_at)");
+  const { data, error } = await allRows((a, b) => db().from("products").select("id, trend_score, mentions(source, posted_at)").order("id").range(a, b));
   if (error) throw new Error(`products okunamadı: ${error.message}`);
   let updated = 0;
-  for (const p of data as { id: string; trend_score: number; mentions: MentionLite[] }[]) {
+  for (const p of data! as { id: string; trend_score: number; mentions: MentionLite[] }[]) {
     const { score, breakdown } = trendScore(p.mentions);
     const { error: upErr } = await db().from("products").update({ trend_score: score, score_breakdown: breakdown }).eq("id", p.id);
     if (upErr) throw new Error(`skor yazılamadı: ${upErr.message}`);
     if (Number(p.trend_score) !== score) updated++;
   }
-  return { updated, total: data.length };
+  return { updated, total: data!.length };
 }
 
 /**

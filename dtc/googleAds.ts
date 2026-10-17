@@ -13,7 +13,8 @@ export const GOOGLE_ADS_MAX_GB = 180;
  */
 export function googleAdsTrSql(days = 30, minNew = 3, limit = 3000): string {
   const d = (col: string) => `SAFE_CAST(CAST(${col} AS STRING) AS DATE)`;
-  const n = (col: string) => `SAFE_CAST(CAST(${col} AS STRING) AS INT64)`;
+  // Gösterim sınırları çok büyük olabilir (üst sınır açık uçlu): toplam taşmasın diye satır başına 10¹² ile sınırlanıp ondalıklı toplanır.
+  const n = (col: string) => `LEAST(SAFE_CAST(CAST(${col} AS STRING) AS FLOAT64), 1e12)`;
   return `
 SELECT
   advertiser_id,
@@ -59,6 +60,8 @@ export type GoogleAdvertiser = {
 
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+/** bigint sütunu için tam sayı (JavaScript'in güvenli tam sayı sınırında kesilir). */
+const big = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.min(Math.round(v), Number.MAX_SAFE_INTEGER) : null);
 const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "").slice(0, 5) : []);
 
 export function parseAdvertiser(r: Record<string, unknown>): GoogleAdvertiser | null {
@@ -77,8 +80,8 @@ export function parseAdvertiser(r: Record<string, unknown>): GoogleAdvertiser | 
     topics: list(r.topics),
     first_shown: str(r.first_shown),
     last_shown: str(r.last_shown),
-    impressions_low: num(r.impressions_low),
-    impressions_high: num(r.impressions_high),
+    impressions_low: big(r.impressions_low),
+    impressions_high: big(r.impressions_high),
     sample_url: str(r.sample_url)?.startsWith("https://adstransparency.google.com/") ? str(r.sample_url) : null,
   };
 }

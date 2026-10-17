@@ -43,6 +43,7 @@ import {
   filterNewItemIds,
   latestTrafficDay,
   markSeen,
+  markMeasureFailed,
   productsToSnapshot,
   propagateBrandRejections,
   productsToVerify,
@@ -232,6 +233,7 @@ async function snapshots(): Promise<boolean> {
         if (!r.ok) {
           totals.okunamadi++;
           console.log(`  ? ${p.name} — ${r.reason}`);
+          await markMeasureFailed(p, r.reason);
           continue;
         }
         const ev = await saveSnapshot(p, r.sales);

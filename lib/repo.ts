@@ -274,6 +274,8 @@ export async function saveSnapshot(p: SnapshotTarget, s: SalesSnapshot): Promise
     inventory: cur.inventory,
   };
   if (s.stockTracked !== null && s.stockTracked !== undefined) update.stock_tracked = s.stockTracked;
+  update.measure_fails = 0;
+  update.measure_error = null;
   if (s.price !== null) update.price = s.price;
   if (ev.priceChanged) {
     update.price_prev = prev!.price;
@@ -288,6 +290,15 @@ export async function saveSnapshot(p: SnapshotTarget, s: SalesSnapshot): Promise
   return ev;
 }
 
+/** Ölçüm okunamadı: son deneme ve art arda başarısızlık sayısı yazılır (sıra hesabında kullanılır). */
+export async function markMeasureFailed(p: SnapshotTarget, reason: string): Promise<void> {
+  const { error } = await db()
+    .from("products")
+    .update({ measure_failed_at: new Date().toISOString(), measure_fails: (p.measure_fails ?? 0) + 1, measure_error: reason.slice(0, 200) })
+    .eq("id", p.id);
+  if (error) throw new Error(`products güncellenemedi: ${error.message}`);
+}
+
 export type SnapshotTarget = {
   id: string;
   name: string;
@@ -298,14 +309,17 @@ export type SnapshotTarget = {
   inventory: number | null;
   last_measured_at: string | null;
   winner_score: number | null;
+  measure_failed_at?: string | null;
+  measure_fails?: number;
 };
 
 /**
  * Ölçüm sırası: winner ürünler (skor ≥ 40) ve favori/incelenecekler 10 saatte bir, diğer doğrulanmışlar günde bir,
- * doğrulanmamış adaylar 3 günde bir. Önce hiç ölçülmemişler, sonra winner skoru yüksek olanlar.
+ * doğrulanmamış adaylar 3 günde bir. Önce hiç ölçülmemişler, sonra winner skoru yüksek olanlar. Okunamayan ürün (kaldırıldı,
+ * alan adı kapandı) son denemeden itibaren aynı aralıkla, art arda 3 kez okunamadıysa haftada bir yeniden denenir.
  */
 export async function productsToSnapshot(limit: number, now = Date.now()): Promise<SnapshotTarget[]> {
-  const cols = "id, name, product_url, price, variants_available, variants_total, inventory, last_measured_at, winner_score, dtc_status";
+  const cols = "id, name, product_url, price, variants_available, variants_total, inventory, last_measured_at, winner_score, dtc_status, measure_failed_at, measure_fails";
   const [products, tracked] = await Promise.all([
     allRows((a, b) =>
       db().from("products").select(cols).in("dtc_status", ["verified", "unverified"]).not("product_url", "is", null).order("id").range(a, b),
@@ -323,8 +337,10 @@ export async function productsToSnapshot(limit: number, now = Date.now()): Promi
   for (const p of [...products.data!, ...extra] as (SnapshotTarget & { dtc_status: string })[]) {
     const hot = watched.has(p.id) || Number(p.winner_score ?? 0) >= SALES_HOT_SCORE;
     const tier = hot ? 0 : p.dtc_status === "verified" ? 1 : 2;
-    const every = tier === 0 ? SALES_HOT_HOURS * H : tier === 1 ? SALES_DAILY_HOURS * H : SALES_REST_DAYS * 24 * H;
-    if (!p.last_measured_at || now - Date.parse(p.last_measured_at) >= every) due.push({ p, tier });
+    const fails = p.measure_fails ?? 0;
+    const every = fails >= 3 ? 7 * 24 * H : tier === 0 ? SALES_HOT_HOURS * H : tier === 1 ? SALES_DAILY_HOURS * H : SALES_REST_DAYS * 24 * H;
+    const last = Math.max(p.last_measured_at ? Date.parse(p.last_measured_at) : 0, p.measure_failed_at ? Date.parse(p.measure_failed_at) : 0);
+    if (!last || now - last >= every) due.push({ p, tier: fails >= 3 ? 3 : tier });
   }
   return due
     .sort(

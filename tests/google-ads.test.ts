@@ -9,6 +9,9 @@ test("googleAdsTrSql: yalnızca Türkiye, son 30 gün, sınırlı", () => {
   assert.match(sql, /r\.region_code = 'TR'/);
   assert.match(sql, /HAVING new_30d >= 3/);
   assert.match(sql, /LIMIT 3000$/);
+  // Gösterim toplamı INT64 taşmasın (BigQuery: "Error in SUM aggregation: integer overflow").
+  assert.doesNotMatch(sql, /AS INT64/);
+  assert.match(sql, /LEAST\(SAFE_CAST\(CAST\(r\.times_shown_upper_bound AS STRING\) AS FLOAT64\), 1e12\)/);
 });
 
 test("parseAdvertiser: geçersiz kimlik ve Şeffaflık Merkezi dışı adres elenir", () => {

@@ -80,14 +80,21 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       # Zincir: GitHub zamanlayıcısı tetiklerin çoğunu geciktiriyor ya da atlıyor; bu yüzden her çalıştırma bitince bir sonraki
-      # devam çalıştırmasını kendisi başlatır (günde ~18 çalıştırma). Zamanlayıcı yalnızca yedek. 15 dakikadan kısa süren
-      # çalıştırma (hata ya da iş kalmadı) zinciri başlatmaz: döngüye girmez, sıradaki zamanlanmış çalıştırma devam ettirir.
+      # devam çalıştırmasını kendisi başlatır (günde ~15-20 çalıştırma). Zamanlayıcı yalnızca yedek. 15 dakikadan kısa süren
+      # çalıştırma (erken hata) 15 dakika dolana kadar bekleyip zinciri sürdürür (saatte en fazla 4 çalıştırma); son 3 çalıştırma
+      # da başarısızsa zincir durur, zamanlanmış çalıştırmalar devam ettirir.
       # Durdurmak için: depo ayarlarında Actions değişkeni CHAIN_RUNS=off.
       - name: Sonraki çalıştırmayı başlat (zincir)
         if: always() && vars.CHAIN_RUNS != 'off' && !github.event.repository.private && (github.event_name == 'schedule' || contains(fromJSON('["devam","full","verify","buyut"]'), inputs.mode))
         run: |
           elapsed=$(( $(date +%s) - START_TS ))
-          if [ "$elapsed" -lt 900 ]; then echo "Çalıştırma $((elapsed / 60)) dakika sürdü: zincir başlatılmadı"; exit 0; fi
+          if [ "$elapsed" -lt 900 ]; then
+            fails=$(gh run list --workflow daily-ingest.yml --status completed --limit 8 --json conclusion \
+              --jq '[.[] | select(.conclusion != "cancelled")][:3] | map(select(.conclusion == "failure")) | length')
+            if [ "${fails:-0}" -ge 3 ]; then echo "Son 3 çalıştırma başarısız: zincir durdu (zamanlanmış çalıştırmalar sürdürür)"; exit 0; fi
+            echo "Çalıştırma $((elapsed / 60)) dakika sürdü: $(( (900 - elapsed) / 60 )) dakika beklenip zincir sürecek"
+            sleep $((900 - elapsed))
+          fi
           gh workflow run daily-ingest.yml -f mode=devam && echo "Sonraki devam çalıştırması sıraya alındı"
         env:
           GH_TOKEN: ${{ github.token }}

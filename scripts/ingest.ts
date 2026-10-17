@@ -327,6 +327,26 @@ async function timing(): Promise<void> {
   }
 }
 
+// Geçici bir ağ/veritabanı hatası (fetch failed, zaman aşımı, Supabase 5xx) tek bir adımı düşürür, tüm çalıştırmayı değil:
+// adım atlanır, sonraki adımlar sürer, çalıştırma sonunda hatalı sayılır. Eskiden tek hata çalıştırmayı birkaç dakikada
+// bitiriyor ve zincir de kırılıyordu (saatlerce tarama yapılmıyordu).
+let stepFailed = false;
+async function step<T>(name: string, fn: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    stepFailed = true;
+    console.error(`\n▶ ${name} yarıda kaldı, sonraki adımlarla devam ediliyor`);
+    console.error(`  neden: ${(err as Error).message}`);
+    return fallback;
+  }
+}
+process.on("unhandledRejection", (err) => {
+  stepFailed = true;
+  console.error("\n▶ Yakalanmamış hata (çalıştırma sürüyor)");
+  console.error(`  neden: ${(err as Error)?.message ?? String(err)}`);
+});
+
 async function main() {
   const started = Date.now();
   // Yalnızca reklam analizi: reklamı bilinen mağazalar yeniden aranır, skorlar güncellenir (~5 dk).
@@ -418,10 +438,10 @@ async function main() {
     if (!ok) console.log(`\n▶ ${step}: bugünkü devam sınırı (${perDay}) doldu, sonraki çalıştırmalarda`);
     return ok;
   };
-  const collected = onlyVerify || resume ? true : await collect();
+  const collected = onlyVerify || resume ? true : await step("Toplama", collect, false);
   // Yeni mağazalar: keşif (yeni kayıtlı alan adları) → kontrol → puanı yüksek olanların öne çıkan ürünü aday olur.
   const skipStores = process.argv.includes("no-stores");
-  const discovered = onlyVerify || skipStores ? true : await discoverStores();
+  const discovered = onlyVerify || skipStores ? true : await step("Yeni mağaza keşfi", discoverStores, false);
   // Reklam Kütüphanesi'nden keşif: zaten reklam veren mağazalar (aynı çalıştırmada kontrol edilir).
   if (!onlyVerify && !skipStores && (await allowed("reklamdan_kesif", 4))) {
     try {
@@ -430,7 +450,7 @@ async function main() {
       console.error(`\n▶ Reklamdan keşif yapılamadı: ${(err as Error).message}`);
     }
   }
-  const checked = skipStores ? true : await checkStores();
+  const checked = skipStores ? true : await step("Mağaza kontrolü", checkStores, false);
   if (!skipStores && (await allowed("rdap", 3))) {
     try {
       await rdapLookups();
@@ -440,9 +460,9 @@ async function main() {
     }
   }
   // Aynı ürünü satan mağazalar (kopya puanı aday seçiminden önce toplam puana eklenir).
-  const copied = skipStores ? true : await copyClusters();
+  const copied = skipStores ? true : await step("Kopyalanan ürünler", copyClusters, false);
   // Reklam sinyali aday seçiminden önce: reklam veren mağazaların toplam puanı yükselir.
-  const advertised = (await allowed("reklam_sinyali", 5)) ? await adSignals() : true;
+  const advertised = (await allowed("reklam_sinyali", 5)) ? await step("Reklam sinyali", adSignals, false) : true;
   // Instagram her çalıştırmada (2 saatte bir): çalıştırma başına ~130 hesap okuma + 60 tahmin sorgusu = ~190 çağrı, Meta'nın
   // saatlik ~200 çağrı sınırının altında. Hız sınırına takılınca adım kendiliğinden durur, kalanlar sonraki çalıştırmaya kalır.
   if (await allowed("instagram", 18)) {
@@ -451,49 +471,50 @@ async function main() {
     } catch (err) {
       console.error(`\n▶ Hesap tahmini yapılamadı: ${(err as Error).message}`);
     }
-    await instagramPosts();
+    await step("Instagram", instagramPosts, undefined);
   }
   try {
     await productTagPosts();
   } catch (err) {
     console.error(`\n▶ Ürün etiketleri aranamadı: ${(err as Error).message}`);
   }
-  const promotedHero = skipStores ? true : await promoteStores();
+  const promotedHero = skipStores ? true : await step("Yeni mağazalardan aday", promoteStores, false);
   // Öne çıkan ürün dışında, mağazada stoğu tekrar tekrar azalan (asıl satan) ürünler.
-  const promotedMovers = skipStores ? true : await promoteMovers();
+  const promotedMovers = skipStores ? true : await step("Satış hareketinden aday", promoteMovers, false);
   const promoted = promotedHero && promotedMovers;
   // Trafik sırası doğrulamadan önce: büyük markalar ağa çıkmadan ve Tavily kredisi harcanmadan elenir.
-  const ranked = await traffic();
-  const big = await rejectBigBrands();
+  const ranked = await step("Trafik sırası", traffic, false);
+  const big = await step("Büyük marka eleme", rejectBigBrands, 0);
   if (big) console.log(`\n▶ Büyük marka: ${big} ürün elendi (sıra ≤ #${BIG_BRAND_MAX_RANK.toLocaleString("tr-TR")})`);
-  const verified = await verify();
+  const verified = await step("DTC doğrulama", verify, false);
   if (STRICT_BRAND_CHECK) {
-    const n = await propagateBrandRejections();
+    const n = await step("Katı mod", propagateBrandRejections, 0);
     if (n) console.log(`\n▶ Katı mod: pazaryerinde satan markaların ${n} ürünü daha elendi`);
   }
-  const measured = await snapshots();
-  const fx = await exchangeRates();
+  const measured = await step("Satış ölçümü", snapshots, false);
+  const fx = await step("Döviz kurları", exchangeRates, false);
   try {
     await turkeyChecks();
   } catch (err) {
     console.error(`\n▶ Türkiye araması yapılamadı: ${(err as Error).message}`);
   }
-  const sourced = await suppliers();
-  const aged = await brandAges();
+  const sourced = await step("Toptancı araması", suppliers, false);
+  const aged = await step("Marka yaşı", brandAges, false);
   // İlk turda Shopify kısıtladıysa: aradan geçen ~45 dakikada kısıtlama çoğu zaman kalkar; kalan mağazalar yeniden denenir.
   if (!skipStores && storeChecksThrottled()) {
     console.log("\n▶ Mağaza kontrolü ikinci tur (ilk turda Shopify kısıtladı)");
-    await checkStores();
-    await promoteStores();
+    await step("Mağaza kontrolü ikinci tur", checkStores, false);
+    await step("Yeni mağazalardan aday", promoteStores, false);
   }
-  const scores = await updateTrendScores();
-  console.log(`\n▶ Trend skoru: ${scores.total} ürün, ${scores.updated} değişti`);
-  await timing();
-  console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
+  const scores = await step("Trend skoru", updateTrendScores, null);
+  if (scores) console.log(`\n▶ Trend skoru: ${scores.total} ürün, ${scores.updated} değişti`);
+  await step("Zamanlama", timing, undefined);
+  const winners = await step("Winner skoru", updateWinnerScores, null);
+  if (winners !== null) console.log(`▶ Winner skoru: ${winners} ürün`);
   if (!resume && !onlyVerify) await setJobState("last_full_day", today());
   console.log(`\nBitti: ${((Date.now() - started) / 1000).toFixed(1)} sn`);
-  await writeJobSummary((Date.now() - started) / 1000);
-  if (![collected, discovered, checked, copied, advertised, promoted, verified, ranked, measured, fx, sourced, aged].every(Boolean)) process.exitCode = 1;
+  await step("İş özeti", () => writeJobSummary((Date.now() - started) / 1000), undefined);
+  if (stepFailed || ![collected, discovered, checked, copied, advertised, promoted, verified, ranked, measured, fx, sourced, aged].every(Boolean)) process.exitCode = 1;
 }
 
 await main();

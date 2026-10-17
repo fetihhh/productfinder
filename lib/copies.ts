@@ -1,7 +1,7 @@
 // Kopyalanan ürünlerin veritabanı katmanı: öne çıkan ürün görsellerinin özeti ve kümeler.
 import { NEW_STORE_MAX_AGE_DAYS } from "../config/limits.ts";
 import { clusterCopies, copyPoints, shopIdFromImage, type CopyPoint } from "../dtc/copies.ts";
-import { db } from "./db.ts";
+import { allRows, db } from "./db.ts";
 
 const DAY = 86_400_000;
 
@@ -10,15 +10,18 @@ export type StoreToHash = { domain: string; hero_image: string };
 /** Özeti çıkarılmamış ya da öne çıkan ürünü değişmiş açık mağazalar (puana göre). */
 export async function storesToHash(limit: number, minScore: number): Promise<StoreToHash[]> {
   const since = new Date(Date.now() - NEW_STORE_MAX_AGE_DAYS * DAY).toISOString();
-  const { data, error } = await db()
-    .from("stores")
-    .select("domain, hero_image, hero_hash_image")
-    .eq("status", "live")
-    .gte("store_score", minScore)
-    .gte("first_product_at", since)
-    .not("hero_image", "is", null)
-    .order("store_score", { ascending: false })
-    .limit(5000);
+  const { data, error } = await allRows((a, b) =>
+    db()
+      .from("stores")
+      .select("domain, hero_image, hero_hash_image")
+      .eq("status", "live")
+      .gte("store_score", minScore)
+      .gte("first_product_at", since)
+      .not("hero_image", "is", null)
+      .order("store_score", { ascending: false })
+      .order("domain")
+      .range(a, b),
+  );
   if (error) throw new Error(`stores okunamadı: ${error.message}`);
   return (data as { domain: string; hero_image: string; hero_hash_image: string | null }[])
     .filter((s) => s.hero_hash_image !== s.hero_image)
@@ -36,12 +39,15 @@ export async function saveHeroHash(domain: string, image: string, hash: string |
  * Açık ve 150 günü geçmiş ("old") mağazalar birlikte kümelenir (eski mağaza da rakiptir).
  */
 export async function updateCopies(maxDistance: number): Promise<{ stores: number; groups: number; changed: number }> {
-  const { data, error } = await db()
-    .from("stores")
-    .select("domain, hero_hash, hero_ali_id, hero_image, hero_title, hero_price, first_product_at, copy_group, copy_count, copy_same_seller, product_id")
-    .in("status", ["live", "old"])
-    .or("hero_hash.not.is.null,hero_ali_id.not.is.null,copy_group.not.is.null")
-    .limit(20000);
+  const { data, error } = await allRows((a, b) =>
+    db()
+      .from("stores")
+      .select("domain, hero_hash, hero_ali_id, hero_image, hero_title, hero_price, first_product_at, copy_group, copy_count, copy_same_seller, product_id")
+      .in("status", ["live", "old"])
+      .or("hero_hash.not.is.null,hero_ali_id.not.is.null,copy_group.not.is.null")
+      .order("domain")
+      .range(a, b),
+  );
   if (error) throw new Error(`stores okunamadı: ${error.message}`);
   type Row = {
     domain: string;
@@ -56,7 +62,7 @@ export async function updateCopies(maxDistance: number): Promise<{ stores: numbe
     copy_same_seller: boolean;
     product_id: string | null;
   };
-  const rows = data as Row[];
+  const rows = data as unknown as Row[];
   const points: CopyPoint[] = rows.map((r) => ({
     domain: r.domain,
     hash: r.hero_hash,

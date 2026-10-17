@@ -96,18 +96,28 @@ test("adLibraryClient: anahtar Authorization başlığında, hata kodları sın�
 
 test("reklam winner ve yükseliş skorlarına eklenir, toplam en fazla 100", () => {
   const base = { reviewCount: null, rating: null, price: null, currency: null, trendScore: 0, ranks: [], snapshots: [] };
-  assert.equal(winnerScore({ ...base, adPoints: 25 }).breakdown.parts.reklam, 30);
-  assert.equal(winnerScore({ ...base, adScore: 80 }).breakdown.parts.reklam, 30);
-  assert.equal(winnerScore({ ...base, adPoints: 10 }).score, 15);
-  // Yeni mağaza sinyalleri: stok azalması ve bağımsız rakip mağazalar.
+  assert.equal(winnerScore({ ...base, adPoints: 25 }).breakdown.parts.reklam, 25);
+  assert.equal(winnerScore({ ...base, adScore: 80 }).breakdown.parts.reklam, 25);
+  // Son 14 günde açılan reklamlar (bütçe artırımı) +5; reklamı olmayan üründe sayılmaz.
+  assert.equal(winnerScore({ ...base, adScore: 80, newAds14d: 3 }).breakdown.parts.reklam, 30);
+  assert.equal(winnerScore({ ...base, newAds14d: 3 }).breakdown.parts.reklam, 0);
+  assert.equal(winnerScore({ ...base, adPoints: 10 }).score, 12.5);
+  // Yeni mağaza sinyalleri: ürünün kendi stok azalması tam, mağaza toplamı yarım puan.
+  assert.deepEqual(
+    [1, 2, 3, 5].map((d) => winnerScore({ ...base, productStockDrops: d }).breakdown.parts.hareket),
+    [6, 10, 12, 15],
+  );
   assert.deepEqual(
     [1, 2, 5].map((d) => winnerScore({ ...base, stockDrops: d }).breakdown.parts.hareket),
-    [4, 7, 10],
+    [3, 5, 7],
   );
+  assert.equal(winnerScore({ ...base, stockDrops: 5, productStockDrops: 0 }).breakdown.parts.hareket, 7);
+  // Bağımsız rakip mağazalar: ürün bazında eşleşme varsa o, yoksa öne çıkan ürünün kümesi.
   assert.deepEqual(
-    [1, 3, 6].map((n) => winnerScore({ ...base, independentCopies: n }).breakdown.parts.kopya),
-    [5, 8, 10],
+    [1, 2, 3, 6].map((n) => winnerScore({ ...base, independentCopies: n }).breakdown.parts.kopya),
+    [6, 10, 12, 15],
   );
+  assert.equal(winnerScore({ ...base, independentCopies: 6, productCopies: 1 }).breakdown.parts.kopya, 6);
   const m = momentumScore(50, 15, 1.2, 2, 3);
   assert.equal(m.parts.reklam, 25);
   assert.equal(m.score, 100);

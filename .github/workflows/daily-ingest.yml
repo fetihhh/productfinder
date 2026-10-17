@@ -70,6 +70,7 @@ jobs:
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
           # Gizli ayar yanlışlıkla "META_ACCES_TOKEN" adıyla kaydedildiyse o da okunur.
           META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN || secrets.META_ACCES_TOKEN }}
+          GOOGLE_BQ_CREDENTIALS: ${{ secrets.GOOGLE_BQ_CREDENTIALS }}
       - name: Ayrıntılı kaydı Supabase'e yaz
         if: always()
         run: node scripts/saveLog.ts ingest.log

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { AdCard } from "@/components/AdCard";
+import { GoogleAdsNotice, GoogleAdvertiserList, type GoogleAdsState } from "@/components/GoogleAdvertisers";
 import { IgPostCard } from "@/components/IgPostCard";
 import { Toggle } from "@/components/ui";
 import { NICHES } from "@/dtc/niche";
 import { galleryAds } from "@/lib/adGallery";
+import { listGoogleAdvertisers } from "@/lib/googleAds";
 import { topIgPosts, type InstagramState } from "@/lib/instagram";
 import { getJobState } from "@/lib/stores";
 import { db } from "@/lib/db";
@@ -44,7 +46,10 @@ function IgNotice({ state, empty }: { state: InstagramState | null; empty: boole
 export default async function AdsGalleryPage({ searchParams }: PageProps<"/reklamlar">) {
   await connection();
   const sp = await searchParams;
-  const tab = one(sp.tab) === "ig" ? "ig" : "meta";
+  const tab = one(sp.tab) === "ig" ? "ig" : one(sp.tab) === "tr" ? "tr" : "meta";
+  const trOnly = one(sp.tronly) === "1";
+  const matched = one(sp.matched) === "1";
+  const q = one(sp.q).slice(0, 60);
   const niche = one(sp.niche).replace(/[^a-z]/g, "").slice(0, 20);
   const all = one(sp.all) === "1";
   const video = one(sp.video) === "1";
@@ -55,10 +60,12 @@ export default async function AdsGalleryPage({ searchParams }: PageProps<"/rekla
     const { data } = await db().from("stores").select("domain").eq("niche", niche).not("instagram", "is", null).limit(2000);
     nicheDomains = (data ?? []).map((d) => d.domain as string);
   }
-  const [ads, posts, igState] = await Promise.all([
+  const [ads, posts, igState, google, googleState] = await Promise.all([
     tab === "meta" ? galleryAds({ niche, activeOnly: !all, limit: 60, withMedia: video }) : Promise.resolve([]),
     tab === "ig" ? topIgPosts({ days, video, domains: nicheDomains, limit: 60 }) : Promise.resolve([]),
     getJobState<InstagramState>("instagram"),
+    tab === "tr" ? listGoogleAdvertisers({ trOnly, matchedOnly: matched, q, limit: 300 }) : Promise.resolve([]),
+    tab === "tr" ? getJobState<GoogleAdsState>("google_ads_tr") : Promise.resolve(null),
   ]);
   const tabLink = (t: string) => `/reklamlar?tab=${t}${niche ? `&niche=${niche}` : ""}`;
 
@@ -76,6 +83,7 @@ export default async function AdsGalleryPage({ searchParams }: PageProps<"/rekla
           {[
             ["meta", "Meta reklamları"],
             ["ig", "Instagram gönderileri"],
+            ["tr", "Türkiye (Google)"],
           ].map(([k, l]) => (
             <Link key={k} href={tabLink(k)} className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${tab === k ? "bg-foreground text-background" : "text-muted hover:text-foreground"}`}>
               {l}
@@ -84,16 +92,24 @@ export default async function AdsGalleryPage({ searchParams }: PageProps<"/rekla
         </div>
         <form className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="tab" value={tab} />
-          <select name="niche" defaultValue={niche} className="field w-48" aria-label="Niş">
-            <option value="">Tüm nişler</option>
-            {NICHES.map((n) => (
-              <option key={n.key} value={n.key}>
-                {n.label}
-              </option>
-            ))}
-            <option value="other">Diğer</option>
-          </select>
-          {tab === "meta" ? (
+          {tab !== "tr" && (
+            <select name="niche" defaultValue={niche} className="field w-48" aria-label="Niş">
+              <option value="">Tüm nişler</option>
+              {NICHES.map((n) => (
+                <option key={n.key} value={n.key}>
+                  {n.label}
+                </option>
+              ))}
+              <option value="other">Diğer</option>
+            </select>
+          )}
+          {tab === "tr" ? (
+            <>
+              <input name="q" defaultValue={q} placeholder="Reklamveren ara" className="field w-48" aria-label="Reklamveren ara" />
+              <Toggle name="tronly" checked={trOnly} label="Türkiye merkezli" />
+              <Toggle name="matched" checked={matched} label="Mağazası bilinenler" />
+            </>
+          ) : tab === "meta" ? (
             <>
               <Toggle name="all" checked={all} label="Durmuş reklamlar da" />
               <Toggle name="video" checked={video} label="Videosu burada oynayanlar" />
@@ -112,7 +128,16 @@ export default async function AdsGalleryPage({ searchParams }: PageProps<"/rekla
         </form>
       </div>
 
-      {tab === "meta" ? (
+      {tab === "tr" ? (
+        <>
+          <GoogleAdsNotice state={googleState} empty={google.length === 0} />
+          {google.length > 0 ? (
+            <GoogleAdvertiserList rows={google} />
+          ) : (
+            googleState?.status === "ok" && <p className="card mt-5 p-6 text-sm text-muted">Bu filtrede reklamveren yok.</p>
+          )}
+        </>
+      ) : tab === "meta" ? (
         <>
           <p className="mt-4 text-xs text-muted">
             Meta&apos;nın ücretsiz API&apos;si reklamın video dosyasını vermez ve facebook.com otomatik okunamaz. Reklam metni mağazanın bir Instagram gönderisiyle

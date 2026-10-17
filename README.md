@@ -42,6 +42,7 @@ Supabase (Postgres)     →  tüm veriler; yalnızca sunucu tarafından gizli an
 | **TCMB günlük kurlar** (tcmb.gov.tr/kurlar/today.xml) | Ücretsiz, resmi, anahtar gerekmez; robots.txt izinli | Günde 1 istek (kâr hesaplayıcının USD/TL kuru) |
 | **Tranco top-1M listesi** (tranco-list.eu) | Ücretsiz, anahtar gerekmez; günlük ~10 MB zip | Günde 1 indirme. robots.txt `/api` ve `/list/` yollarını yasaklar, yalnızca izinli `/top-1m.csv.zip` kullanılır |
 | **Doğrudan pazaryeri araması** (amazon.com, otto.de arama sayfaları) ve **toptancı araması** (aliexpress.com, alibaba.com/showroom, made-in-china.com) | Ücretsiz, anahtar ve kota yok | robots.txt bu arama yollarına izin veriyor; site başına 1 istek/sn. CAPTCHA/503 dönerse atlatılmaz, o site "okunamadı" sayılır |
+| **Google BigQuery deneme alanı (sandbox)** — Reklam Şeffaflık Merkezi veri seti (`bigquery-public-data.google_ads_transparency_center`) | Ücretsiz, **kredi kartı istemez**: ayda 1 TB sorgu, 10 GB depolama. Kuru çalıştırma (taranacak veri hesabı) ücretsizdir | Haftada 1 sorgu; önce kuru çalıştırılır, 180 GB'ı geçecekse ya da ayın toplamı 900 GB'ı aşacaksa çalıştırılmaz (ayda ~4 sorgu). Anahtar tanımlı değilse adım atlanır |
 | **RSS beslemeleri, Shopify `meta.json` / `products.json`, Yotpo yorum özeti** | Herkese açık, ücretsiz | robots.txt'ye uyularak, alan adı başına 1 istek/sn |
 
 > Ürün ticari bir hizmete dönüşürse Vercel Hobby (ticari kullanım yasak), Tavily ve Product Hunt benzeri kaynakların koşulları değişir; bu durumda yeniden değerlendirilmeli.
@@ -70,10 +71,11 @@ Amaç: **son 5 ayda açılmış küçük dropshipping mağazalarını** yakalama
 
 1. **Yeni kayıtlı alan adları:** WhoisDS'nin ücretsiz günlük listesi (~70 bin/gün). Başlangıçta cenk/nrd'nin son 60 günlük birikimi parça parça taranır (her çalıştırmada 300 bin alan adı). Spam ağırlıklı uzantılar (.xyz, .top…) atlanır.
 2. **DNS ile Shopify tespiti:** Shopify'a bağlı alan adları 23.227.38.x adresine çözülür (~%3: günde ~1.000 yeni mağaza). DNS sorgusu siteye istek göndermez.
-3. **Kontrol takvimi:** ilk kontrol kayıttan 5 gün sonra. Şifreli/boş mağaza 14 günde bir (90 günde açılmazsa bırakılır), açık mağaza **haftada bir**, puanı ≥ 55 olan açık mağaza **her gün** (stok tükenmesi ve yeni ürün günler içinde görünsün; ilk ürünü 150 günü geçince bırakılır). Her kontrol `/products.json` (gerekirse `/meta.json` ve ana sayfa) okur; şifre sayfasına girilmez, robots.txt'ye uyulur.
+3. **Kontrol takvimi:** ilk kontrol kayıttan 5 gün sonra. Şifreli/boş mağaza 14 günde bir (90 günde açılmazsa bırakılır), açık mağaza **haftada bir**, puanı ≥ 55 olan açık mağaza **her gün**, **sıcak** açık mağaza (reklam veriyor ya da reklamdan bulundu, stoğu azaldı veya ürünü başka mağazada da satılıyor) **günde iki kez** (stok azalması iki kontrol arasındaki farktan ölçülür; ne sık bakılırsa o kadar çok satış işareti yakalanır) (stok tükenmesi ve yeni ürün günler içinde görünsün; ilk ürünü 150 günü geçince bırakılır). Her kontrol `/products.json` (gerekirse `/meta.json` ve ana sayfa) okur; şifre sayfasına girilmez, robots.txt'ye uyulur.
 4. **Mağaza puanı (0–100):** odak 25 (tek ürün mağazası tam), yenilik 15, **dropship işareti 20** (ürün açıklamasında "7-15 business days" gibi uzun teslimat aralığı, dünya geneli gönderim ya da **AliExpress görseli**: görselin dosya adı AliExpress görsel kimliği, ör. `S4f799d…edi.avif` — fotoğraf AliExpress'ten indirilip yüklenmiş), indirim 10 (compare-at fiyat), fiyat 10 (15–150), **hareket 20** (iki kontrol arasında yeni ürün eklendi +10, varyant stoğu tükendi +10). Baskılı giyim/merch mağazaları −20, dijital ağırlıklı mağazalar 0.
 5. **Kopyalanan ürünler** (`dtc/copies.ts`): puanı ≥ 35 olan açık mağazaların öne çıkan ürün görseli özetlenir (dHash, yalnızca yeni ya da değişmiş görseller; çalıştırma başına en fazla 400, cdn.shopify.com'dan saniyede 1). Aynı AliExpress görsel kimliği ya da neredeyse aynı fotoğraf (fark ≤ 40/256) → aynı ürün. Aynı Shopify mağazasının farklı alan adları (görsel adresindeki mağaza kimliği aynı) tek mağaza sayılır. Kümedeki tüm mağazalar ürünü **birebir aynı başlık ve fiyatla** satıyorsa "aynı satıcının ağı olabilir" diye işaretlenir (çoğunlukla aynı gün açılmış, ürünle ilgisiz adlı alan adları) ve puan almaz. **Kopya puanı:** bağımsız başka mağaza 1 → 8, 2–4 → 12, ≥ 5 → 15.
 6. **Aday:** toplam puanı (mağaza puanı + reklam puanı + kopya puanı, en fazla 100) ≥ 50 (çalıştırma başına en fazla 60 mağaza), açık ve ilk ürünü son 150 gün içinde olan mağazanın ana sayfasında öne çıkardığı ürün (yoksa en yeni fiziksel ürün) aday olur; sonra normal hattan geçer: pazaryeri kontrolü → toptancı araması → skorlar.
+6b. **Ürün bazında kopyalar** (`lib/storeItems.ts`, tablo `store_items`): öne çıkan ürünle sınırlı kalmadan, anlık görüntüsü tutulan her mağazanın hareket sırasına göre **ilk 8 ürünü** ayrı satırlarda izlenir. Görselleri özetlenir (çalıştırma başına en fazla 900 görsel / 15 dakika, cdn.shopify.com'dan saniyede 1 istek) ve tüm ürünler aynı fotoğraf ya da aynı AliExpress görsel kimliği (ürünün herhangi bir görselinden) üzerinden kümelenir. **En az 2 bağımsız mağazada daha** satılan ürünün kümesinden bir temsilci (stoğu en çok azalan, sonra puanı en yüksek mağazanınki) aday olur (çalıştırma başına en fazla 40). Ürünün kendi stok azalması ve kopya sayısı winner skoruna doğrudan girer.
 7. **Asıl satan ürünler:** mağazanın ürün görüntülerinde stoğu en az 2 kez azalan ürünler (öne çıkan ürün değilse) de aday olur; mağaza başına en fazla 2, çalıştırma başına 40 mağaza.
 
 **Yeni mağazalar** sayfası (`/yeni`): açık yeni mağazalar, mağaza yaşı, ürün sayısı, indirim ve dropship işaretleri, AliExpress görseli, aynı ürünü satan rakip mağazalar ("N mağaza daha satıyor" → kümeyi listeler; "Aynı ürünü satan en çok mağaza" sıralaması), Türkiye'ye gönderim, toptan fiyat/marj ve keşif hattının özeti (bulunan / açık / kapalı / kapanmış). Ana listede de **Mağaza yaşı** filtresi (≤ 30 / 90 / 150 gün) vardır; markaların yaşı RDAP kayıt tarihi ve Shopify'daki ilk ürün tarihinden hesaplanır.
@@ -94,6 +96,15 @@ Yeni kayıtlı alan adı listeleri yalnızca son günlerde alınan alan adların
 - Çalıştırma başına 40 ifade (ifade başına 1 istek, saniyede 1; teklif, ürün ve niş ifadeleri, ~80 ifade); liste iki günde bir baştan döner (`job_state.ad_discovery.cursor`).
 - Tam günlük işte yeni alan adı keşfinden sonra çalışır. Ayrıca Actions → **Run workflow** → `kesif` modu: keşif + yalnızca bu mağazaların kontrolü + reklam analizi + aday seçimi.
 - `/yeni` sayfasında **📣 Reklamdan bulunanlar** filtresi ve kartlarda "📣 Reklamdan" etiketi.
+
+## Türkiye'deki reklamlar: Google Reklam Şeffaflık Merkezi (`dtc/googleAds.ts`, `lib/bigquery.ts`, `scripts/googleAds.ts`)
+
+Meta'nın ücretsiz Reklam Kütüphanesi API'si ticari reklamları yalnızca AB'de gösterilenler için verir; Türkiye'de dönen reklamlar orada görünmez (yalnızca siyasi reklamlar). Google'ın Reklam Şeffaflık Merkezi ise **AB ve Türkiye'de gösterilen tüm reklamları** resmi ve ücretsiz bir BigQuery veri setinde yayımlar (Google Arama, YouTube, Görüntülü Reklam Ağı, Shopping).
+
+- Haftada bir: son 30 günde Türkiye'de gösterilen reklamlar reklamveren bazında özetlenir — son 30 günde Türkiye'de ilk kez gösterilen reklam sayısı (en az 3), son 7 günde yayında olan, toplam, biçim (metin/görsel/video), konu, ilk reklam tarihi ve Türkiye'deki gösterim aralığı.
+- Reklamveren adı (şirket türü ve "store/shop/e-ticaret" gibi kelimeler atılarak) bilinen bir mağazanın alan adıyla ya da mağaza adıyla **tek** eşleşiyorsa mağazaya bağlanır.
+- **Reklamlar** sayfasında **Türkiye (Google)** sekmesi: yeni reklam sayısına göre sıralı liste, "Türkiye merkezli" ve "Mağazası bilinenler" filtreleri; reklamların kendisi Şeffaflık Merkezi'ndeki reklamveren sayfasında (`?region=TR`) görülür.
+- Veri setinde reklamın görseli/metni ve hedef sitesi yoktur; eşleşme yalnızca addan yapılır.
 
 ## Reklam sinyali (`dtc/adLibrary.ts`, `scripts/ads.ts`)
 
@@ -186,7 +197,7 @@ Gerçek satış adetleri herkese açık değildir; kartta satışa dair şu işa
 |---|---|
 | Mağaza ülkesi, şehri | Shopify `/meta.json`; yoksa schema.org Organization adresi; yoksa ülke uzantısı (.ch, .de, .co.uk) |
 | Türkiye'ye gönderim | Shopify `/meta.json` → `ships_to_countries` içinde `TR` var mı (diğer platformlarda bilinmiyor) |
-| Yorum sayısı ve puan (satış hacmine en iyi yaklaşım) | schema.org `AggregateRating`, Judge.me rozeti, Yotpo yorum özeti (`api-cdn.yotpo.com/products/*/*/bottomline`, robots.txt izin veriyor) |
+| Yorum sayısı ve puan (satış hacmine en iyi yaklaşım) | schema.org `AggregateRating`, Judge.me rozeti, Loox (sunucuda çizilen yorum özeti "4.8 / 5 from 1350 reviews" ya da `data-raters` rozeti), Yotpo yorum özeti (`api-cdn.yotpo.com/products/*/*/bottomline`, robots.txt izin veriyor) |
 | Fiyat, para birimi, varyant sayısı | Shopify ürün JSON'u / schema.org `Offer` |
 | Stok durumu | Shopify katalog `available` / schema.org `availability` |
 | Satışa çıkış tarihi | Shopify `published_at` |
@@ -210,13 +221,13 @@ Günlük iş doğrulanmış ürünlerin (ve favori/incelenecek listesindekilerin
 | Bileşen | Puan | Formül |
 |---|---|---|
 | **Kanıt** | | |
-| Reklam | 30 | `30 × min(1, reklam kanıt skoru / 80)`: süreklilik, ölçekleme, kopya reklam, erişim, ülke genişlemesi (aşağıda **Reklam sinyali**). En güçlü işaret: kârsız reklam birkaç günde kapatılır |
+| Reklam | 30 | `25 × min(1, reklam kanıt skoru / 80)`: süreklilik, ölçekleme, kopya reklam, erişim, ülke genişlemesi (aşağıda **Reklam sinyali**) `+ 5 × min(1, son 14 günde açılan reklam / 3)` (bütçe artırımı). En güçlü işaret: kârsız reklam birkaç günde kapatılır |
 | Talep | 20 | `20 × min(1, log10(1 + yorum) / 3)` × puan katsayısı (★ ≥ 4,5 → 1; 4–4,5 → 0,85; < 4 → 0,6). Yorum artışı henüz ölçülmediyse **×0,5**: yeni mağazalar yorumları çoğu zaman toplu içe aktarır. Yorumu olmayan ürünlerde **toptancı satışı**: `10 × min(1, log10(1 + satış) / 4)` (ilan fotoğrafla eşleşmediyse ×0,5) |
 | İvme | 15 | `15 × min(1, aylık yeni yorum / 30)` (en az 7 günlük ölçüm). Yorum ölçümü yoksa **toptancı satış hızı**: `15 × min(1, haftalık satış / 100)` (fotoğrafla eşleşmediyse ×0,5) |
-| Trafik | 10 | `8 × sıra puanı` (1 Mn → 0,1, ≤ 150 B → 1, logaritmik) `+ 2 × min(1, (eski sıra / yeni sıra − 1) / 0,2)` |
-| Gündem | 5 | `5 × trend skoru / 100` |
-| Stok hareketi | 10 | Ürünün mağazasında toplam stok azalması (yeni mağaza keşfi): 1 → 4, ≥ 2 → 7, ≥ 5 → 10 |
-| Rakip mağaza | 10 | Aynı ürünü satan bağımsız yeni mağaza: 1 → 5, 2–4 → 8, ≥ 5 → 10 (aynı satıcının ağı sayılmaz) |
+| Trafik | 4 | `3 × sıra puanı` (1 Mn → 0,1, ≤ 150 B → 1, logaritmik) `+ 1 × min(1, (eski sıra / yeni sıra − 1) / 0,2)`. Yeni mağazalar Tranco'nun ilk 1 milyonuna neredeyse hiç girmediği için ağırlığı düşük |
+| Gündem | 1 | `trend skoru / 100` (bloglarda anılma; yeni mağazalarda ayırt edici değil) |
+| Stok hareketi | 15 | **Ürünün kendi** stok azalması (`store_items`): 1 → 6, 2 → 10, 3–4 → 12, ≥ 5 → 15. Ürün bazında ölçüm yoksa mağazanın toplamı yarım puan: 1 → 3, ≥ 2 → 5, ≥ 5 → 7 |
+| Rakip mağaza | 15 | Aynı ürünü satan bağımsız mağaza (ürün bazında görsel eşleşmesi; yoksa öne çıkan ürünün kümesi): 1 → 6, 2 → 10, 3–4 → 12, ≥ 5 → 15 (aynı satıcının ağı sayılmaz) |
 | **Uygunluk** (× `min(1, kanıt / 30)`) | | |
 | Fiyat | 10 | 25–150 $ → 10; 15–25 $ veya 150–300 $ → 5; diğer → 0 (yaklaşık sabit kurlarla dolara çevrilir) |
 | Tedarik | 15 | Toptancıda benzer ürün (≥ %70) → 6; kâr marjı ≥ 4× → +9, ≥ 3× → +7, ≥ 2× → +4 |

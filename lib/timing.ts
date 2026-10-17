@@ -45,8 +45,10 @@ export async function updateTiming(now = Date.now()): Promise<{ stores: number; 
 
   const storeTiming = new Map<string, { timing: string; reason: string }>();
   let storeChanges = 0;
-  const { data: current } = await db().from("stores").select("domain, timing, timing_reason").not("timing", "is", null).limit(20000);
-  const before = new Map((current ?? []).map((r) => [r.domain as string, `${r.timing}|${r.timing_reason}`]));
+  const current = await all<{ domain: string; timing: string; timing_reason: string | null }>((a, b) =>
+    db().from("stores").select("domain, timing, timing_reason").not("timing", "is", null).order("domain").range(a, b),
+  );
+  const before = new Map(current.map((r) => [r.domain as string, `${r.timing}|${r.timing_reason}`]));
   for (const s of stores) {
     const members = s.copy_group && !s.copy_same_seller ? (groups.get(s.copy_group) ?? [s]) : [s];
     const t = timingFor(members.map(member), now);

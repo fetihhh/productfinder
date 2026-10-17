@@ -119,6 +119,10 @@ test("nextCheck: kontrol takvimi", () => {
   // Puanı yüksek açık mağaza ertesi gün yeniden kontrol edilir (20 saat sonra = sonraki günlük çalıştırma).
   assert.deepEqual(nextCheck("live", 40, NOW, 60), { status: "live", next: new Date(NOW + 20 * 3_600_000).toISOString() });
   assert.equal(nextCheck("live", 40, NOW, 54).next, daysAgo(-7));
+  // Sıcak mağaza (reklam/stok azalması/kopya) günde iki kez; eski ya da kapalı mağazada etkisi yok.
+  assert.deepEqual(nextCheck("live", 40, NOW, 10, true), { status: "live", next: new Date(NOW + 10 * 3_600_000).toISOString() });
+  assert.equal(nextCheck("live", 160, NOW, 10, true).status, "old");
+  assert.deepEqual(nextCheck("closed", 10, NOW, 0, true), { status: "closed", next: daysAgo(-14) });
 });
 
 test("aliImageId: AliExpress görsel kimliği Shopify dosya adında korunur → dropship işareti", () => {

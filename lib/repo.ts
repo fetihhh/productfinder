@@ -5,6 +5,7 @@ import { isImageMatch, type SupplierResult } from "../dtc/suppliers.ts";
 import { bigBrandReason, WIDE_PENDING, type VerifyResult } from "../dtc/verify.ts";
 import type { Candidate, SeenItem } from "../sources/types.ts";
 import { adPointsByDomain } from "./ads.ts";
+import { itemKeyFromUrl, itemSignals } from "./storeItems.ts";
 import { allRows, db } from "./db.ts";
 import { normalizeName } from "./productName.ts";
 import { clip } from "./text.ts";
@@ -272,17 +273,18 @@ export async function saveTrafficRanks(day: string, domains: string[], ranks: Ma
 /** Tüm ürünlerin winner skorunu satış ölçümleri, trafik sırası ve trend skorundan yeniden hesaplar. */
 export async function updateWinnerScores(): Promise<number> {
   const since = new Date(Date.now() - 45 * 86_400_000).toISOString().slice(0, 10);
-  const [products, snaps, ranks, ads, stores] = await Promise.all([
+  const [products, snaps, ranks, ads, items, stores] = await Promise.all([
     allRows((a, b) =>
       db()
         .from("products")
-        .select("id, brand_domain, review_count, rating, price, currency, trend_score, score_breakdown, supplier_min_usd, margin_ratio, supplier_sold, supplier_sold_per_week, supplier_image_match")
+        .select("id, brand_domain, product_url, review_count, rating, price, currency, trend_score, score_breakdown, supplier_min_usd, margin_ratio, supplier_sold, supplier_sold_per_week, supplier_image_match")
         .order("id")
         .range(a, b),
     ),
     allRows((a, b) => db().from("product_snapshots").select("product_id, day, review_count").gte("day", since).order("product_id").order("day").range(a, b)),
     allRows((a, b) => db().from("traffic_ranks").select("domain, day, rank").gte("day", since).order("domain").order("day").range(a, b)),
     adPointsByDomain(),
+    itemSignals(),
     allRows((a, b) => db().from("stores").select("domain, stock_drops, copy_count, copy_same_seller").or("stock_drops.gt.0,copy_count.gt.0").order("domain").range(a, b)),
   ]);
   for (const r of [products, snaps, ranks, stores]) if (r.error) throw new Error(`winner verisi okunamadı: ${r.error.message}`);
@@ -296,6 +298,8 @@ export async function updateWinnerScores(): Promise<number> {
   const ranksBy = group(ranks.data as { domain: string; day: string; rank: number | null }[], "domain");
 
   for (const p of products.data!) {
+    const key = itemKeyFromUrl(p.product_url);
+    const item = key ? items.get(key) : undefined;
     const { score, breakdown } = winnerScore({
       reviewCount: p.review_count,
       rating: p.rating === null ? null : Number(p.rating),
@@ -315,6 +319,8 @@ export async function updateWinnerScores(): Promise<number> {
       supplierSoldPerWeek: p.supplier_sold_per_week === null ? null : Number(p.supplier_sold_per_week),
       supplierByImage: p.supplier_image_match,
       independentCopies: storeBy.get(p.brand_domain)?.copy_same_seller ? 0 : (storeBy.get(p.brand_domain)?.copy_count ?? 0),
+      productStockDrops: item?.so ?? null,
+      productCopies: item?.copies ?? null,
     });
     const { error } = await db().from("products").update({ winner_score: score, winner_breakdown: breakdown, momentum_score: breakdown.momentum.score }).eq("id", p.id);
     if (error) throw new Error(`winner skoru yazılamadı: ${error.message}`);

@@ -15,6 +15,7 @@ export type SnapItem = {
   a: number; // stokta olan varyant
   v: number; // toplam varyant
   ali: boolean; // AliExpress görseli
+  ai?: string | null; // AliExpress görsel kimliği (ürün bazında kopya tespiti; herhangi bir görselinden)
   f: string; // ilk görüldüğü gün
   so: number; // stok azalma sayısı (iki kontrol arasında stokta olan varyant azaldı)
   pc: number; // fiyat değişim sayısı
@@ -46,6 +47,7 @@ export function mergeSnapshot(prev: SnapItem[] | null, products: StoreProduct[],
       a: p.availableVariants,
       v: p.totalVariants,
       ali: Boolean(p.aliImageId),
+      ai: p.aliImageId,
       f: o?.f ?? (prev ? day : (p.createdAt?.slice(0, 10) ?? day)),
       so: o?.so ?? 0,
       pc: o?.pc ?? 0,

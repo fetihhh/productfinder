@@ -2,6 +2,11 @@
 import {
   COPY_HASH_PER_RUN,
   COPY_MIN_STORE_SCORE,
+  COPY_PROMOTE_MIN_COPIES,
+  COPY_PROMOTE_PER_RUN,
+  ITEM_HASH_PER_RUN,
+  ITEM_HASH_SECONDS,
+  ITEMS_PER_STORE,
   DNS_CONCURRENCY,
   IMAGE_MATCH_MAX,
   MOVER_MIN_STOCK_DROPS,
@@ -18,6 +23,7 @@ import { imageHasher } from "../dtc/imageHash.ts";
 import { registrationDate } from "../dtc/rdap.ts";
 import { parseStoreProducts, probeStore } from "../dtc/storeProbe.ts";
 import { saveHeroHash, storesToHash, updateCopies } from "../lib/copies.ts";
+import { copyCandidates, itemsToHash, markItemPromoted, saveItemHash, syncStoreItems, updateItemCopies } from "../lib/storeItems.ts";
 import { registrableDomain } from "../lib/domain.ts";
 import { politeFetch, politeFetchBytes, politeFetchLarge } from "../lib/http.ts";
 import { findStoreDomains, NRD60_MAX_BYTES, NRD60_URL, parseDomainList, whoisdsUrl, type StorePlatform } from "../lib/nrd.ts";
@@ -228,6 +234,81 @@ export async function copyClusters(): Promise<boolean> {
     console.error(`  ✖ ${(err as Error).message}`);
     return false;
   }
+}
+
+/**
+ * Ürün bazında kopyalar: mağazaların anlık görüntüsündeki ilk ürünler eşitlenir, yeni/değişen ürün görselleri özetlenir
+ * (süre ve adet sınırlı; kalanlar sonraki çalıştırmaya), sonra tüm ürünler aynı fotoğraf / AliExpress görseline göre kümelenir.
+ */
+export async function itemCopies(): Promise<boolean> {
+  try {
+    const synced = await syncStoreItems(ITEMS_PER_STORE);
+    const list = await itemsToHash(ITEM_HASH_PER_RUN);
+    console.log(`\n▶ Ürün bazında kopya: ${synced} ürün güncellendi, ${list.length} ürün görseli özetlenecek`);
+    const hash = imageHasher((url) => politeFetchBytes(url, 5_000_000, "image/avif,image/webp,image/jpeg,image/png,*/*;q=0.5"));
+    const t0 = Date.now();
+    let done = 0;
+    let failed = 0;
+    let next = 0;
+    // İki işçi: indirme ve özet çıkarma üst üste biner; istekler yine alan adı başına saniyede en fazla 1 başlar (politeFetch).
+    const worker = async () => {
+      while (next < list.length && Date.now() - t0 < ITEM_HASH_SECONDS * 1000) {
+        const it = list[next++];
+        const h = await hash(it.image);
+        if (h === null) failed++;
+        await saveItemHash(it.domain, it.handle, h === null ? null : hashToHex(h));
+        done++;
+      }
+    };
+    await Promise.all([worker(), worker()]);
+    const t1 = Date.now();
+    const r = await updateItemCopies(IMAGE_MATCH_MAX);
+    console.log(
+      `  ${done - failed} görsel özetlendi${failed ? `, ${failed} okunamadı` : ""} (${secs(t0)} sn) · ` +
+        `${r.groups} ürün birden çok mağazada (${r.items} mağaza ürünü), ${r.changed} değişti (${secs(t1)} sn)`,
+    );
+    return true;
+  } catch (err) {
+    console.error(`  ✖ ${(err as Error).message}`);
+    return false;
+  }
+}
+
+/** Birden çok bağımsız yeni mağazanın aynı anda sattığı ürünler aday olur (kümeden bir temsilci). */
+export async function promoteCopies(): Promise<boolean> {
+  const list = await copyCandidates(COPY_PROMOTE_PER_RUN, COPY_PROMOTE_MIN_COPIES);
+  let created = 0;
+  let ok = true;
+  for (const c of list) {
+    try {
+      const r = await saveCandidate({
+        source: "yenimagaza",
+        sourceItemId: `${c.domain}/${c.handle}`,
+        sourceUrl: `https://${c.domain}/`,
+        title: c.shop_name ?? c.domain,
+        productName: c.title ?? c.handle,
+        brandDomain: registrableDomain(`https://${c.domain}/`) ?? c.domain,
+        productUrl: `https://${c.domain}/products/${c.handle}`,
+        imageUrl: c.image,
+        category: null,
+        postedAt: new Date(c.first_product_at ?? Date.now()),
+        engagement: c.copies,
+        comments: 0,
+        marketplaceLinks: [],
+        priority: Math.min(100, 75 + 5 * c.copies),
+      });
+      await markItemPromoted(c.domain, c.handle, r.productId);
+      if (r.created) {
+        created++;
+        console.log(`  + ${c.title}  [${c.domain}] ${c.copies + 1} mağazada satılıyor`);
+      }
+    } catch (err) {
+      ok = false;
+      console.error(`  ! ${c.domain}/${c.handle}: ${(err as Error).message}`);
+    }
+  }
+  console.log(`\n▶ Kopyası çok olan ürünlerden aday: ${created} yeni (${list.length} küme)`);
+  return ok;
 }
 
 /** Puanı yüksek yeni mağazaların öne çıkan ürününü aday olarak ekler (doğrulama ve toptancı araması bunlarla devam eder). */

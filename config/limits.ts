@@ -101,6 +101,17 @@ export const IMAGE_MATCH_MAX = 40;
 export const COPY_HASH_PER_RUN = Number(process.env.COPY_HASH_PER_RUN) || 400;
 export const COPY_MIN_STORE_SCORE = 35;
 
+/**
+ * Ürün bazında kopya tespiti (store_items): mağaza başına hareket sırasına göre ilk 8 ürün izlenir; görselleri
+ * cdn.shopify.com'dan saniyede 1 özetlenir (çalıştırma başına en fazla 900 görsel ≈ 15 dk, sonra sıradaki çalıştırmaya kalır).
+ * En az 2 bağımsız mağazada satılan ürünün kümesinden bir temsilci aday olur (çalıştırma başına en fazla 40).
+ */
+export const ITEMS_PER_STORE = 8;
+export const ITEM_HASH_PER_RUN = Number(process.env.ITEM_HASH_PER_RUN) || 900;
+export const ITEM_HASH_SECONDS = 15 * 60;
+export const COPY_PROMOTE_MIN_COPIES = 2;
+export const COPY_PROMOTE_PER_RUN = 40;
+
 /** Satış hareketi olan ürünleri aday yapma: en az bu kadar stok azalması, çalıştırma başına en fazla bu kadar mağaza. */
 export const MOVER_MIN_STOCK_DROPS = 2;
 export const MOVER_STORES_PER_RUN = 40;

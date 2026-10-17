@@ -70,7 +70,8 @@ import { rdapLookups } from "./rdap.ts";
 import { findSocialHandles, guessSocial, instagramPosts } from "./instagram.ts";
 import { turkeyChecks } from "./turkey.ts";
 import { productTagPosts } from "./hashtags.ts";
-import { brandAges, checkStores, copyClusters, discoverStores, promoteMovers, promoteStores, storeChecksThrottled } from "./stores.ts";
+import { googleAdsTr } from "./googleAds.ts";
+import { brandAges, checkStores, copyClusters, discoverStores, itemCopies, promoteCopies, promoteMovers, promoteStores, storeChecksThrottled } from "./stores.ts";
 
 async function collect(): Promise<boolean> {
   let ok = true;
@@ -461,8 +462,12 @@ async function main() {
   }
   // Aynı ürünü satan mağazalar (kopya puanı aday seçiminden önce toplam puana eklenir).
   const copied = skipStores ? true : await step("Kopyalanan ürünler", copyClusters, false);
+  // Ürün bazında: mağazaların ilk 8 ürünü (öne çıkan ürünle sınırlı kalmadan) aynı fotoğrafa göre kümelenir.
+  const itemCopied = skipStores ? true : await step("Ürün bazında kopya", itemCopies, false);
   // Reklam sinyali aday seçiminden önce: reklam veren mağazaların toplam puanı yükselir.
   const advertised = (await allowed("reklam_sinyali", 5)) ? await step("Reklam sinyali", adSignals, false) : true;
+  // Türkiye'de reklam verenler (Google Reklam Şeffaflık Merkezi, BigQuery): haftada bir, ücretsiz kotayla sınırlı.
+  const googled = await step("Google reklamları (Türkiye)", googleAdsTr, false);
   // Instagram her çalıştırmada (2 saatte bir): çalıştırma başına ~130 hesap okuma + 60 tahmin sorgusu = ~190 çağrı, Meta'nın
   // saatlik ~200 çağrı sınırının altında. Hız sınırına takılınca adım kendiliğinden durur, kalanlar sonraki çalıştırmaya kalır.
   if (await allowed("instagram", 18)) {
@@ -481,7 +486,9 @@ async function main() {
   const promotedHero = skipStores ? true : await step("Yeni mağazalardan aday", promoteStores, false);
   // Öne çıkan ürün dışında, mağazada stoğu tekrar tekrar azalan (asıl satan) ürünler.
   const promotedMovers = skipStores ? true : await step("Satış hareketinden aday", promoteMovers, false);
-  const promoted = promotedHero && promotedMovers;
+  // Birden çok bağımsız mağazanın aynı anda sattığı ürünler.
+  const promotedCopies = skipStores ? true : await step("Kopyası çok olan ürünlerden aday", promoteCopies, false);
+  const promoted = promotedHero && promotedMovers && promotedCopies;
   // Trafik sırası doğrulamadan önce: büyük markalar ağa çıkmadan ve Tavily kredisi harcanmadan elenir.
   const ranked = await step("Trafik sırası", traffic, false);
   const big = await step("Büyük marka eleme", rejectBigBrands, 0);
@@ -514,7 +521,7 @@ async function main() {
   if (!resume && !onlyVerify) await setJobState("last_full_day", today());
   console.log(`\nBitti: ${((Date.now() - started) / 1000).toFixed(1)} sn`);
   await step("İş özeti", () => writeJobSummary((Date.now() - started) / 1000), undefined);
-  if (stepFailed || ![collected, discovered, checked, copied, advertised, promoted, verified, ranked, measured, fx, sourced, aged].every(Boolean)) process.exitCode = 1;
+  if (stepFailed || ![collected, discovered, checked, copied, itemCopied, advertised, googled, promoted, verified, ranked, measured, fx, sourced, aged].every(Boolean)) process.exitCode = 1;
 }
 
 await main();

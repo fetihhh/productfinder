@@ -100,9 +100,9 @@ test("winnerScore: bileşenler ve satış tahminleri", () => {
     supplierMinUsd: 20,
     marginRatio: 5,
   });
-  assert.deepEqual(breakdown.parts, { talep: 20, ivme: 15, trafik: 10, gundem: 2, fiyat: 10, tedarik: 15, reklam: 0, hareket: 0, kopya: 0 });
-  assert.equal(score, 72);
-  assert.equal(breakdown.evidence, 47);
+  assert.deepEqual(breakdown.parts, { talep: 20, ivme: 15, trafik: 4, gundem: 0.4, fiyat: 10, tedarik: 15, reklam: 0, hareket: 0, kopya: 0 });
+  assert.equal(score, 64.4);
+  assert.equal(breakdown.evidence, 39.4);
   assert.equal(breakdown.gate, 1);
   assert.deepEqual(breakdown.sales, { low: 9990, high: 49950 });
   assert.equal(breakdown.reviewsPerMonth, 90);
@@ -115,7 +115,7 @@ test("winnerScore: veri yoksa yalnızca gündem puanı", () => {
   const { score, breakdown } = winnerScore({
     reviewCount: null, rating: null, price: null, currency: null, trendScore: 20, ranks: [], snapshots: [],
   });
-  assert.equal(score, 1);
+  assert.equal(score, 0.2);
   assert.equal(breakdown.visits, null);
   assert.equal(breakdown.sales, null);
   assert.equal(breakdown.salesPerMonth, null);
@@ -177,6 +177,6 @@ test("winnerScore: kanıtı olmayan ürün yalnızca uygun fiyat ve ucuz toptanc
   assert.ok((noAds.breakdown.gate ?? 1) < 0.4);
   // Reklamı ölçeklenen ürün (reklam kanıt skoru 65).
   const ads = winnerScore({ ...base, adScore: 65 });
-  assert.equal(ads.breakdown.parts.reklam, 24.4);
+  assert.equal(ads.breakdown.parts.reklam, 20.3);
   assert.ok(ads.score > noAds.score + 15, `reklamlı ${ads.score} / reklamsız ${noAds.score}`);
 });

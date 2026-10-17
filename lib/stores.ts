@@ -36,13 +36,31 @@ export async function insertStores(domains: string[], source: string, registered
   return inserted;
 }
 
-export type StoreToCheck = { domain: string; registered_on: string | null; discovered_at: string; first_product_at: string | null; status?: string; platform?: string };
+export type StoreToCheck = {
+  domain: string;
+  registered_on: string | null;
+  discovered_at: string;
+  first_product_at: string | null;
+  status?: string;
+  platform?: string;
+  source?: string | null;
+  ads_active?: number | null;
+  stock_drops?: number | null;
+  copy_count?: number | null;
+};
+
+const CHECK_COLS = "domain, registered_on, discovered_at, first_product_at, status, platform, source, ads_active, stock_drops, copy_count";
+
+/** Reklam veren (ya da reklamdan bulunan), stoğu azalan veya ürünü başka mağazalarda da satılan mağaza: günde iki kez kontrol. */
+export function isHotStore(s: StoreToCheck): boolean {
+  return (s.ads_active ?? 0) > 0 || (s.stock_drops ?? 0) > 0 || (s.copy_count ?? 0) > 0 || s.source === "reklam";
+}
 
 /** Aday ürünü ya da reklamı olan açık mağazalar (kontrol zamanı beklenmez): ürün ayrıntılarını hemen doldurmak için. */
 export async function storesForDetail(limit: number): Promise<StoreToCheck[]> {
   const { data, error } = await db()
     .from("stores")
-    .select("domain, registered_on, discovered_at, first_product_at, status, platform")
+    .select(CHECK_COLS)
     .eq("status", "live")
     .or("product_id.not.is.null,ad_points.gt.0")
     .order("total_score", { ascending: false })
@@ -86,7 +104,7 @@ export async function storesToCheck(limit: number, source?: string): Promise<Sto
 const dueStores = (now: string) =>
   db()
     .from("stores")
-    .select("domain, registered_on, discovered_at, first_product_at, status, platform")
+    .select(CHECK_COLS)
     .in("status", ["pending", "closed", "live"])
     .lte("next_check_at", now);
 
@@ -112,7 +130,8 @@ export async function saveStoreCheck(s: StoreToCheck, probe: StoreProbe): Promis
   const age = storeAgeDays({ ...s, first_product_at: firstProductAt });
   const activity = probe.state === "live" ? storeActivity(prevRows[0] ?? null, probe) : null;
   const score = probe.state === "live" ? storeScore(probe, activity!) : 0;
-  const planned = nextCheck(probe.state, age, Date.now(), score);
+  const hot = isHotStore(s);
+  const planned = nextCheck(probe.state, age, Date.now(), score, hot);
   // Geçici hata (429, zaman aşımı): açık/kapalı mağaza durumunu korur, ertesi gün yeniden denenir.
   const status = probe.state === "error" && (s.status === "live" || s.status === "closed") ? s.status : planned.status;
   const next = planned.next;
@@ -147,7 +166,7 @@ export async function saveStoreCheck(s: StoreToCheck, probe: StoreProbe): Promis
       score_parts: storeScoreParts(probe, activity!),
     });
     // Ürün bazında hareket yalnızca aday olabilecek mağazalarda izlenir (veritabanı boyutu).
-    if (score >= COPY_MIN_STORE_SCORE) {
+    if (score >= COPY_MIN_STORE_SCORE || hot) {
       const [{ data: snapRow, error: sErr }, { data: tracked }] = await Promise.all([
         db().from("stores").select("products_snapshot, details").eq("domain", s.domain).maybeSingle(),
         db().from("products").select("product_url").eq("brand_domain", s.domain).limit(10),

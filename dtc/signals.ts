@@ -105,6 +105,27 @@ function ratingFromJudgeMe(html: string): Rating | null {
   return Number.isFinite(count) ? { count, value: Number.isFinite(value) && count > 0 ? value : null, source: "Judge.me" } : null;
 }
 
+/**
+ * Loox: sunucuda çizilen yorum özeti ("Overall rating: 4.8 / 5 from 1350 reviews.") ya da klasik yıldız rozeti
+ * (data-rating / data-raters). Loox'un yorumları sayfaya JavaScript'le yüklediği temalarda ikisi de olmayabilir.
+ */
+function ratingFromLoox(html: string): Rating | null {
+  const summary = html.match(/class=["'][^"']*loox-ssr-review-summary[^"']*["'][^>]*>([^<]{0,300})/i)?.[1];
+  if (summary) {
+    const m = summary.match(/(\d+(?:[.,]\d+)?)\s*\/\s*5\D+?(\d[\d.,\s]*\d|\d)/);
+    if (m) {
+      const count = Number(m[2].replace(/[.,\s]/g, ""));
+      const value = Number(m[1].replace(",", "."));
+      if (Number.isFinite(count)) return { count, value: Number.isFinite(value) && count > 0 ? value : null, source: "Loox" };
+    }
+  }
+  const badge = html.match(/<[^>]*class=["'][^"']*loox-rating[^"']*["'][^>]*data-raters=[^>]*>/i)?.[0] ?? html.match(/<[^>]*data-raters=["']?\d+[^>]*class=["'][^"']*loox-rating[^>]*>/i)?.[0];
+  if (!badge) return null;
+  const count = Number(badge.match(/data-raters=["']?(\d+)/i)?.[1]);
+  const value = Number(badge.match(/data-rating=["']?([\d.]+)/i)?.[1]);
+  return Number.isFinite(count) ? { count, value: Number.isFinite(value) && count > 0 ? value : null, source: "Loox" } : null;
+}
+
 function firstString(v: unknown): string | null {
   if (typeof v === "string") return v;
   if (Array.isArray(v)) return firstString(v[0]);
@@ -142,7 +163,7 @@ export function pageSignals(html: string): PageSignals {
     digitalType: digital,
     shippingDetails: ld.some((o) => types(o).includes("OfferShippingDetails")) || /"weight"\s*:/.test(html),
     hasProductSchema: Boolean(product),
-    rating: ratingFromJsonLd(ld) ?? ratingFromJudgeMe(html),
+    rating: ratingFromJsonLd(ld) ?? ratingFromJudgeMe(html) ?? ratingFromLoox(html),
     siteName: siteName(html, ld, product),
     orgCountry:
       ld

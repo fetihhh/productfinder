@@ -110,6 +110,13 @@ test("Yorum kaynakları: schema.org AggregateRating ve Judge.me rozeti", () => {
   assert.deepEqual(a.rating, { count: 87, value: 4.6, source: "schema.org" });
   const j = pageSignals(`<div class="jdgm-widget jdgm-prev-badge" data-average-rating="4.90" data-number-of-reviews="1204"></div>`);
   assert.deepEqual(j.rating, { count: 1204, value: 4.9, source: "Judge.me" });
+  const loox = pageSignals(`<h3>Customer Reviews</h3><p class="loox-ssr-review-summary">
+ Overall rating: 4.8 / 5 from 1,350 reviews.
+</p>`);
+  assert.deepEqual(loox.rating, { count: 1350, value: 4.8, source: "Loox" });
+  const badge = pageSignals(`<div class="loox-rating" data-id="7" data-rating="4.6" data-raters="212"></div>`);
+  assert.deepEqual(badge.rating, { count: 212, value: 4.6, source: "Loox" });
+  assert.equal(pageSignals(`<div class="loox-rating" data-id="7"></div>`).rating, null);
   assert.deepEqual(parseYotpoBottomline(YOTPO), { count: 312, value: 4.7, source: "Yotpo" });
 });
 

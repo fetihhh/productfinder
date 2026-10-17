@@ -43,7 +43,7 @@ export async function adTargets(limit: number, minStoreScore: number): Promise<A
       .gte("first_product_at", since)
       .gte("store_score", minStoreScore)
       .order("store_score", { ascending: false })
-      .limit(2000),
+      .limit(1000),
     // Reklamdan keşfedilen açık ve yeni mağazalar: reklam verdikleri bilindiği için puana bakılmaz, önce aranır.
     db().from("stores").select("domain, shop_name").eq("source", "reklam").eq("status", "live").gte("first_product_at", since).limit(500),
   ]);

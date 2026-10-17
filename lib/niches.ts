@@ -1,7 +1,7 @@
 // Niş trendleri (yalnızca sunucu): hangi ürün türlerinde yeni mağaza açılıyor, reklam ve satış hareketi artıyor.
 import { NEW_STORE_MAX_AGE_DAYS } from "../config/limits.ts";
 import { NICHES } from "../dtc/niche.ts";
-import { db } from "./db.ts";
+import { allRows, db } from "./db.ts";
 
 const DAY = 86_400_000;
 const WEEKS = 8;
@@ -50,7 +50,7 @@ export async function getNicheTrends(now = Date.now()): Promise<NicheTrend[]> {
     stores.push(...(data as StoreRow[]));
     if (data.length < 1000) break;
   }
-  const { data: ads, error } = await db().from("ad_signals").select("domain, ad_stage").gt("active_ads", 0).limit(10000);
+  const { data: ads, error } = await allRows((a, b) => db().from("ad_signals").select("domain, ad_stage").gt("active_ads", 0).order("domain").range(a, b));
   if (error) throw new Error(error.message);
   const stage = new Map((ads ?? []).map((a) => [a.domain as string, a.ad_stage as string]));
 

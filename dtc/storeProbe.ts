@@ -244,11 +244,13 @@ export function storeScore(s: LiveStore, activity: StoreActivity, now = Date.now
 
 /**
  * Sonraki kontrol: şifreli/boş mağaza 14 günde bir (90 günü geçince bırakılır), açık mağaza haftada bir (150 güne kadar);
- * puanı yüksek açık mağaza her gün (stok tükenmesi ve yeni ürün günler içinde görünsün).
+ * puanı yüksek açık mağaza her gün (stok tükenmesi ve yeni ürün günler içinde görünsün); reklam veren, stoğu azalan ya da
+ * ürünü başka mağazalarda da satılan ("sıcak") açık mağaza günde iki kez (satış hareketi stok farkından ölçülür; ne sık
+ * bakılırsa o kadar çok azalma yakalanır).
  */
 export type StoreStatus = "pending" | "closed" | "live" | "dead" | "old";
 
-export function nextCheck(state: StoreProbe["state"], storeAgeDays: number, now = Date.now(), score = 0): { status: StoreStatus; next: string } {
+export function nextCheck(state: StoreProbe["state"], storeAgeDays: number, now = Date.now(), score = 0, hot = false): { status: StoreStatus; next: string } {
   const at = (days: number) => new Date(now + days * DAY).toISOString();
   if (state === "error") return { status: "pending", next: at(1) };
   // dead/old: artık kontrol edilmez (next yalnızca alan dolu kalsın diye).
@@ -256,5 +258,6 @@ export function nextCheck(state: StoreProbe["state"], storeAgeDays: number, now 
   if (state === "closed") return storeAgeDays > 90 ? { status: "dead", next: at(0) } : { status: "closed", next: at(14) };
   if (storeAgeDays > 150) return { status: "old", next: at(0) };
   // Günlük çalıştırma her gün aynı saatte başlar: 20 saat sonrası ertesi günün çalıştırmasına denk gelir.
+  if (hot) return { status: "live", next: at(10 / 24) };
   return { status: "live", next: score >= STORE_DAILY_MIN_SCORE ? at(20 / 24) : at(7) };
 }

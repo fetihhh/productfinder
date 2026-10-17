@@ -6,16 +6,20 @@
 // Tahmini aylık satış    = son ≤30 günde eklenen yorum (aylığa ölçeklenmiş, en az 7 günlük veri) × 10 – 50
 //
 // Winner skoru = KANIT (ürün satıyor mu?) + UYGUNLUK (satılabilir mi?) × kanıt kapısı. Toplam en fazla 100.
-//  Kanıt (en fazla 100):
-//   reklam  30 × min(1, reklam kanıt skoru / 80)   (Meta Reklam Kütüphanesi: süreklilik, ölçekleme, kopya, erişim, ülke; en güçlü işaret)
+//  Kanıt (en fazla 100). Ağırlıklar yeni mağazalarda gerçekten ölçülebilen işaretlere göre: trafik sırası (Tranco ilk 1 M)
+//  ve blog gündemi yeni mağazalarda neredeyse hiç oluşmuyor; puan ürün bazında stok hareketine ve kopyalara kaydırıldı.
+//   reklam  25 × min(1, reklam kanıt skoru / 80) + 5 × min(1, son 14 günde açılan reklam / 3)
+//           (Meta Reklam Kütüphanesi: süreklilik, ölçekleme, kopya, erişim, ülke; en güçlü işaret + bütçe artırımı)
 //   talep   20 × min(1, log10(1 + yorum) / 3) × puan katsayısı   (1000 yorum = tam; ★<4 → ×0,6, ★4–4,5 → ×0,85)
 //           Yorum artışı henüz ölçülmediyse ×0,5: yeni mağazalar yorumları çoğu zaman toplu içe aktarır.
 //           Yorum yoksa toptancı satışı: 10 × min(1, log10(1 + satış) / 4) (ilan fotoğrafla eşleşmediyse ×0,5)
 //   ivme    15 × min(1, aylık yeni yorum / 30) (en az 7 günlük ölçüm); yoksa toptancı satış hızı 15 × min(1, haftalık / 100)
-//   trafik  8 × sıra puanı + 2 × sıra iyileşmesi   (1 M → 0,1; ≤150 B → 1; 30 günde %20 iyileşme = 2)
-//   gündem  5 × trend skoru / 100                  (bloglarda anılma)
-//   hareket 10 → mağazada stok azalması (satış işareti): 1 → 4, ≥ 2 → 7, ≥ 5 → 10
-//   kopya   10 → aynı ürünü satan bağımsız yeni mağaza: 1 → 5, 2–4 → 8, ≥ 5 → 10   (aynı satıcı ağı sayılmaz)
+//   trafik  3 × sıra puanı + 1 × sıra iyileşmesi   (1 M → 0,1; ≤150 B → 1; 30 günde %20 iyileşme = 1)
+//   gündem  1 × trend skoru / 100                  (bloglarda anılma)
+//   hareket 15 → ürünün kendi stok azalması (satış işareti): 1 → 6, 2 → 10, 3–4 → 12, ≥ 5 → 15
+//           ürün bazında ölçüm yoksa mağazanın toplamı yarım: 1 → 3, ≥ 2 → 5, ≥ 5 → 7
+//   kopya   15 → aynı ürünü satan bağımsız mağaza (ürün bazında görsel eşleşmesi): 1 → 6, 2 → 10, 3–4 → 12, ≥ 5 → 15
+//           (aynı satıcı ağı sayılmaz)
 //  Uygunluk (en fazla 25), kanıt kapısıyla çarpılır: min(1, kanıt / 30). Kanıtı olmayan ürün yalnızca ucuz toptancısı ve
 //  uygun fiyatı olduğu için üste çıkamaz.
 //   fiyat   10 → 25–150 $, 5 → 15–25 $ veya 150–300 $, 0 → diğer
@@ -53,6 +57,9 @@ export type WinnerInput = {
   /** Ürünün mağazasında toplam stok azalması ve aynı ürünü satan bağımsız mağaza sayısı (yeni mağaza keşfi). */
   stockDrops?: number;
   independentCopies?: number;
+  /** Ürün bazında (store_items): ürünün kendi stok azalması ve aynı ürünü satan bağımsız mağaza sayısı; varsa mağaza toplamının yerine geçer. */
+  productStockDrops?: number | null;
+  productCopies?: number | null;
   /** Asıl toptan ilanın toplam satışı ve haftalık satış hızı (AliExpress "N sold"); ilan fotoğrafla mı eşleşti. */
   supplierSold?: number | null;
   supplierSoldPerWeek?: number | null;
@@ -213,6 +220,17 @@ function ratingFactor(rating: number | null): number {
   return rating >= 4 ? 0.85 : 0.6;
 }
 
+/** Ürünün kendi stok azalması (ölçüldüyse) ya da mağazanın toplamı (yarım puan). */
+export function movementPoints(productDrops: number | null, storeDrops: number): number {
+  if (productDrops !== null && productDrops > 0) return productDrops >= 5 ? 15 : productDrops >= 3 ? 12 : productDrops >= 2 ? 10 : 6;
+  return storeDrops >= 5 ? 7 : storeDrops >= 2 ? 5 : storeDrops >= 1 ? 3 : 0;
+}
+
+/** Aynı ürünü satan bağımsız mağaza sayısına göre kopya puanı. */
+export function copyTier(copies: number): number {
+  return copies >= 5 ? 15 : copies >= 3 ? 12 : copies >= 2 ? 10 : copies >= 1 ? 6 : 0;
+}
+
 const scale = (n: number, r: Range): Range => ({ low: Math.round(n * r.low), high: Math.round(n * r.high) });
 
 export function winnerScore(input: WinnerInput): { score: number; breakdown: WinnerBreakdown } {
@@ -228,14 +246,12 @@ export function winnerScore(input: WinnerInput): { score: number; breakdown: Win
   const talep = Math.max(reviewTalep, supplierTalep);
   const perWeek = input.supplierSoldPerWeek ?? null;
   const ivme = rpm !== null ? 15 * clamp01(rpm / 30) : perWeek !== null ? 15 * clamp01(perWeek / 100) * (input.supplierByImage ? 1 : 0.5) : 0;
-  const trafik = 8 * rankPoints(latestRank) + (change === null ? 0 : 2 * clamp01((change - 1) / 0.2));
-  const gundem = 5 * clamp01(Number(input.trendScore) / 100);
+  const trafik = 3 * rankPoints(latestRank) + (change === null ? 0 : clamp01((change - 1) / 0.2));
+  const gundem = clamp01(Number(input.trendScore) / 100);
   const adScore = input.adScore ?? (input.adPoints ?? 0) * 4;
-  const reklam = 30 * clamp01(adScore / 80);
-  const drops = input.stockDrops ?? 0;
-  const hareket = drops >= 5 ? 10 : drops >= 2 ? 7 : drops >= 1 ? 4 : 0;
-  const copies = input.independentCopies ?? 0;
-  const kopya = copies >= 5 ? 10 : copies >= 2 ? 8 : copies >= 1 ? 5 : 0;
+  const reklam = 25 * clamp01(adScore / 80) + (adScore > 0 ? 5 * clamp01((input.newAds14d ?? 0) / 3) : 0);
+  const hareket = movementPoints(input.productStockDrops ?? null, input.stockDrops ?? 0);
+  const kopya = copyTier(input.productCopies ?? input.independentCopies ?? 0);
   const evidence = talep + ivme + trafik + gundem + reklam + hareket + kopya;
   const gate = clamp01(evidence / EVIDENCE_GATE);
   const fiyat = pricePoints(priceUsd) * gate;

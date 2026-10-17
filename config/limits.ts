@@ -26,8 +26,17 @@ export const REVERIFY_AFTER_DAYS = 30;
 export const STRICT_BRAND_CHECK = true;
 export const BRAND_RECHECK_DAYS = 30;
 
-/** Bir çalıştırmada en fazla kaç ürünün günlük satış ölçümü alınır (ürün başına 2-3 istek, kota harcamaz). */
-export const SNAPSHOT_PER_RUN = 150;
+/**
+ * Satış takibi: bir çalıştırmada en fazla kaç ürün ölçülür (ürün başına 2-3 istek, kota harcamaz; farklı mağazalar aynı anda,
+ * alan adı başına saniyede 1 istek). Winner ürünler (skor ≥ 40) ve favori/incelenecekler 10 saatte bir (günde ~2),
+ * diğer doğrulanmışlar günde bir, doğrulanmamış adaylar 3 günde bir ölçülür.
+ */
+export const SNAPSHOT_PER_RUN = Number(process.env.SNAPSHOT_PER_RUN) || 400;
+export const SNAPSHOT_CONCURRENCY = 6;
+export const SALES_HOT_SCORE = 40;
+export const SALES_HOT_HOURS = 10;
+export const SALES_DAILY_HOURS = 20;
+export const SALES_REST_DAYS = 3;
 
 /**
  * Tavily kotası dolduğunda, doğrudan pazaryeri araması (Amazon.com zorunlu + AliExpress + Otto) temiz çıkan ürün

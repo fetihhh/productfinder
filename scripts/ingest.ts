@@ -12,6 +12,7 @@
 //             npm run ingest -- instagram (Instagram hesabı bilinmeyen mağazaların ana sayfası + çok tutan gönderiler)
 import {
   BIG_BRAND_MAX_RANK,
+  SNAPSHOT_CONCURRENCY,
   SNAPSHOT_PER_RUN,
   STRICT_BRAND_CHECK,
   SUPPLIER_PER_RUN,
@@ -218,22 +219,42 @@ async function traffic(): Promise<boolean> {
 async function snapshots(): Promise<boolean> {
   const products = await productsToSnapshot(SNAPSHOT_PER_RUN);
   console.log(`\n▶ Satış ölçümü: ${products.length} ürün`);
-  let ok = true;
-  for (const p of products) {
-    try {
-      const r = await readSales(p.product_url, politeFetch);
-      if (!r.ok) {
-        console.log(`  ? ${p.name} — ${r.reason}`);
-        continue;
+  const t0 = Date.now();
+  let failures = 0;
+  let next = 0;
+  const totals = { olculen: 0, okunamadi: 0, tukenen: 0, yenidenGelen: 0, satilanAdet: 0, fiyatDegisen: 0 };
+  // Farklı mağazalar aynı anda ölçülür; aynı alan adına istekler yine saniyede en fazla 1 (politeFetch).
+  const worker = async () => {
+    while (next < products.length) {
+      const p = products[next++];
+      try {
+        const r = await readSales(p.product_url, politeFetch);
+        if (!r.ok) {
+          totals.okunamadi++;
+          console.log(`  ? ${p.name} — ${r.reason}`);
+          continue;
+        }
+        const ev = await saveSnapshot(p, r.sales);
+        totals.olculen++;
+        totals.tukenen += ev.soldOut;
+        totals.yenidenGelen += ev.restocked;
+        totals.satilanAdet += ev.unitsSold;
+        if (ev.priceChanged) totals.fiyatDegisen++;
+        const moves = [
+          ev.soldOut ? `${ev.soldOut} varyant tükendi` : "",
+          ev.unitsSold ? `${ev.unitsSold} adet satıldı` : "",
+          ev.priceChanged ? `fiyat ${p.price ?? "?"} → ${r.sales.price ?? "?"}` : "",
+        ].filter(Boolean);
+        console.log(`  • ${p.name} — stok ${r.sales.variantsAvailable ?? "?"}/${r.sales.variantsTotal ?? "?"}, yorum ${r.sales.reviewCount ?? "?"}, fiyat ${r.sales.price ?? "?"} ${r.sales.currency ?? ""}${moves.length ? ` · ${moves.join(", ")}` : ""}`);
+      } catch (err) {
+        failures++;
+        console.error(`  ! ${p.name}: ${(err as Error).message}`);
       }
-      await saveSnapshot(p.id, r.sales);
-      console.log(`  • ${p.name} — yorum ${r.sales.reviewCount ?? "?"}, fiyat ${r.sales.price ?? "?"} ${r.sales.currency ?? ""}`);
-    } catch (err) {
-      ok = false;
-      console.error(`  ! ${p.name}: ${(err as Error).message}`);
     }
-  }
-  return ok;
+  };
+  await Promise.all(Array.from({ length: SNAPSHOT_CONCURRENCY }, worker));
+  console.log(`  özet: ${JSON.stringify(totals)} (${((Date.now() - t0) / 1000).toFixed(0)} sn)`);
+  return failures < Math.max(5, products.length * 0.2);
 }
 
 /** Doğrulanmış/takip edilen ürünler için toptancı adayları (AliExpress, Alibaba, Made-in-China). */

@@ -67,6 +67,12 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
   const reviewPoints = history.map((h) => ({ day: h.day, y: h.review_count }));
   const salesPoints = history.map((h) => ({ day: h.day, y: h.review_count === null ? null : h.review_count * ((REVIEW_TO_SALES.low + REVIEW_TO_SALES.high) / 2) }));
   const pricePoints = history.map((h) => ({ day: h.day, y: h.price }));
+  const stockPoints = history.map((h) => ({ day: h.day, y: h.variants_available }));
+  const inventoryPoints = history.map((h) => ({ day: h.day, y: h.inventory }));
+  const hasInventory = history.some((h) => h.inventory !== null);
+  const soldOut = history.reduce((n, h) => n + (h.sold_out ?? 0), 0);
+  const unitsSold = history.reduce((n, h) => n + (h.units_sold ?? 0), 0);
+  const variantsTotal = history.findLast((h) => h.variants_total !== null)?.variants_total ?? null;
   const latestRank = ranks.findLast((r) => r.rank !== null) ?? null;
   const notRanked = ranks.length > 0 && ranks[ranks.length - 1].rank === null;
   const accumulating = `Günlük ölçüm birikiyor (${history.length} gün). Grafik her gün otomatik dolar.`;
@@ -290,6 +296,26 @@ export default async function ProductPage({ params }: PageProps<"/p/[id]">) {
             dot="fill-rose-500"
             area="fill-rose-500/10"
             empty="Fiyat okunamadı"
+          />
+        </Panel>
+        <Panel
+          title={hasInventory ? "Kalan adet" : "Stokta olan varyant"}
+          note={
+            hasInventory
+              ? `Tema kalan adedi gösteriyor: düşüş satış demek. Ölçüm geçmişinde ${unitsSold} adet satıldı.`
+              : variantsTotal !== null
+                ? `Toplam ${variantsTotal} varyant. Ölçüm geçmişinde ${soldOut} kez varyant tükendi. Çizgi hep tepedeyse mağaza stok takibi yapmıyor olabilir (dropshipping); o zaman yorum artışına bakın.`
+                : "Stok bilgisi bir sonraki ölçümde gelecek (winner ürünler günde iki kez ölçülür)."
+          }
+        >
+          <LineChart
+            points={hasInventory ? inventoryPoints : stockPoints}
+            format={(n) => String(Math.round(n))}
+            minZero
+            color="stroke-emerald-500"
+            dot="fill-emerald-500"
+            area="fill-emerald-500/10"
+            empty="Stok verisi henüz yok"
           />
         </Panel>
         <Panel

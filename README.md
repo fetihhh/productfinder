@@ -203,6 +203,17 @@ Gerçek satış adetleri herkese açık değildir; kartta satışa dair şu işa
 | Satışa çıkış tarihi | Shopify `published_at` |
 | Trend skoru | Bloglardaki bahsedilmeler (aşağıda) |
 
+## Satış takibi (`dtc/stock.ts`, `lib/sales.ts`, `app/satis/page.tsx`)
+
+Ürün başına fiyat, indirim ve stok hareketi zaman içinde izlenir; **Satış takibi** sayfası (`/satis`) bunları listeler.
+
+- **Sıklık:** winner skoru ≥ 40 olan ürünler ile favori/incelenecekler **10 saatte bir** (günde ~2), diğer doğrulanmışlar günde bir, doğrulanmamış adaylar 3 günde bir; çalıştırma başına en fazla 400 ürün, farklı mağazalar aynı anda (alan adı başına saniyede 1 istek).
+- **Kaynak:** Shopify'ın herkese açık ürün uç noktası `/products/<handle>.js` (her varyantın stokta olup olmadığı, fiyat, indirim öncesi fiyat, mağazanın stok takibi yapıp yapmadığı). Shopify kalan adedi herkese göstermez; tema gösteriyorsa (ürün JSON'undaki `inventory_quantity`, Dawn'ın stok bildirimi) okunur. Uygulamaların "Son 7 ürün!" sayaçları çoğu zaman uydurma olduğu için okunmaz.
+- **Satış işaretleri** iki ölçüm arasındaki farktan çıkar: tükenen varyant, yeniden stoğa giren varyant, azalan adet (= satılan adet), fiyat değişimi (önceki fiyat ve değişim zamanı saklanır). Gün içindeki ölçümler aynı günlük satırda birikir (`product_snapshots`).
+- **Dropshipping:** mağazaların çoğu stok takibi yapmaz (ürün hep "stokta" görünür); bu ürünler "stok takibi yok" diye işaretlenir ve satış yorum artışından (× 10–50) ve eşleşen toptan ilanın haftalık satışından okunur.
+- **Tüm mağaza ürünleri:** izlenen her mağazanın ürünlerinde (mağaza kontrolündeki anlık görüntü, `store_items`) fiyatı düşen ve stoğu azalan ürünler ayrı sekmede listelenir; sıcak mağazalar günde iki kez kontrol edilir.
+- Ürün sayfasında **Stokta olan varyant** (ya da görünüyorsa **Kalan adet**) grafiği.
+
 ## Trafik, satış tahmini ve winner skoru (`lib/winner.ts`)
 
 Hiçbir ücretsiz kaynak bir sitenin gerçek ziyaret ya da satış sayısını vermez. Aşağıdakiler kamuya açık işaretlerden türetilmiş **kaba tahminlerdir**; ürünleri birbirleriyle karşılaştırmak ve eğilimi görmek içindir.

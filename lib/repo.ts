@@ -1,5 +1,15 @@
 // Toplama işinin veritabanı yazma katmanı (yalnızca sunucu/cron).
-import { BIG_BRAND_MAX_RANK, REVERIFY_AFTER_DAYS, SUPPLIER_REFRESH_DAYS, WIDE_RETRY_DAYS } from "../config/limits.ts";
+import {
+  BIG_BRAND_MAX_RANK,
+  REVERIFY_AFTER_DAYS,
+  SALES_DAILY_HOURS,
+  SALES_HOT_HOURS,
+  SALES_HOT_SCORE,
+  SALES_REST_DAYS,
+  SUPPLIER_REFRESH_DAYS,
+  WIDE_RETRY_DAYS,
+} from "../config/limits.ts";
+import { stockEvents, type StockEvents } from "../dtc/stock.ts";
 import type { SalesSnapshot } from "../dtc/sales.ts";
 import { isImageMatch, type SupplierResult } from "../dtc/suppliers.ts";
 import { bigBrandReason, WIDE_PENDING, type VerifyResult } from "../dtc/verify.ts";
@@ -181,7 +191,7 @@ export async function saveVerification(p: ProductToVerify, r: VerifyResult): Pro
   const { error } = await db().from("products").update(update).eq("id", p.id);
   if (error) throw new Error(`products güncellenemedi: ${error.message}`);
   if (r.status === "verified" && (r.sales.reviewCount !== null || r.sales.price !== null)) {
-    await saveSnapshot(p.id, { ...r.sales, price: Number.isNaN(r.sales.price) ? null : r.sales.price });
+    await saveDailyPoint(p.id, { ...r.sales, price: Number.isNaN(r.sales.price) ? null : r.sales.price });
   }
 
   const brand: Record<string, unknown> = {};
@@ -205,45 +215,126 @@ export async function saveVerification(p: ProductToVerify, r: VerifyResult): Pro
 export const today = () => new Date().toISOString().slice(0, 10);
 
 /** Günlük satış ölçümü (grafikler ve satış hızı için); ürünün güncel değerlerini de yeniler. */
-export async function saveSnapshot(productId: string, s: SalesSnapshot): Promise<void> {
+/** Doğrulama sırasında okunan fiyat/yorum: günün satırına yazılır (stok ölçümü ve ölçüm zamanı değişmez). */
+async function saveDailyPoint(productId: string, s: SalesSnapshot): Promise<void> {
+  const row: Record<string, unknown> = { product_id: productId, day: today(), price: s.price, currency: s.currency, availability: s.availability };
+  if (s.reviewCount !== null) row.review_count = s.reviewCount;
+  if (s.rating !== null) row.rating = s.rating;
+  const { error } = await db().from("product_snapshots").upsert(row, { onConflict: "product_id,day" });
+  if (error) throw new Error(`product_snapshots yazılamadı: ${error.message}`);
+}
+
+/**
+ * Ölçümü kaydeder. Gün içindeki ölçümler aynı satırda birikir: tükenen / yeniden gelen varyant ve satılan adet önceki
+ * ölçüme (products'taki son durum) göre eklenir; fiyat değiştiyse önceki fiyat ve değişim zamanı ürüne yazılır.
+ */
+export async function saveSnapshot(p: SnapshotTarget, s: SalesSnapshot): Promise<StockEvents> {
+  const day = today();
+  const now = new Date().toISOString();
+  const cur = { price: s.price, variantsAvailable: s.variantsAvailable ?? null, variantsTotal: s.variantsTotal ?? null, inventory: s.inventory ?? null };
+  const prev = p.last_measured_at
+    ? { price: p.price === null ? null : Number(p.price), variantsAvailable: p.variants_available, variantsTotal: p.variants_total, inventory: p.inventory }
+    : null;
+  const ev = stockEvents(prev, cur);
+  const { data: row, error: rErr } = await db()
+    .from("product_snapshots")
+    .select("checks, sold_out, restocked, units_sold, review_count, rating")
+    .eq("product_id", p.id)
+    .eq("day", day)
+    .maybeSingle();
+  if (rErr) throw new Error(`product_snapshots okunamadı: ${rErr.message}`);
   const { error } = await db().from("product_snapshots").upsert(
     {
-      product_id: productId,
-      day: today(),
+      product_id: p.id,
+      day,
       price: s.price,
       currency: s.currency,
-      review_count: s.reviewCount,
-      rating: s.rating,
+      review_count: s.reviewCount ?? row?.review_count ?? null,
+      rating: s.rating ?? row?.rating ?? null,
       availability: s.availability,
+      compare_at: s.compareAt ?? null,
+      variants_available: cur.variantsAvailable,
+      variants_total: cur.variantsTotal,
+      inventory: cur.inventory,
+      stock_tracked: s.stockTracked ?? null,
+      measured_at: now,
+      checks: (row?.checks ?? 0) + 1,
+      sold_out: (row?.sold_out ?? 0) + ev.soldOut,
+      restocked: (row?.restocked ?? 0) + ev.restocked,
+      units_sold: (row?.units_sold ?? 0) + ev.unitsSold,
     },
     { onConflict: "product_id,day" },
   );
   if (error) throw new Error(`product_snapshots yazılamadı: ${error.message}`);
-  const update: Record<string, string | number> = {};
+  const update: Record<string, string | number | boolean | null> = {
+    last_measured_at: now,
+    compare_at: s.compareAt ?? null,
+    variants_available: cur.variantsAvailable,
+    variants_total: cur.variantsTotal,
+    inventory: cur.inventory,
+  };
+  if (s.stockTracked !== null && s.stockTracked !== undefined) update.stock_tracked = s.stockTracked;
   if (s.price !== null) update.price = s.price;
+  if (ev.priceChanged) {
+    update.price_prev = prev!.price;
+    update.price_changed_at = now;
+  }
   if (s.currency) update.currency = s.currency;
   if (s.reviewCount !== null) update.review_count = s.reviewCount;
   if (s.rating !== null) update.rating = s.rating;
   if (s.availability) update.availability = s.availability;
-  if (Object.keys(update).length === 0) return;
-  const { error: upErr } = await db().from("products").update(update).eq("id", productId);
+  const { error: upErr } = await db().from("products").update(update).eq("id", p.id);
   if (upErr) throw new Error(`products güncellenemedi: ${upErr.message}`);
+  return ev;
 }
 
-/** Bugün ölçümü alınmamış doğrulanmış ürünler ile favori/incelenecek listesindekiler. */
-export async function productsToSnapshot(limit: number): Promise<{ id: string; name: string; product_url: string }[]> {
-  const [verified, tracked, done] = await Promise.all([
-    allRows((a, b) => db().from("products").select("id, name, product_url").eq("dtc_status", "verified").not("product_url", "is", null).order("id").range(a, b)),
-    db().from("products").select("id, name, product_url, tracking!inner(status)").in("tracking.status", ["favorite", "review"]).not("product_url", "is", null),
-    allRows((a, b) => db().from("product_snapshots").select("product_id").eq("day", today()).order("product_id").range(a, b)),
+export type SnapshotTarget = {
+  id: string;
+  name: string;
+  product_url: string;
+  price: number | null;
+  variants_available: number | null;
+  variants_total: number | null;
+  inventory: number | null;
+  last_measured_at: string | null;
+  winner_score: number | null;
+};
+
+/**
+ * Ölçüm sırası: winner ürünler (skor ≥ 40) ve favori/incelenecekler 10 saatte bir, diğer doğrulanmışlar günde bir,
+ * doğrulanmamış adaylar 3 günde bir. Önce hiç ölçülmemişler, sonra winner skoru yüksek olanlar.
+ */
+export async function productsToSnapshot(limit: number, now = Date.now()): Promise<SnapshotTarget[]> {
+  const cols = "id, name, product_url, price, variants_available, variants_total, inventory, last_measured_at, winner_score, dtc_status";
+  const [products, tracked] = await Promise.all([
+    allRows((a, b) =>
+      db().from("products").select(cols).in("dtc_status", ["verified", "unverified"]).not("product_url", "is", null).order("id").range(a, b),
+    ),
+    allRows((a, b) => db().from("tracking").select("product_id").in("status", ["favorite", "review"]).order("product_id").range(a, b)),
   ]);
-  for (const r of [verified, tracked, done]) if (r.error) throw new Error(`ölçüm listesi okunamadı: ${r.error.message}`);
-  const skip = new Set(done.data!.map((d) => d.product_id as string));
-  const byId = new Map<string, { id: string; name: string; product_url: string }>();
-  for (const p of [...verified.data!, ...tracked.data!]) {
-    if (!skip.has(p.id)) byId.set(p.id, { id: p.id, name: p.name, product_url: p.product_url });
+  for (const r of [products, tracked]) if (r.error) throw new Error(`ölçüm listesi okunamadı: ${r.error.message}`);
+  const watched = new Set(tracked.data!.map((t) => t.product_id as string));
+  const missing = [...watched].filter((id) => !products.data!.some((p) => p.id === id));
+  const extra = missing.length
+    ? ((await db().from("products").select(cols).in("id", missing.slice(0, 500)).not("product_url", "is", null)).data ?? [])
+    : [];
+  const H = 3_600_000;
+  const due: { p: SnapshotTarget; tier: number }[] = [];
+  for (const p of [...products.data!, ...extra] as (SnapshotTarget & { dtc_status: string })[]) {
+    const hot = watched.has(p.id) || Number(p.winner_score ?? 0) >= SALES_HOT_SCORE;
+    const tier = hot ? 0 : p.dtc_status === "verified" ? 1 : 2;
+    const every = tier === 0 ? SALES_HOT_HOURS * H : tier === 1 ? SALES_DAILY_HOURS * H : SALES_REST_DAYS * 24 * H;
+    if (!p.last_measured_at || now - Date.parse(p.last_measured_at) >= every) due.push({ p, tier });
   }
-  return [...byId.values()].slice(0, limit);
+  return due
+    .sort(
+      (a, b) =>
+        a.tier - b.tier ||
+        Number(Boolean(a.p.last_measured_at)) - Number(Boolean(b.p.last_measured_at)) ||
+        Number(b.p.winner_score ?? 0) - Number(a.p.winner_score ?? 0),
+    )
+    .slice(0, limit)
+    .map((d) => d.p);
 }
 
 export async function brandDomains(): Promise<string[]> {

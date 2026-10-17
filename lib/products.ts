@@ -240,7 +240,20 @@ export type SupplierRow = {
 /** Toptan ilanın fotoğrafı ürün fotoğrafıyla aynı mı (dHash farkı ≤ eşik). */
 export const sameImage = (s: { image_distance: number | null }) => s.image_distance !== null && s.image_distance <= IMAGE_MATCH_MAX;
 
-export type HistoryPoint = { day: string; price: number | null; currency: string | null; review_count: number | null; rating: number | null; availability: string | null };
+export type HistoryPoint = {
+  day: string;
+  price: number | null;
+  currency: string | null;
+  review_count: number | null;
+  rating: number | null;
+  availability: string | null;
+  /** Satış takibi: stokta olan / toplam varyant, görünüyorsa kalan adet, o gün tükenen varyant ve satılan adet. */
+  variants_available: number | null;
+  variants_total: number | null;
+  inventory: number | null;
+  sold_out: number;
+  units_sold: number;
+};
 
 /** Ürün detay sayfası: ürün, günlük satış ölçümleri ve markanın trafik sırası geçmişi. */
 export async function getProduct(
@@ -273,7 +286,12 @@ export async function getProduct(
   if (!data) return null;
   const p = data as unknown as ProductDetail;
   const [history, ranks, suppliers, ads, adHist, tr] = await Promise.all([
-    db().from("product_snapshots").select("day, price, currency, review_count, rating, availability").eq("product_id", id).order("day").limit(400),
+    db()
+      .from("product_snapshots")
+      .select("day, price, currency, review_count, rating, availability, variants_available, variants_total, inventory, sold_out, units_sold")
+      .eq("product_id", id)
+      .order("day")
+      .limit(400),
     db().from("traffic_ranks").select("day, rank").eq("domain", p.brand_domain).order("day").limit(400),
     db().from("suppliers").select("url, source, title, image_url, price_min, price_max, currency, moq, sold, supplier_name, similarity, image_distance, rating").eq("product_id", id).order("similarity", { ascending: false }).limit(15),
     adSignalsFor([p.brand_domain]),

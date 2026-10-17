@@ -138,7 +138,28 @@ test("readSales: ürün JSON'u ve Yotpo özetinden günlük ölçüm", async () 
   };
   const r = await readSales(`${BASE}/products/lamp`, async (u) => pages[u] ?? { ok: false, url: u, reason: "404", retryable: false });
   assert.ok(r.ok);
-  assert.deepEqual(r.sales, { price: 49, currency: "USD", reviewCount: 88, rating: 4.4, availability: "InStock" });
+  assert.deepEqual(r.sales, {
+    price: 49, currency: "USD", reviewCount: 88, rating: 4.4, availability: "InStock",
+    compareAt: null, variantsAvailable: null, variantsTotal: null, inventory: null, stockTracked: null,
+  });
+});
+
+test("readSales: .js uç noktasından varyant stoğu ve indirim öncesi fiyat", async () => {
+  const BASE = "https://shop.example.com";
+  const ok = (url: string, text: string): FetchResult => ({ ok: true, status: 200, url, contentType: "", text });
+  const variant = (available: boolean, price: number, compare: number | null) => ({ available, price, compare_at_price: compare, inventory_management: "shopify" });
+  const pages: Record<string, FetchResult> = {
+    [`${BASE}/products/lamp`]: ok(`${BASE}/products/lamp`, `<p class="product__inventory">Low stock: 4 left</p>`),
+    [`${BASE}/products/lamp.js`]: ok("j", JSON.stringify({ id: 7, variants: [variant(true, 3990, 5990), variant(false, 3990, 5990), variant(true, 4490, null)] })),
+  };
+  const r = await readSales(`${BASE}/products/lamp`, async (u) => pages[u] ?? { ok: false, url: u, reason: "404", retryable: false });
+  assert.ok(r.ok);
+  assert.equal(r.sales.price, 39.9);
+  assert.equal(r.sales.compareAt, 59.9);
+  assert.equal(r.sales.variantsAvailable, 2);
+  assert.equal(r.sales.variantsTotal, 3);
+  assert.equal(r.sales.inventory, 4);
+  assert.equal(r.sales.stockTracked, true);
 });
 
 test("momentumScore: büyüklükten bağımsız hız ölçer", () => {

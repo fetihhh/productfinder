@@ -112,6 +112,49 @@ export function nameKey(name: string | null): string | null {
   return key.length >= 4 ? key : null;
 }
 
+/**
+ * Reklamveren türü: winner aramak için yalnızca "kucuk" (ürün satan küçük/orta e-ticaret) işe yarar. Liste aksi halde
+ * pazaryerleri, zincir mağazalar, holdingler ve müşterileri adına reklam veren medya ajanslarıyla dolar.
+ * - ajans: adında reklam/medya/ajans/dijital/iletişim/danışmanlık geçenler ve bilinen medya ajansı grupları
+ * - buyuk: 30 günde 500+ reklam, 50 milyon+ gösterim ya da holding, banka, zincir mağaza, kamu kurumu vb.
+ * - diger: hiçbir konusu ürün kategorisi olmayanlar (turizm, finans, eğitim, eğlence, restoran…)
+ */
+export type AdvertiserKind = "kucuk" | "buyuk" | "ajans" | "diger";
+
+export const BIG_CREATIVES = 500;
+export const BIG_IMPRESSIONS = 50_000_000;
+
+const AGENCY =
+  /\b(reklam\w*|medya|media|ajans\w*|agency|iletisim|tanitim|danismanlik|dijital|digital|interaktif|interactive|yayincilik|organizasyon|advertising|groupm|mindshare|vivaki|phd|ingage|liberdatum|innocean|publicis|havas|dentsu|omnicom|wavemaker|starcom|zenith|mediacom|carat|mimeda)\b/;
+const BIG =
+  /\b(holding|bankasi|bank|sigorta|telekom\w*|vakfi|belediye\w*|universite\w*|kurumu|bakanligi|gayrimenkul|yatirim|havayollari|otomotiv|finans\w*|faktoring|leasing|hastane\w*|enerji|magazacilik|magazalari|perakende|alisveris merkezi|elektronik ticaret|bilisim hizmetleri)\b/;
+/** Reklam sayısı eşiğin altında kalan bilinen büyük markalar (çok uluslu üreticiler, zincirler, pazaryerleri). */
+const BIG_BRANDS =
+  /\b(colgate|palmolive|castrol|nestle|l.?oreal|unilever|procter|gamble|henkel|danone|reckitt|beiersdorf|nivea|coca cola|pepsi|ulker|eti gida|torku|pinar|sutas|arcelik|beko|vestel|bosch|siemens|philips|samsung|apple|huawei|xiaomi|oppo|lenovo|teknosa|vatan bilgisayar|migros|a101|bim birlesik|sok marketler|carrefour|trendyol|dsm grup|hepsiburada|d market|amazon|ciceksepeti|getir|yemeksepeti|koton|defacto|lc waikiki|boyner|ipekyol|vakko|mavi giyim|penti|flo magaza|derimod|beymen|karaca|english home|madame coco|watsons|gratis|rossmann|decathlon|ikea|koctas|bauhaus|sodexo|ford|toyota|renault|fiat|hyundai|tofas|opet|shell|turkcell|vodafone)\b/;
+/** Ürün satmayan sektörler (adından). */
+const SERVICE =
+  /\b(restoran\w*|restaurant|pizza|burger|kebap|lokanta|durum\w*|tavuk dunyasi|cafe|otel\w*|hotel|seyahat|tatil\w*|filmcilik|sinema|ogretim|egitim|kolej\w*|okul\w*|kurs\w*|klinik\w*|hastane\w*|tip merkezi|saglik hizmetleri|noropsikiyatri|insaat|taahhut|emlak|lojistik|kargo|nakliyat|avukat\w*|hukuk)\b/;
+const PRODUCT_TOPICS = new Set([
+  "Apparel", "Apparel & Accessories", "Beauty & Personal Care", "Health & Beauty", "Health", "Home & Garden", "Home Improvement",
+  "Computers & Consumer Electronics", "Electronics", "Hobbies, Games & Leisure", "Sports & Fitness", "Sports & Outdoors", "Shopping",
+  "Furniture", "Baby & Kids", "Toys & Games", "Pets & Animals", "Animals & Pet Supplies", "Occasions & Gifts", "Luggage & Bags",
+  "Travel, Luggage & Bags", "Household Supplies", "Hardware", "Arts, Crafts & Party Supplies", "Food, Beverages & Tobacco",
+  "Food & Groceries", "Grocery", "Commercial", "Automotive",
+]);
+
+const plain = (s: string) => s.replace(/[çğıİöşüâîû]/g, (c) => TR_MAP[c] ?? c).toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
+
+export function advertiserKind(a: Pick<GoogleAdvertiser, "name" | "legal_name" | "creatives" | "impressions_low" | "topics">): AdvertiserKind {
+  const name = plain(`${a.name ?? ""} ${a.legal_name ?? ""}`);
+  if (AGENCY.test(name)) return "ajans";
+  if (a.creatives >= BIG_CREATIVES || (a.impressions_low ?? 0) >= BIG_IMPRESSIONS || BIG.test(name) || BIG_BRANDS.test(name)) return "buyuk";
+  if (SERVICE.test(name)) return "diger";
+  // Adında "turizm" geçen gıda/tekstil şirketleri çoktur: yalnızca konusu da turizmse ürün satmıyor sayılır.
+  if (/\bturizm\b/.test(name) && a.topics.includes("Travel & Tourism")) return "diger";
+  if (a.topics.length && !a.topics.some((t) => PRODUCT_TOPICS.has(t))) return "diger";
+  return "kucuk";
+}
+
 const PREFIX = /^(try|get|shop|buy|my|the|go)(?=[a-z0-9]{4,})/;
 const SUFFIX = /(?<=[a-z0-9]{4,})(shop|store|official|tr|online|co)$/;
 

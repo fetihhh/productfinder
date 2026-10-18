@@ -49,6 +49,8 @@ export default async function AdsGalleryPage({ searchParams }: PageProps<"/rekla
   const tab = one(sp.tab) === "ig" ? "ig" : one(sp.tab) === "tr" ? "tr" : "meta";
   const trOnly = one(sp.tronly) === "1";
   const matched = one(sp.matched) === "1";
+  // Varsayılan: yalnızca küçük e-ticaret reklamverenleri (liste aksi halde pazaryerleri, zincirler ve ajanslarla dolar).
+  const everyone = one(sp.hepsi) === "1";
   const q = one(sp.q).slice(0, 60);
   const niche = one(sp.niche).replace(/[^a-z]/g, "").slice(0, 20);
   const all = one(sp.all) === "1";
@@ -64,7 +66,7 @@ export default async function AdsGalleryPage({ searchParams }: PageProps<"/rekla
     tab === "meta" ? galleryAds({ niche, activeOnly: !all, limit: 60, withMedia: video }) : Promise.resolve([]),
     tab === "ig" ? topIgPosts({ days, video, domains: nicheDomains, limit: 60 }) : Promise.resolve([]),
     getJobState<InstagramState>("instagram"),
-    tab === "tr" ? listGoogleAdvertisers({ trOnly, matchedOnly: matched, q, limit: 300 }) : Promise.resolve([]),
+    tab === "tr" ? listGoogleAdvertisers({ trOnly, matchedOnly: matched, smallOnly: !everyone, q, limit: 300 }) : Promise.resolve([]),
     tab === "tr" ? getJobState<GoogleAdsState>("google_ads_tr") : Promise.resolve(null),
   ]);
   const tabLink = (t: string) => `/reklamlar?tab=${t}${niche ? `&niche=${niche}` : ""}`;
@@ -108,6 +110,7 @@ export default async function AdsGalleryPage({ searchParams }: PageProps<"/rekla
               <input name="q" defaultValue={q} placeholder="Reklamveren ara" className="field w-48" aria-label="Reklamveren ara" />
               <Toggle name="tronly" checked={trOnly} label="Türkiye merkezli" />
               <Toggle name="matched" checked={matched} label="Mağazası bilinenler" />
+              <Toggle name="hepsi" checked={everyone} label="Büyük şirketler ve ajanslar da" />
             </>
           ) : tab === "meta" ? (
             <>
@@ -130,9 +133,9 @@ export default async function AdsGalleryPage({ searchParams }: PageProps<"/rekla
 
       {tab === "tr" ? (
         <>
-          <GoogleAdsNotice state={googleState} empty={google.length === 0} />
+          <GoogleAdsNotice state={googleState} empty={google.length === 0} smallOnly={!everyone} />
           {google.length > 0 ? (
-            <GoogleAdvertiserList rows={google} />
+            <GoogleAdvertiserList rows={google} showKind={everyone} />
           ) : (
             googleState?.status === "ok" && <p className="card mt-5 p-6 text-sm text-muted">Bu filtrede reklamveren yok.</p>
           )}

@@ -6,9 +6,10 @@ import type { GoogleAdvertiserRow } from "@/lib/googleAds";
 export type GoogleAdsState = { day: string; status: string; gb?: number; rows?: number; matched?: number; reason?: string } | null;
 
 const FORMAT: Record<string, string> = { TEXT: "Metin", IMAGE: "Görsel", VIDEO: "Video" };
+const KIND: Record<string, string> = { kucuk: "küçük e-ticaret", buyuk: "büyük şirket", ajans: "ajans", diger: "ürün satmıyor" };
 const fullDay = new Intl.DateTimeFormat("tr-TR", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
-export function GoogleAdsNotice({ state, empty }: { state: GoogleAdsState; empty: boolean }) {
+export function GoogleAdsNotice({ state, empty, smallOnly }: { state: GoogleAdsState; empty: boolean; smallOnly: boolean }) {
   const box = "mt-5 rounded-2xl border p-4 text-sm";
   if (!state) {
     return (
@@ -29,13 +30,17 @@ export function GoogleAdsNotice({ state, empty }: { state: GoogleAdsState; empty
   return (
     <p className={`${box} border-line bg-surface text-muted`}>
       {dayLabel(state.day)} tarihli özet: son 30 günde Türkiye&apos;de en az 3 yeni reklam açan {state.rows ?? 0} reklamveren, {state.matched ?? 0} tanesi
-      bilinen bir mağaza. Kaynak Google Reklam Şeffaflık Merkezi (Google Arama, YouTube, Görüntülü Reklam Ağı, Shopping); reklamların kendisi
+      bilinen bir mağaza.{" "}
+      {smallOnly
+        ? "Yalnızca ürün satan küçük ve orta e-ticaret reklamverenleri gösteriliyor: 30 günde 500+ reklam açan büyük şirketler, bilinen markalar ve zincirler, reklam/medya ajansları ve ürün satmayanlar (turizm, eğitim, restoran, finans…) gizli."
+        : "Büyük şirketler ve ajanslar dahil hepsi gösteriliyor."}{" "}
+      Kaynak Google Reklam Şeffaflık Merkezi (Google Arama, YouTube, Görüntülü Reklam Ağı, Shopping); reklamların kendisi
       reklamverenin Şeffaflık Merkezi sayfasında görülür.
     </p>
   );
 }
 
-export function GoogleAdvertiserList({ rows }: { rows: GoogleAdvertiserRow[] }) {
+export function GoogleAdvertiserList({ rows, showKind }: { rows: GoogleAdvertiserRow[]; showKind: boolean }) {
   return (
     <div className="mt-5 overflow-x-auto rounded-2xl border border-line bg-surface">
       <table className="w-full min-w-[760px] text-sm">
@@ -60,6 +65,7 @@ export function GoogleAdvertiserList({ rows }: { rows: GoogleAdvertiserRow[] }) 
                 </p>
                 <p className="truncate text-xs text-muted">
                   {r.location ? `${r.location} · ` : ""}
+                  {showKind && r.kind ? `${KIND[r.kind] ?? r.kind} · ` : ""}
                   {r.domain ? (
                     <Link href={`/m/${r.domain}`} className="text-amber-700 hover:underline dark:text-amber-300">
                       {r.domain}

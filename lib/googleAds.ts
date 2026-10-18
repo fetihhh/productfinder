@@ -1,5 +1,5 @@
 // Türkiye'de reklam veren Google reklamverenlerinin veritabanı katmanı (google_advertisers).
-import { nameKey, storeKeys, type GoogleAdvertiser } from "../dtc/googleAds.ts";
+import { advertiserKind, nameKey, storeKeys, type AdvertiserKind, type GoogleAdvertiser } from "../dtc/googleAds.ts";
 import { allRows, db } from "./db.ts";
 
 /**
@@ -21,7 +21,7 @@ export async function saveGoogleAdvertisers(rows: GoogleAdvertiser[]): Promise<n
     const key = nameKey(r.name) ?? nameKey(r.legal_name);
     const domain = key ? (byKey.get(key) ?? null) : null;
     if (domain) matched++;
-    return { ...r, domain, updated_at: started };
+    return { ...r, domain, kind: advertiserKind(r), updated_at: started };
   });
   for (let i = 0; i < out.length; i += 500) {
     const { error: uErr } = await db().from("google_advertisers").upsert(out.slice(i, i + 500), { onConflict: "advertiser_id" });
@@ -34,11 +34,13 @@ export async function saveGoogleAdvertisers(rows: GoogleAdvertiser[]): Promise<n
   return matched;
 }
 
-export type GoogleAdvertiserRow = GoogleAdvertiser & { domain: string | null; updated_at: string };
+export type GoogleAdvertiserRow = GoogleAdvertiser & { domain: string | null; kind: AdvertiserKind | null; updated_at: string };
 
-export async function listGoogleAdvertisers(opts: { trOnly: boolean; matchedOnly: boolean; q: string; limit: number }): Promise<GoogleAdvertiserRow[]> {
+/** smallOnly: yalnızca ürün satan küçük/orta e-ticaret reklamverenleri (büyük şirket, ajans ve hizmet sektörü hariç). */
+export async function listGoogleAdvertisers(opts: { trOnly: boolean; matchedOnly: boolean; smallOnly: boolean; q: string; limit: number }): Promise<GoogleAdvertiserRow[]> {
   let q = db().from("google_advertisers").select("*");
   if (opts.trOnly) q = q.eq("location", "TR");
+  if (opts.smallOnly) q = q.eq("kind", "kucuk");
   if (opts.matchedOnly) q = q.not("domain", "is", null);
   const term = opts.q.replace(/[%_*,()\\"']/g, " ").trim();
   if (term) q = q.or(`name.ilike.*${term}*,legal_name.ilike.*${term}*,domain.ilike.*${term}*`);

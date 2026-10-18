@@ -103,7 +103,7 @@ Meta'nın ücretsiz Reklam Kütüphanesi API'si ticari reklamları yalnızca AB'
 
 - Haftada bir: son 30 günde Türkiye'de gösterilen reklamlar reklamveren bazında özetlenir — son 30 günde Türkiye'de ilk kez gösterilen reklam sayısı (en az 3), son 7 günde yayında olan, toplam, biçim (metin/görsel/video), konu, ilk reklam tarihi ve Türkiye'deki gösterim aralığı.
 - Reklamveren adı (şirket türü ve "store/shop/e-ticaret" gibi kelimeler atılarak) bilinen bir mağazanın alan adıyla ya da mağaza adıyla **tek** eşleşiyorsa mağazaya bağlanır.
-- **Reklamlar** sayfasında **Türkiye (Google)** sekmesi: yeni reklam sayısına göre sıralı liste, "Türkiye merkezli" ve "Mağazası bilinenler" filtreleri; reklamların kendisi Şeffaflık Merkezi'ndeki reklamveren sayfasında (`?region=TR`) görülür.
+- **Reklamlar** sayfasında **Türkiye (Google)** sekmesi: yeni reklam sayısına göre sıralı liste, "Türkiye merkezli" ve "Mağazası bilinenler" filtreleri. Varsayılan olarak yalnızca ürün satan küçük/orta e-ticaret reklamverenleri görünür: 30 günde 500+ reklam ya da 50 milyon+ gösterim alan büyük şirketler, bilinen markalar/zincirler/pazaryerleri, reklam ve medya ajansları ve ürün satmayan sektörler (turizm, eğitim, restoran, finans…) adından ve reklam konusundan ayıklanır ("Büyük şirketler ve ajanslar da" ile hepsi görünür). Reklamların kendisi Şeffaflık Merkezi'ndeki reklamveren sayfasında (`?region=TR`) görülür.
 - Veri setinde reklamın görseli/metni ve hedef sitesi yoktur; eşleşme yalnızca addan yapılır.
 
 ## Reklam sinyali (`dtc/adLibrary.ts`, `scripts/ads.ts`)

@@ -127,6 +127,7 @@ export type ProductToVerify = {
   brand_domain: string;
   product_url: string | null;
   dtc_status: "verified" | "rejected_marketplace" | "rejected_big_brand" | "unverified";
+  dtc_reason?: string | null;
   brands: {
     marketplace_status: "clean" | "found" | null;
     marketplace_evidence: string | null;
@@ -146,7 +147,7 @@ export async function productsToVerify(limit: number, recheckAll = false): Promi
   const wideDue = new Date(Date.now() - WIDE_RETRY_DAYS * 86_400_000).toISOString();
   const { data, error } = await db()
     .from("products")
-    .select("id, name, brand_domain, product_url, dtc_status, brands(marketplace_status, marketplace_evidence, marketplace_checked_at, tranco_rank, country), mentions(source)")
+    .select("id, name, brand_domain, product_url, dtc_status, dtc_reason, brands(marketplace_status, marketplace_evidence, marketplace_checked_at, tranco_rank, country), mentions(source)")
     // Yeni ürünler önce (tarihi boş); sonra geniş araması kotadan dolayı bekleyen doğrulanmışlar (2 günde bir) ve süresi dolanlar.
     .or(`dtc_checked_at.is.null,and(dtc_status.eq.verified,dtc_checked_at.lt.${stale}),and(dtc_status.eq.verified,dtc_reason.like.*${WIDE_PENDING_TAG}*,dtc_checked_at.lt.${wideDue})`)
     .order("dtc_checked_at", { ascending: true, nullsFirst: true })
@@ -155,6 +156,11 @@ export async function productsToVerify(limit: number, recheckAll = false): Promi
     .limit(limit);
   if (error) throw new Error(`products okunamadı: ${error.message}`);
   return data as unknown as ProductToVerify[];
+}
+
+/** Marka sitesine hiç bağlanılamadı (DNS/bağlantı hatası; 429 ve 5xx gibi sunucu yanıtları değil). */
+export function isNetworkFailure(reason: string): boolean {
+  return reason.startsWith("Marka sitesi okunamadı") && reason.includes("ağ hatası");
 }
 
 export async function saveVerification(p: ProductToVerify, r: VerifyResult): Promise<void> {
@@ -166,9 +172,12 @@ export async function saveVerification(p: ProductToVerify, r: VerifyResult): Pro
   // gün kuyruğun başına dönüp yeni ürünlerin sırasını yiyordu.
   const widePending = r.status === "verified" && r.reason.includes(WIDE_PENDING_TAG);
   const keepPrevious = r.retryable && !widePending && p.dtc_status === "verified";
+  // Hiç doğrulanamamış bir marka sitesine üst üste iki kez bağlanılamadıysa (DNS yok, alan adı kapanmış) ürün her çalıştırmada
+  // kuyruğun başına dönmez: tarih yazılır, yeniden denenmez (mağaza kontrolü alan adını ayrıca izler).
+  const deadSite = r.retryable && p.dtc_status === "unverified" && isNetworkFailure(r.reason) && isNetworkFailure(p.dtc_reason ?? "");
   const update: Record<string, unknown> = keepPrevious
     ? { dtc_checked_at: null }
-    : { dtc_status: r.status, dtc_reason: r.reason, dtc_checked_at: r.retryable && !widePending ? null : now };
+    : { dtc_status: r.status, dtc_reason: r.reason, dtc_checked_at: r.retryable && !widePending && !deadSite ? null : now };
   if (r.name && r.name.length >= 3 && r.name.length <= 150) update.name = r.name;
   if (r.productUrl) update.product_url = r.productUrl;
   if (r.productType) update.product_type = r.productType;

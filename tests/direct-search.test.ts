@@ -58,6 +58,10 @@ test("directQuery: marka adı yoksa eklenir", () => {
   assert.equal(directQuery("Mibro", "Mibro GS Explorer S"), "Mibro GS Explorer S");
   assert.equal(directQuery("Nocs Provisions", "Portal AFN7"), "Nocs Provisions Portal AFN7");
   assert.equal(directQuery("TDM.", ""), "TDM.");
+  // Süslü harfler (iki UTF-16 birimi) 120. karakterde ortadan bölünmez.
+  const q = directQuery("Elunavo", "🎉" + "𝗨".repeat(200));
+  assert.equal(Array.from(q).length, 120);
+  assert.doesNotThrow(() => encodeURIComponent(q));
 });
 
 const site = (name: string, required: boolean, html: string | null): DirectSite => ({

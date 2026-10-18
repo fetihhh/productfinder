@@ -544,7 +544,10 @@ async function main() {
   if (!resume && !onlyVerify) await setJobState("last_full_day", today());
   console.log(`\nBitti: ${((Date.now() - started) / 1000).toFixed(1)} sn`);
   await step("İş özeti", () => writeJobSummary((Date.now() - started) / 1000), undefined);
-  if (stepFailed || ![collected, discovered, checked, copied, itemCopied, advertised, googled, promoted, verified, ranked, measured, fx, sourced, aged].every(Boolean)) process.exitCode = 1;
+  const results = { collected, discovered, checked, copied, itemCopied, advertised, googled, promoted, verified, ranked, measured, fx, sourced, aged };
+  const failed = Object.entries(results).filter(([, v]) => !v).map(([k]) => k);
+  if (failed.length) console.log(`\n▶ Hatayla biten adımlar: ${failed.join(", ")}`);
+  if (stepFailed || failed.length) process.exitCode = 1;
 }
 
 await main();

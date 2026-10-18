@@ -54,7 +54,8 @@ export function directQuery(brandName: string, productName: string): string {
   const compact = (s: string) => normalizeName(s).replace(/\s+/g, "");
   const brand = brandName.replace(/[®™]/g, "").trim();
   const q = compact(productName).includes(compact(brand)) ? productName : `${brand} ${productName}`;
-  return q.replace(/["“”]/g, "").trim().slice(0, 120);
+  // Karakter (kod noktası) bazında kısaltılır: "𝗨𝗹𝘁𝗿𝗮" gibi süslü harfler iki UTF-16 birimidir, ortadan bölünürse adres kodlanamaz (URI malformed).
+  return Array.from(q.replace(/["“”]/g, "").trim()).slice(0, 120).join("");
 }
 
 /**

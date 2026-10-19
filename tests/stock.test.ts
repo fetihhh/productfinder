@@ -33,3 +33,11 @@ test("stockEvents: tükenen/yeniden gelen varyant, azalan adet, fiyat değişimi
   // Varyant yapısı değiştiyse stok farkı sayılmaz.
   assert.equal(stockEvents(m(10, 3, 3, null), m(10, 1, 4, null)).soldOut, 0);
 });
+
+test("stockEvents: %3'ten küçük fiyat oynaması ve para birimi değişimi fiyat değişimi sayılmaz", () => {
+  const m = (price: number, currency = "USD") => ({ price, variantsAvailable: 2, variantsTotal: 2, inventory: null, currency });
+  assert.equal(stockEvents(m(191), m(190)).priceChanged, false); // yuvarlama
+  assert.equal(stockEvents(m(22.92), m(22.86)).priceChanged, false); // kur oynaması
+  assert.equal(stockEvents(m(49.95, "EUR"), m(39.95, "EUR")).priceChanged, true);
+  assert.equal(stockEvents(m(57, "EUR"), m(56, "USD")).priceChanged, false);
+});

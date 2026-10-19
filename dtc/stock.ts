@@ -82,7 +82,14 @@ export type Measurement = {
   variantsAvailable: number | null;
   variantsTotal: number | null;
   inventory: number | null;
+  currency?: string | null;
 };
+
+/**
+ * Fiyat değişimi sayılmayan oynama: Avrupalı mağazaların çoğu ABD'deki sunucuya fiyatı günlük kurla USD gösterir
+ * (Shopify Markets) ve kur her gün biraz oynar; ayrıca yuvarlama farkları (191 → 190). %3'ten küçük fark değişim sayılmaz.
+ */
+export const PRICE_CHANGE_MIN = 0.03;
 
 export type StockEvents = { soldOut: number; restocked: number; unitsSold: number; priceChanged: boolean };
 
@@ -100,6 +107,11 @@ export function stockEvents(prev: Measurement | null, cur: Measurement): StockEv
     soldOut: sameShape && pa !== null && ca !== null && ca < pa ? pa - ca : 0,
     restocked: sameShape && pa !== null && ca !== null && ca > pa ? ca - pa : 0,
     unitsSold: prev.inventory !== null && cur.inventory !== null && cur.inventory < prev.inventory ? prev.inventory - cur.inventory : 0,
-    priceChanged: prev.price !== null && cur.price !== null && Math.abs(prev.price - cur.price) >= 0.01,
+    priceChanged:
+      prev.price !== null &&
+      cur.price !== null &&
+      prev.price > 0 &&
+      !(prev.currency && cur.currency && prev.currency !== cur.currency) &&
+      Math.abs(prev.price - cur.price) / prev.price >= PRICE_CHANGE_MIN,
   };
 }

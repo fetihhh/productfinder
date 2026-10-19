@@ -3,6 +3,7 @@
 // Anlık görüntü yalnızca puanı belirli bir seviyenin üstündeki mağazalarda tutulur (veritabanı boyutu).
 import { clip } from "../lib/text.ts";
 import type { StoreProduct } from "./storeProbe.ts";
+import { PRICE_CHANGE_MIN } from "./stock.ts";
 
 /** Kısa anahtarlar: mağaza başına en fazla 60 ürün jsonb'de saklanır. */
 export type SnapItem = {
@@ -67,7 +68,8 @@ export function mergeSnapshot(prev: SnapItem[] | null, products: StoreProduct[],
       base.ld = day;
       events.stockDrops++;
     }
-    if (o.p !== null && p.price !== null && Math.abs(o.p - p.price) >= 0.01) {
+    // Kur oynaması ve yuvarlama (%3 altı) fiyat değişimi sayılmaz (dtc/stock.ts PRICE_CHANGE_MIN).
+    if (o.p !== null && p.price !== null && o.p > 0 && Math.abs(o.p - p.price) / o.p >= PRICE_CHANGE_MIN) {
       base.pc++;
       base.pp = o.p;
       base.ld = day;

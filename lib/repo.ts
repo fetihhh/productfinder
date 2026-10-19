@@ -240,9 +240,9 @@ async function saveDailyPoint(productId: string, s: SalesSnapshot): Promise<void
 export async function saveSnapshot(p: SnapshotTarget, s: SalesSnapshot): Promise<StockEvents> {
   const day = today();
   const now = new Date().toISOString();
-  const cur = { price: s.price, variantsAvailable: s.variantsAvailable ?? null, variantsTotal: s.variantsTotal ?? null, inventory: s.inventory ?? null };
+  const cur = { price: s.price, variantsAvailable: s.variantsAvailable ?? null, variantsTotal: s.variantsTotal ?? null, inventory: s.inventory ?? null, currency: s.currency };
   const prev = p.last_measured_at
-    ? { price: p.price === null ? null : Number(p.price), variantsAvailable: p.variants_available, variantsTotal: p.variants_total, inventory: p.inventory }
+    ? { price: p.price === null ? null : Number(p.price), variantsAvailable: p.variants_available, variantsTotal: p.variants_total, inventory: p.inventory, currency: p.currency }
     : null;
   const ev = stockEvents(prev, cur);
   const { data: row, error: rErr } = await db()
@@ -313,6 +313,7 @@ export type SnapshotTarget = {
   name: string;
   product_url: string;
   price: number | null;
+  currency?: string | null;
   variants_available: number | null;
   variants_total: number | null;
   inventory: number | null;
@@ -328,7 +329,7 @@ export type SnapshotTarget = {
  * alan adı kapandı) son denemeden itibaren aynı aralıkla, art arda 3 kez okunamadıysa haftada bir yeniden denenir.
  */
 export async function productsToSnapshot(limit: number, now = Date.now()): Promise<SnapshotTarget[]> {
-  const cols = "id, name, product_url, price, variants_available, variants_total, inventory, last_measured_at, winner_score, dtc_status, measure_failed_at, measure_fails";
+  const cols = "id, name, product_url, price, currency, variants_available, variants_total, inventory, last_measured_at, winner_score, dtc_status, measure_failed_at, measure_fails";
   const [products, tracked] = await Promise.all([
     allRows((a, b) =>
       db().from("products").select(cols).in("dtc_status", ["verified", "unverified"]).not("product_url", "is", null).order("id").range(a, b),

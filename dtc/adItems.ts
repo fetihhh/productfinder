@@ -47,6 +47,33 @@ export function adItemRow(ad: ArchivedAd, domain: string): AdItem {
   };
 }
 
+type AdText = Pick<AdItem, "creative_key" | "body">;
+
+/**
+ * Aynı kreatifin (creative_key) tüm kopyalarının metni birebir aynıysa metin yalnızca ilk satırda saklanır (kaydederken).
+ * Metinleri farklı (ör. yalnızca fiyatı değişen) kopyalara dokunulmaz: okurken hangi metnin geri yazılacağı kesin olur.
+ */
+export function dedupeAdText<T extends AdText>(rows: T[]): T[] {
+  const bodies = new Map<string, Set<string | null>>();
+  for (const r of rows) if (r.creative_key) bodies.set(r.creative_key, (bodies.get(r.creative_key) ?? new Set()).add(r.body));
+  const kept = new Set<string>();
+  return rows.map((r) => {
+    if (!r.creative_key || !r.body || bodies.get(r.creative_key)!.size > 1) return r;
+    if (!kept.has(r.creative_key)) {
+      kept.add(r.creative_key);
+      return r;
+    }
+    return { ...r, body: null };
+  });
+}
+
+/** Metni boşaltılmış kopyalara aynı kreatifin ilk metni geri yazılır (okurken). */
+export function fillAdText<T extends AdText>(rows: T[]): T[] {
+  const first = new Map<string, string>();
+  for (const r of rows) if (r.creative_key && r.body && !first.has(r.creative_key)) first.set(r.creative_key, r.body);
+  return rows.map((r) => (r.body || !r.creative_key || !first.has(r.creative_key) ? r : { ...r, body: first.get(r.creative_key)! }));
+}
+
 const DAY = 86_400_000;
 
 /** Arayüzde gösterilen reklam: yayında mı, kaç gündür, aynı metnin kaç kopyası var, önerilen sıra puanı. */

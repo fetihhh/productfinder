@@ -3,13 +3,21 @@
 // bağımsız mağazalar bulunur. Bir ürünü birden çok yeni mağazanın aynı anda satması klasik "winner" işaretidir.
 import { clusterCopies, shopIdFromImage } from "../dtc/copies.ts";
 import { allRows, db } from "./db.ts";
+import { getJobState, setJobState } from "./stores.ts";
 
 export type ItemToHash = { domain: string; handle: string; image: string };
 
-/** Anlık görüntülerden ürünleri eşitler (mağaza başına ilk perStore ürün); değişen satır sayısı. */
+/**
+ * Anlık görüntülerden ürünleri eşitler (mağaza başına ilk perStore ürün); değişen satır sayısı. Artımlı: yalnızca son başarılı
+ * eşitlemeden (10 dk pay bırakılarak) beri kontrol edilen mağazalar işlenir; hepsini her seferinde açmak zaman aşımına uğruyordu.
+ */
 export async function syncStoreItems(perStore: number): Promise<number> {
-  const { data, error } = await db().rpc("sync_store_items", { per_store: perStore });
+  const started = new Date();
+  const last = (await getJobState<{ at?: string }>("store_items_sync"))?.at;
+  const since = last ? new Date(Date.parse(last) - 10 * 60_000).toISOString() : new Date(Date.now() - 2 * 86_400_000).toISOString();
+  const { data, error } = await db().rpc("sync_store_items", { per_store: perStore, p_since: since });
   if (error) throw new Error(`store_items eşitlenemedi: ${error.message}`);
+  await setJobState("store_items_sync", { at: started.toISOString() });
   return Number(data ?? 0);
 }
 

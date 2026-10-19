@@ -4,7 +4,7 @@ import type { AdAnalysis, AdScoreParts, AdStage, AdvertisedProduct, CreativeGrou
 import type { AdOffers } from "../dtc/offers.ts";
 import type { Audience } from "../dtc/audience.ts";
 import { guessLang } from "../dtc/adCopy.ts";
-import { adItemRow, viewAdItems, type AdItem, type AdItemView } from "../dtc/adItems.ts";
+import { adItemRow, dedupeAdText, fillAdText, viewAdItems, type AdItem, type AdItemView } from "../dtc/adItems.ts";
 import { matchAdsToPosts, type IgMediaPost } from "../dtc/adMedia.ts";
 import type { AdSummary, ArchivedAd } from "../dtc/adLibrary.ts";
 import { allRows, db } from "./db.ts";
@@ -226,9 +226,13 @@ export async function translateTopCreatives(
   return added;
 }
 
-/** Mağazanın tek tek reklamlarını kaydeder; arşivden düşenleri (bu aramada gelmeyenleri) siler. */
+/**
+ * Mağazanın tek tek reklamlarını kaydeder; arşivden düşenleri (bu aramada gelmeyenleri) siler. Aynı kreatifin kopyalarında
+ * (aynı creative_key) metin yalnızca ilk satırda saklanır, okurken kopyalara dağıtılır: reklamların ~%70'i kopya ve metinler
+ * veritabanının yarısını kaplıyordu (Supabase ücretsiz katmanı 500 MB).
+ */
 export async function saveAdItems(domain: string, ads: ArchivedAd[]): Promise<void> {
-  const rows = ads.map((a) => ({ ...adItemRow(a, domain), checked_at: new Date().toISOString() }));
+  const rows = dedupeAdText(ads.map((a) => ({ ...adItemRow(a, domain), checked_at: new Date().toISOString() })));
   for (let i = 0; i < rows.length; i += 200) {
     const { error } = await db().from("ad_items").upsert(rows.slice(i, i + 200), { onConflict: "id" });
     if (error) throw new Error(`ad_items yazılamadı: ${error.message}`);
@@ -275,7 +279,7 @@ export async function adItemsFor(domain: string): Promise<AdItemView[]> {
   ]);
   if (error) throw new Error(`ad_items okunamadı: ${error.message}`);
   const items = viewAdItems(
-    ((data ?? []) as AdItem[]).map((r) => ({ ...r, eu_reach: r.eu_reach === null ? null : Number(r.eu_reach), female_share: r.female_share === null ? null : Number(r.female_share) })),
+    fillAdText((data ?? []) as AdItem[]).map((r) => ({ ...r, eu_reach: r.eu_reach === null ? null : Number(r.eu_reach), female_share: r.female_share === null ? null : Number(r.female_share) })),
   );
   const media = matchAdsToPosts(items, posts);
   return items.map((i) => ({ ...i, media: media.get(i.id) ?? null }));

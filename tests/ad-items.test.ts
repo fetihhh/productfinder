@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { adItemRow, assignAdsToProducts, viewAdItems } from "../dtc/adItems.ts";
+import { adItemRow, assignAdsToProducts, dedupeAdText, fillAdText, viewAdItems } from "../dtc/adItems.ts";
 
 const NOW = Date.parse("2026-10-11T12:00:00Z");
 const ago = (d: number) => new Date(NOW - d * 86_400_000).toISOString();
@@ -66,4 +66,18 @@ test("assignAdsToProducts: reklam metni ürün adıyla eşleşir; eşleşmeyen �
     ["3", "galaxy-projector"],
   ]);
   assert.equal(assignAdsToProducts([{ id: "x", title: "nothing", body: null, description: null }], products, null).get("x"), null);
+});
+
+test("dedupeAdText/fillAdText: aynı kreatifin aynı metni bir kez saklanır, okurken geri gelir", () => {
+  const rows = [
+    { id: "1", creative_key: "k", body: "Uzun reklam metni" },
+    { id: "2", creative_key: "k", body: "Uzun reklam metni" },
+    { id: "3", creative_key: "k", body: "Uzun reklam metni" },
+    { id: "4", creative_key: "p", body: "Fiyat 10 TL" },
+    { id: "5", creative_key: "p", body: "Fiyat 20 TL" }, // metinleri farklı kopyalara dokunulmaz
+    { id: "6", creative_key: null, body: "Anahtarsız" },
+  ];
+  const saved = dedupeAdText(rows);
+  assert.deepEqual(saved.map((r) => r.body), ["Uzun reklam metni", null, null, "Fiyat 10 TL", "Fiyat 20 TL", "Anahtarsız"]);
+  assert.deepEqual(fillAdText(saved).map((r) => r.body), rows.map((r) => r.body));
 });

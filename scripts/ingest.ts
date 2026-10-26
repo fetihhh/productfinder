@@ -463,9 +463,9 @@ async function main() {
     return ok;
   };
   // Reklam arşivi: aynı kreatifin eski kopya satırları toplanır (veritabanı ücretsiz katmanın 500 MB sınırında kalsın).
-  const compacted = await step("Reklam arşivi sıkıştırma", () => compactAdItems(180), 0);
+  const compacted = await step("Reklam arşivi sıkıştırma", () => compactAdItems(300), 0);
   if (compacted) console.log(`
-▶ Reklam arşivi: ${compacted} mağazanın kopya reklamları tek satırda toplandı`);
+▶ Reklam arşivi: ~${compacted} mağaza gezildi (kopyalar tek satırda, 60 günden eski durmuş reklamlar silindi)`);
   const collected = onlyVerify || resume ? true : await step("Toplama", collect, false);
   // Yeni mağazalar: keşif (yeni kayıtlı alan adları) → kontrol → puanı yüksek olanların öne çıkan ürünü aday olur.
   const skipStores = process.argv.includes("no-stores");

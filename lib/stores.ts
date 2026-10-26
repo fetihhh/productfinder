@@ -191,6 +191,9 @@ export async function saveStoreCheck(s: StoreToCheck, probe: StoreProbe): Promis
         moving_products: items.filter((i) => i.so > 0).length,
         ...(Object.keys(details).length ? { details } : {}),
       });
+    } else {
+      // Aday olmayan mağazanın eski anlık görüntüsü güncellenmiyordu, yalnızca yer kaplıyordu (store_items ayrı tabloda kalır).
+      Object.assign(update, { products_snapshot: null, details: null });
     }
   }
   const { error } = await db().from("stores").update(update).eq("domain", s.domain);

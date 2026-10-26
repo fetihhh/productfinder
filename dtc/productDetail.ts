@@ -45,9 +45,9 @@ export function descriptionBullets(html: string | null): { bullets: string[]; te
     .replace(/<\/(p|div|h[1-6])>|<br\s*\/?>/gi, "\n")
     .split("\n")
     .map(clean);
-  const pick = (xs: string[]) => [...new Set(xs.filter((x) => x.length >= 8 && x.length <= 220))].slice(0, 10);
+  const pick = (xs: string[]) => [...new Set(xs.filter((x) => x.length >= 8 && x.length <= 220))].slice(0, 8);
   const bullets = pick(lis.length >= 2 ? lis : blocks.filter((b) => /^[✓✔✅•★⭐🔥💡👉\-–]|^[A-ZÀ-Ü][^.!?]{6,90}[:：]/u.test(b) || b.length <= 120));
-  return { bullets: bullets.map((b) => clip(b, 220)), text: clip(blocks.filter(Boolean).join("\n"), 1500) };
+  return { bullets: bullets.map((b) => clip(b, 220)), text: clip(blocks.filter(Boolean).join("\n"), 800) };
 }
 
 /** Shopify ürün nesnesinden ayrıntı. */
@@ -58,7 +58,8 @@ export function productDetail(p: Json): ProductDetail {
       values: (Array.isArray(o.values) ? (o.values as unknown[]) : []).filter((v): v is string => typeof v === "string").slice(0, 20).map((v) => clip(v, 40)),
     }))
     .filter((o) => o.name && !(o.name === "Title" && o.values.length === 1 && o.values[0] === "Default Title"));
-  const variants = (Array.isArray(p.variants) ? (p.variants as Json[]) : []).slice(0, 40).map((v) => {
+  // Sınırlar veritabanı boyutu için (Supabase ücretsiz katmanı 500 MB): 25 varyant, 5 görsel, 800 karakter açıklama.
+  const variants = (Array.isArray(p.variants) ? (p.variants as Json[]) : []).slice(0, 25).map((v) => {
     const price = num(v.price);
     const cmp = num(v.compare_at_price);
     return {
@@ -72,7 +73,7 @@ export function productDetail(p: Json): ProductDetail {
   const images = (Array.isArray(p.images) ? (p.images as Json[]) : [])
     .map((im) => (typeof im.src === "string" ? im.src : null))
     .filter((s): s is string => Boolean(s))
-    .slice(0, 10);
+    .slice(0, 5);
   const { bullets, text } = descriptionBullets(typeof p.body_html === "string" ? p.body_html : null);
   return { options, variants, images, bullets, text };
 }

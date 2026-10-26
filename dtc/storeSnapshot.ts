@@ -5,7 +5,7 @@ import { clip } from "../lib/text.ts";
 import type { StoreProduct } from "./storeProbe.ts";
 import { PRICE_CHANGE_MIN } from "./stock.ts";
 
-/** Kısa anahtarlar: mağaza başına en fazla 60 ürün jsonb'de saklanır. */
+/** Kısa anahtarlar: mağaza başına en fazla 40 ürün jsonb'de saklanır (hareket edenler önde; veritabanı boyutu). */
 export type SnapItem = {
   h: string; // handle
   t: string; // başlık
@@ -26,7 +26,7 @@ export type SnapItem = {
 
 export type SnapEvents = { newProducts: number; stockDrops: number; priceChanges: number };
 
-export const SNAPSHOT_LIMIT = 60;
+export const SNAPSHOT_LIMIT = 40;
 
 /** Hareket sırası: stok azalması, fiyat değişimi, en yeni ürün. */
 export function movementOrder(a: SnapItem, b: SnapItem): number {

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { StoreProduct } from "../dtc/storeProbe.ts";
-import { mergeSnapshot } from "../dtc/storeSnapshot.ts";
+import { mergeSnapshot, SNAPSHOT_LIMIT } from "../dtc/storeSnapshot.ts";
 
 const product = (handle: string, over: Partial<StoreProduct> = {}): StoreProduct => ({
   handle,
@@ -47,8 +47,8 @@ test("mergeSnapshot: ilk görüntüde olay yok; sonra stok azalması, fiyat değ
   assert.equal(third.items[0].so, 1);
 });
 
-test("mergeSnapshot: en fazla 60 ürün, en hareketliler tutulur", () => {
+test("mergeSnapshot: en fazla 40 ürün, en hareketliler tutulur", () => {
   const many = Array.from({ length: 80 }, (_, i) => product(`p${i}`, { createdAt: `2026-09-${String((i % 28) + 1).padStart(2, "0")}T00:00:00Z` }));
   const first = mergeSnapshot(null, many, "2026-10-01");
-  assert.equal(first.items.length, 60);
+  assert.equal(first.items.length, SNAPSHOT_LIMIT);
 });

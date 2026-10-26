@@ -232,7 +232,11 @@ export async function translateTopCreatives(
  */
 export async function saveAdItems(domain: string, ads: ArchivedAd[]): Promise<void> {
   const checked = new Date().toISOString();
-  const rows = collapseAdItems(ads.map((a) => adItemRow(a, domain))).map((r) => ({ ...r, copies: r.copies ?? 1, active_copies: r.active_copies ?? null, checked_at: checked }));
+  // 60 günden önce durmuş reklamlar tutulmaz (winner için bilgi vermez; veritabanı boyutu).
+  const keepAfter = Date.now() - AD_KEEP_STOPPED_DAYS * 86_400_000;
+  const rows = collapseAdItems(ads.map((a) => adItemRow(a, domain)))
+    .filter((r) => !r.stop_at || Date.parse(r.stop_at) >= keepAfter)
+    .map((r) => ({ ...r, copies: r.copies ?? 1, active_copies: r.active_copies ?? null, checked_at: checked }));
   for (let i = 0; i < rows.length; i += 200) {
     const { error } = await db().from("ad_items").upsert(rows.slice(i, i + 200), { onConflict: "id" });
     if (error) throw new Error(`ad_items yazılamadı: ${error.message}`);
@@ -242,6 +246,8 @@ export async function saveAdItems(domain: string, ads: ArchivedAd[]): Promise<vo
   const { error } = await del;
   if (error) throw new Error(`ad_items temizlenemedi: ${error.message}`);
 }
+
+export const AD_KEEP_STOPPED_DAYS = 60;
 
 /**
  * Eski satırları toplar (aynı kreatifin kopyaları tek satıra; compact_ad_items): 100'er mağaza, en fazla maxSeconds sürer.
@@ -256,6 +262,12 @@ export async function compactAdItems(maxSeconds: number): Promise<number> {
     const n = Number(data ?? 0);
     total += n;
     if (n === 0) break;
+  }
+  // Saklama süresi dolan durmuş reklamlar (kalan süre içinde, 5.000'er satır).
+  while (Date.now() - t0 < maxSeconds * 1000) {
+    const { data, error } = await db().rpc("prune_ad_items", { p_days: AD_KEEP_STOPPED_DAYS, p_limit: 5000 });
+    if (error) throw new Error(`eski reklamlar silinemedi: ${error.message}`);
+    if (Number(data ?? 0) < 5000) break;
   }
   return total;
 }

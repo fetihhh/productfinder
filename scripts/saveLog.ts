@@ -1,5 +1,5 @@
 // Günlük işin ayrıntılı kaydını Supabase'deki job_logs tablosuna yazar (yalnızca gizli anahtarla okunur; GitHub'da
-// görünmez). Son 120 kayıt tutulur.
+// görünmez). Son 60 kayıt tutulur (~4 gün).
 import { readFileSync } from "node:fs";
 import { db } from "../lib/db.ts";
 
@@ -19,6 +19,6 @@ if (error) {
   console.error(`job_logs yazılamadı: ${error.message}`);
   process.exit(0);
 }
-const { data } = await db().from("job_logs").select("id").order("id", { ascending: false }).range(120, 120);
+const { data } = await db().from("job_logs").select("id").order("id", { ascending: false }).range(60, 60);
 if (data?.[0]) await db().from("job_logs").delete().lte("id", data[0].id);
 console.log("Ayrıntılı kayıt Supabase job_logs tablosuna yazıldı.");

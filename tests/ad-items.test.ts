@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { adItemRow, assignAdsToProducts, dedupeAdText, fillAdText, viewAdItems } from "../dtc/adItems.ts";
+import { adItemRow, assignAdsToProducts, collapseAdItems, fillAdText, viewAdItems, type AdItem } from "../dtc/adItems.ts";
 
 const NOW = Date.parse("2026-10-11T12:00:00Z");
 const ago = (d: number) => new Date(NOW - d * 86_400_000).toISOString();
@@ -68,16 +68,39 @@ test("assignAdsToProducts: reklam metni ürün adıyla eşleşir; eşleşmeyen �
   assert.equal(assignAdsToProducts([{ id: "x", title: "nothing", body: null, description: null }], products, null).get("x"), null);
 });
 
-test("dedupeAdText/fillAdText: aynı kreatifin aynı metni bir kez saklanır, okurken geri gelir", () => {
+test("collapseAdItems: aynı kreatifin reklamları tek satır, kopya sayıları korunur", () => {
+  const now = Date.parse("2026-10-26T00:00:00Z");
+  const ago = (d: number) => new Date(now - d * 86_400_000).toISOString();
+  const base: AdItem = { id: "", domain: "x.com", page_id: null, page_name: null, start_at: null, stop_at: null, title: null, body: "metin", description: null, platforms: [], eu_reach: null, countries: [], female_share: null, top_age: null, creative_key: "k" };
+  const rows = collapseAdItems(
+    [
+      { ...base, id: "a", start_at: ago(40), stop_at: ago(20), eu_reach: 100, platforms: ["facebook"], countries: ["DE"] },
+      { ...base, id: "b", start_at: ago(10), stop_at: null, eu_reach: 50, platforms: ["instagram"], countries: ["FR"] },
+      { ...base, id: "c", start_at: ago(5), stop_at: null, eu_reach: null },
+      { ...base, id: "d", creative_key: "z", start_at: ago(3), stop_at: ago(1) },
+    ],
+    now,
+  );
+  assert.equal(rows.length, 2);
+  const k = rows.find((r) => r.creative_key === "k")!;
+  assert.equal(k.id, "b"); // yayında olanlardan en uzun süredir yayında olan
+  assert.equal(k.copies, 3);
+  assert.equal(k.active_copies, 2);
+  assert.equal(k.start_at, ago(40));
+  assert.equal(k.stop_at, null);
+  assert.equal(k.eu_reach, 150);
+  assert.deepEqual(k.platforms.sort(), ["facebook", "instagram"]);
+  // Görünümde kopya sayısı toplanan satırdan gelir.
+  const v = viewAdItems(rows, now).find((r) => r.id === "b")!;
+  assert.equal(v.copies, 3);
+  assert.equal(v.activeCopies, 2);
+});
+
+test("fillAdText: eski satırlarda boşaltılmış metin aynı kreatiften geri gelir", () => {
   const rows = [
     { id: "1", creative_key: "k", body: "Uzun reklam metni" },
-    { id: "2", creative_key: "k", body: "Uzun reklam metni" },
-    { id: "3", creative_key: "k", body: "Uzun reklam metni" },
-    { id: "4", creative_key: "p", body: "Fiyat 10 TL" },
-    { id: "5", creative_key: "p", body: "Fiyat 20 TL" }, // metinleri farklı kopyalara dokunulmaz
-    { id: "6", creative_key: null, body: "Anahtarsız" },
+    { id: "2", creative_key: "k", body: null },
+    { id: "3", creative_key: null, body: null },
   ];
-  const saved = dedupeAdText(rows);
-  assert.deepEqual(saved.map((r) => r.body), ["Uzun reklam metni", null, null, "Fiyat 10 TL", "Fiyat 20 TL", "Anahtarsız"]);
-  assert.deepEqual(fillAdText(saved).map((r) => r.body), rows.map((r) => r.body));
+  assert.deepEqual(fillAdText(rows).map((r) => r.body), ["Uzun reklam metni", "Uzun reklam metni", null]);
 });

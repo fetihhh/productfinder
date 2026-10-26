@@ -59,7 +59,8 @@ export default async function AdsGalleryPage({ searchParams }: PageProps<"/rekla
 
   let nicheDomains: string[] | null = null;
   if (tab === "ig" && niche) {
-    const { data } = await db().from("stores").select("domain").eq("niche", niche).not("instagram", "is", null).limit(2000);
+    // En iyi 300 mağaza: alan adları istek adresine yazılır, 2.000 alan adı adres sınırını aşıyordu.
+    const { data } = await db().from("stores").select("domain").eq("niche", niche).not("instagram", "is", null).order("total_score", { ascending: false }).limit(300);
     nicheDomains = (data ?? []).map((d) => d.domain as string);
   }
   const [ads, posts, igState, google, googleState] = await Promise.all([

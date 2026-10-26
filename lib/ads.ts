@@ -4,7 +4,7 @@ import type { AdAnalysis, AdScoreParts, AdStage, AdvertisedProduct, CreativeGrou
 import type { AdOffers } from "../dtc/offers.ts";
 import type { Audience } from "../dtc/audience.ts";
 import { guessLang } from "../dtc/adCopy.ts";
-import { adItemRow, dedupeAdText, fillAdText, viewAdItems, type AdItem, type AdItemView } from "../dtc/adItems.ts";
+import { adItemRow, collapseAdItems, fillAdText, viewAdItems, type AdItem, type AdItemView } from "../dtc/adItems.ts";
 import { matchAdsToPosts, type IgMediaPost } from "../dtc/adMedia.ts";
 import type { AdSummary, ArchivedAd } from "../dtc/adLibrary.ts";
 import { allRows, db } from "./db.ts";
@@ -227,12 +227,12 @@ export async function translateTopCreatives(
 }
 
 /**
- * Mağazanın tek tek reklamlarını kaydeder; arşivden düşenleri (bu aramada gelmeyenleri) siler. Aynı kreatifin kopyalarında
- * (aynı creative_key) metin yalnızca ilk satırda saklanır, okurken kopyalara dağıtılır: reklamların ~%70'i kopya ve metinler
- * veritabanının yarısını kaplıyordu (Supabase ücretsiz katmanı 500 MB).
+ * Mağazanın reklamlarını kaydeder (aynı kreatifin kopyaları tek satırda: collapseAdItems); arşivden düşenleri (bu aramada
+ * gelmeyenleri) ve toplanan kopyaların eski satırlarını siler.
  */
 export async function saveAdItems(domain: string, ads: ArchivedAd[]): Promise<void> {
-  const rows = dedupeAdText(ads.map((a) => ({ ...adItemRow(a, domain), checked_at: new Date().toISOString() })));
+  const checked = new Date().toISOString();
+  const rows = collapseAdItems(ads.map((a) => adItemRow(a, domain))).map((r) => ({ ...r, copies: r.copies ?? 1, active_copies: r.active_copies ?? null, checked_at: checked }));
   for (let i = 0; i < rows.length; i += 200) {
     const { error } = await db().from("ad_items").upsert(rows.slice(i, i + 200), { onConflict: "id" });
     if (error) throw new Error(`ad_items yazılamadı: ${error.message}`);
@@ -241,6 +241,23 @@ export async function saveAdItems(domain: string, ads: ArchivedAd[]): Promise<vo
   if (rows.length) del = del.not("id", "in", `(${rows.map((r) => `"${r.id}"`).join(",")})`);
   const { error } = await del;
   if (error) throw new Error(`ad_items temizlenemedi: ${error.message}`);
+}
+
+/**
+ * Eski satırları toplar (aynı kreatifin kopyaları tek satıra; compact_ad_items): 100'er mağaza, en fazla maxSeconds sürer.
+ * Dönüş: işlenen mağaza sayısı. Yeni kayıtlar saveAdItems'te zaten toplanmış yazılır.
+ */
+export async function compactAdItems(maxSeconds: number): Promise<number> {
+  const t0 = Date.now();
+  let total = 0;
+  while (Date.now() - t0 < maxSeconds * 1000) {
+    const { data, error } = await db().rpc("compact_ad_items", { p_domains: 100 });
+    if (error) throw new Error(`ad_items sıkıştırılamadı: ${error.message}`);
+    const n = Number(data ?? 0);
+    total += n;
+    if (n === 0) break;
+  }
+  return total;
 }
 
 /** Ürün/mağaza sayfası: mağazanın tüm reklamları (önerilen sırada). */
@@ -271,7 +288,7 @@ export async function adItemsFor(domain: string): Promise<AdItemView[]> {
   const [{ data, error }, { data: posts }] = await Promise.all([
     db()
       .from("ad_items")
-      .select("id, domain, page_id, page_name, start_at, stop_at, title, body, description, platforms, eu_reach, countries, female_share, top_age, creative_key")
+      .select("id, domain, page_id, page_name, start_at, stop_at, title, body, description, platforms, eu_reach, countries, female_share, top_age, creative_key, copies, active_copies")
       .eq("domain", domain)
       .limit(400),
     // Reklamın videosu: mağazanın aynı metinli Instagram gönderisi (resmi Business Discovery verisi).

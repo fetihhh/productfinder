@@ -22,6 +22,9 @@ export type AdItem = {
   female_share: number | null;
   top_age: string | null;
   creative_key: string | null;
+  /** Aynı kreatifin kaç reklamı bu satırda toplandı ve kaçı yayında (collapseAdItems; eski satırlarda yok). */
+  copies?: number;
+  active_copies?: number | null;
 };
 
 export function adItemRow(ad: ArchivedAd, domain: string): AdItem {
@@ -50,20 +53,37 @@ export function adItemRow(ad: ArchivedAd, domain: string): AdItem {
 type AdText = Pick<AdItem, "creative_key" | "body">;
 
 /**
- * Aynı kreatifin (creative_key) tüm kopyalarının metni birebir aynıysa metin yalnızca ilk satırda saklanır (kaydederken).
- * Metinleri farklı (ör. yalnızca fiyatı değişen) kopyalara dokunulmaz: okurken hangi metnin geri yazılacağı kesin olur.
+ * Aynı kreatifin (creative_key) reklamları tek satırda toplanır: reklamların ~%70'i aynı kreatifin kopyası ve hepsini ayrı
+ * satırda tutmak veritabanının yarısını kaplıyordu (Supabase ücretsiz katmanı 500 MB). Temsilci satır yayında olanlardan en
+ * uzun süredir yayında olanıdır; başlangıç en erken, bitiş (hepsi durduysa) en geç tarih, erişim toplam, platform ve ülkeler
+ * birleşimdir. Kopya ve yayındaki kopya sayısı satırda saklanır.
  */
-export function dedupeAdText<T extends AdText>(rows: T[]): T[] {
-  const bodies = new Map<string, Set<string | null>>();
-  for (const r of rows) if (r.creative_key) bodies.set(r.creative_key, (bodies.get(r.creative_key) ?? new Set()).add(r.body));
-  const kept = new Set<string>();
-  return rows.map((r) => {
-    if (!r.creative_key || !r.body || bodies.get(r.creative_key)!.size > 1) return r;
-    if (!kept.has(r.creative_key)) {
-      kept.add(r.creative_key);
-      return r;
-    }
-    return { ...r, body: null };
+export function collapseAdItems(rows: AdItem[], now = Date.now()): AdItem[] {
+  const isActive = (i: AdItem) => !i.stop_at || Date.parse(i.stop_at) > now;
+  const groups = new Map<string, AdItem[]>();
+  for (const r of rows) {
+    const k = r.creative_key ?? `id:${r.id}`;
+    groups.set(k, [...(groups.get(k) ?? []), r]);
+  }
+  const startOf = (i: AdItem) => (i.start_at ? Date.parse(i.start_at) : Infinity);
+  return [...groups.values()].map((g) => {
+    const rep = [...g].sort((a, b) => Number(isActive(b)) - Number(isActive(a)) || startOf(a) - startOf(b) || Number(b.eu_reach ?? 0) - Number(a.eu_reach ?? 0))[0];
+    const active = g.filter(isActive).length;
+    const starts = g.map((i) => i.start_at).filter((d): d is string => Boolean(d)).sort();
+    const stops = g.map((i) => i.stop_at).filter((d): d is string => Boolean(d)).sort();
+    const reach = g.filter((i) => i.eu_reach !== null);
+    const prevCopies = g.reduce((n, i) => n + (i.copies ?? 1), 0);
+    const prevActive = g.reduce((n, i) => n + (i.active_copies ?? (isActive(i) ? 1 : 0)), 0);
+    return {
+      ...rep,
+      start_at: starts[0] ?? rep.start_at,
+      stop_at: active > 0 ? rep.stop_at : (stops[stops.length - 1] ?? rep.stop_at),
+      eu_reach: reach.length ? reach.reduce((n, i) => n + Number(i.eu_reach), 0) : null,
+      platforms: [...new Set(g.flatMap((i) => i.platforms ?? []))],
+      countries: [...new Set(g.flatMap((i) => i.countries ?? []))],
+      copies: prevCopies,
+      active_copies: prevActive,
+    };
   });
 }
 
@@ -97,8 +117,8 @@ export function viewAdItems(items: AdItem[], now = Date.now()): AdItemView[] {
   for (const i of items) {
     if (!i.creative_key) continue;
     const g = groups.get(i.creative_key) ?? { n: 0, active: 0 };
-    g.n++;
-    if (isActive(i)) g.active++;
+    g.n += i.copies ?? 1;
+    g.active += i.active_copies ?? (isActive(i) ? 1 : 0);
     groups.set(i.creative_key, g);
   }
   return items
@@ -109,7 +129,7 @@ export function viewAdItems(items: AdItem[], now = Date.now()): AdItemView[] {
       const g = i.creative_key ? groups.get(i.creative_key) : undefined;
       const reach = Number(i.eu_reach ?? 0);
       const score = (active ? 1 : 0.35) * Math.min(days ?? 0, 90) + 4 * (g?.active ?? 0) + 3 * Math.log10(1 + reach);
-      return { ...i, active, days, copies: g?.n ?? 1, activeCopies: g?.active ?? (active ? 1 : 0), score: Math.round(score * 10) / 10 };
+      return { ...i, active, days, copies: g?.n ?? i.copies ?? 1, activeCopies: g?.active ?? i.active_copies ?? (active ? 1 : 0), score: Math.round(score * 10) / 10 };
     })
     .sort((a, b) => b.score - a.score);
 }

@@ -8,17 +8,26 @@ import { getJobState, setJobState } from "./stores.ts";
 export type ItemToHash = { domain: string; handle: string; image: string };
 
 /**
- * Anlık görüntülerden ürünleri eşitler (mağaza başına ilk perStore ürün); değişen satır sayısı. Artımlı: yalnızca son başarılı
- * eşitlemeden (10 dk pay bırakılarak) beri kontrol edilen mağazalar işlenir; hepsini her seferinde açmak zaman aşımına uğruyordu.
+ * Anlık görüntülerden ürünleri eşitler (mağaza başına ilk perStore ürün); değişen satır sayısı. Artımlı ve saatlik dilimlerle:
+ * son eşitlemeden (10 dk pay) bu yana kontrol edilen mağazalar birer saatlik dilimlerle işlenir, her dilimden sonra ilerleme
+ * kaydedilir. Pencere en fazla 12 saat geriye gider: bir hata ilerlemeyi geride bırakıp pencereyi her çalıştırmada büyütüyor ve
+ * sorgu hep zaman aşımına düşüyordu (kısır döngü). Daha eski kontroller mağazanın bir sonraki kontrolünde zaten yeniden gelir.
  */
 export async function syncStoreItems(perStore: number): Promise<number> {
-  const started = new Date();
+  const HOUR = 3_600_000;
+  const now = Date.now();
   const last = (await getJobState<{ at?: string }>("store_items_sync"))?.at;
-  const since = last ? new Date(Date.parse(last) - 10 * 60_000).toISOString() : new Date(Date.now() - 2 * 86_400_000).toISOString();
-  const { data, error } = await db().rpc("sync_store_items", { per_store: perStore, p_since: since });
-  if (error) throw new Error(`store_items eşitlenemedi: ${error.message}`);
-  await setJobState("store_items_sync", { at: started.toISOString() });
-  return Number(data ?? 0);
+  let from = Math.max(last ? Date.parse(last) - 10 * 60_000 : 0, now - 12 * HOUR);
+  let changed = 0;
+  while (from < now) {
+    const to = Math.min(from + HOUR, now);
+    const { data, error } = await db().rpc("sync_store_items", { per_store: perStore, p_since: new Date(from).toISOString(), p_until: new Date(to).toISOString() });
+    if (error) throw new Error(`store_items eşitlenemedi: ${error.message}`);
+    changed += Number(data ?? 0);
+    await setJobState("store_items_sync", { at: new Date(to).toISOString() });
+    from = to;
+  }
+  return changed;
 }
 
 /** Görsel özeti çıkarılmamış ürünler: önce stoğu azalanlar. */

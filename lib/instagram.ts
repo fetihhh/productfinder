@@ -28,9 +28,14 @@ export async function igTargets(limit: number): Promise<IgTarget[]> {
   const skip = new Set(((shared as { instagram: string }[] | null) ?? []).map((r) => r.instagram));
   const usernames = [...new Set((stores ?? []).map((s) => s.instagram as string))].filter((u) => !skip.has(u));
   if (usernames.length === 0) return [];
-  const { data: accounts, error: e2 } = await db().from("ig_accounts").select("username, next_check_at").in("username", usernames);
-  if (e2) throw new Error(`ig_accounts okunamadı: ${e2.message}`);
-  const next = new Map((accounts ?? []).map((a) => [a.username as string, Date.parse(a.next_check_at as string)]));
+  // Parça parça: 1.000 kullanıcı adı tek istek adresine sığmıyor (adres sınırı aşılınca istek "fetch failed" ile düşüyordu).
+  const accounts: { username: string; next_check_at: string }[] = [];
+  for (let i = 0; i < usernames.length; i += 150) {
+    const { data, error: e2 } = await db().from("ig_accounts").select("username, next_check_at").in("username", usernames.slice(i, i + 150));
+    if (e2) throw new Error(`ig_accounts okunamadı: ${e2.message}`);
+    accounts.push(...((data ?? []) as { username: string; next_check_at: string }[]));
+  }
+  const next = new Map(accounts.map((a) => [a.username, Date.parse(a.next_check_at)]));
   const seen = new Set<string>();
   const out: IgTarget[] = [];
   for (const s of stores ?? []) {

@@ -36,7 +36,6 @@ import { verifyProduct, type BrandState } from "../dtc/verify.ts";
 import { politeFetch, politeFetchBytes } from "../lib/http.ts";
 import {
   brandDomains,
-  brandsWithoutRank,
   productsToSource,
   rejectBigBrands,
   saveSuppliers,
@@ -193,7 +192,8 @@ async function traffic(): Promise<boolean> {
   const latest = await latestTrafficDay();
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
   // Liste tazeyse yalnızca o listede sırası kaydedilmemiş (yeni) markalar için yeniden indirilir.
-  if (latest && latest >= yesterday && (await brandsWithoutRank(latest)).length === 0) {
+  // Liste tazeyse indirilmez; sonradan eklenen markaların sırası ertesi günün listesiyle yazılır.
+  if (latest && latest >= yesterday) {
     console.log(`  son liste zaten kayıtlı (${latest})`);
     return true;
   }
@@ -382,7 +382,7 @@ async function main() {
     const ok = await adSignals();
     const promoted = await promoteStores();
     await timing();
-    console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
+    console.log(`▶ Winner skoru: ${(await updateWinnerScores()).updated} ürün değişti`);
     await writeJobSummary((Date.now() - started) / 1000);
     if (![checked, ok, promoted].every(Boolean)) process.exitCode = 1;
     return;
@@ -432,7 +432,7 @@ async function main() {
     const ok = await adSignals(true);
     await instagramPosts();
     await timing();
-    console.log(`▶ Winner skoru: ${await updateWinnerScores()} ürün`);
+    console.log(`▶ Winner skoru: ${(await updateWinnerScores()).updated} ürün değişti`);
     await writeJobSummary((Date.now() - started) / 1000);
     if (!ok) process.exitCode = 1;
     return;
@@ -462,6 +462,9 @@ async function main() {
     if (!ok) console.log(`\n▶ ${step}: bugünkü devam sınırı (${perDay}) doldu, sonraki çalıştırmalarda`);
     return ok;
   };
+  // Tüm tabloları okuyan genel hesaplar (kopya kümeleri, trend, zamanlama, winner skoru, trafik sırası) günde bir, tam işte:
+  // her devam çalıştırmasında (günde ~12) yapılınca Supabase ücretsiz katmanın aylık 5 GB veri çıkışı aşıldı ve proje kısıtlandı.
+  const daily = !resume;
   // Reklam arşivi: aynı kreatifin eski kopya satırları toplanır (veritabanı ücretsiz katmanın 500 MB sınırında kalsın).
   const compacted = await step("Reklam arşivi sıkıştırma", () => compactAdItems(300), 0);
   if (compacted) console.log(`
@@ -488,9 +491,9 @@ async function main() {
     }
   }
   // Aynı ürünü satan mağazalar (kopya puanı aday seçiminden önce toplam puana eklenir).
-  const copied = skipStores ? true : await step("Kopyalanan ürünler", copyClusters, false);
+  const copied = skipStores || !daily ? true : await step("Kopyalanan ürünler", copyClusters, false);
   // Ürün bazında: mağazaların ilk 8 ürünü (öne çıkan ürünle sınırlı kalmadan) aynı fotoğrafa göre kümelenir.
-  const itemCopied = skipStores ? true : await step("Ürün bazında kopya", itemCopies, false);
+  const itemCopied = skipStores || !daily ? true : await step("Ürün bazında kopya", itemCopies, false);
   // Reklam sinyali aday seçiminden önce: reklam veren mağazaların toplam puanı yükselir.
   const advertised = (await allowed("reklam_sinyali", 5)) ? await step("Reklam sinyali", adSignals, false) : true;
   // Türkiye'de reklam verenler (Google Reklam Şeffaflık Merkezi, BigQuery): haftada bir, ücretsiz kotayla sınırlı.
@@ -512,12 +515,12 @@ async function main() {
   }
   const promotedHero = skipStores ? true : await step("Yeni mağazalardan aday", promoteStores, false);
   // Öne çıkan ürün dışında, mağazada stoğu tekrar tekrar azalan (asıl satan) ürünler.
-  const promotedMovers = skipStores ? true : await step("Satış hareketinden aday", promoteMovers, false);
+  const promotedMovers = skipStores || !daily ? true : await step("Satış hareketinden aday", promoteMovers, false);
   // Birden çok bağımsız mağazanın aynı anda sattığı ürünler.
-  const promotedCopies = skipStores ? true : await step("Kopyası çok olan ürünlerden aday", promoteCopies, false);
+  const promotedCopies = skipStores || !daily ? true : await step("Kopyası çok olan ürünlerden aday", promoteCopies, false);
   const promoted = promotedHero && promotedMovers && promotedCopies;
   // Trafik sırası doğrulamadan önce: büyük markalar ağa çıkmadan ve Tavily kredisi harcanmadan elenir.
-  const ranked = await step("Trafik sırası", traffic, false);
+  const ranked = daily ? await step("Trafik sırası", traffic, false) : true;
   const big = await step("Büyük marka eleme", rejectBigBrands, 0);
   if (big) console.log(`\n▶ Büyük marka: ${big} ürün elendi (sıra ≤ #${BIG_BRAND_MAX_RANK.toLocaleString("tr-TR")})`);
   const verified = await step("DTC doğrulama", verify, false);
@@ -540,11 +543,13 @@ async function main() {
     await step("Mağaza kontrolü ikinci tur", checkStores, false);
     await step("Yeni mağazalardan aday", promoteStores, false);
   }
-  const scores = await step("Trend skoru", updateTrendScores, null);
-  if (scores) console.log(`\n▶ Trend skoru: ${scores.total} ürün, ${scores.updated} değişti`);
-  await step("Zamanlama", timing, undefined);
-  const winners = await step("Winner skoru", updateWinnerScores, null);
-  if (winners !== null) console.log(`▶ Winner skoru: ${winners} ürün`);
+  if (daily) {
+    const scores = await step("Trend skoru", updateTrendScores, null);
+    if (scores) console.log(`\n▶ Trend skoru: ${scores.total} ürün, ${scores.updated} değişti`);
+    await step("Zamanlama", timing, undefined);
+    const winners = await step("Winner skoru", updateWinnerScores, null);
+    if (winners !== null) console.log(`▶ Winner skoru: ${winners.total} ürün, ${winners.updated} değişti`);
+  }
   if (!resume && !onlyVerify) await setJobState("last_full_day", today());
   console.log(`\nBitti: ${((Date.now() - started) / 1000).toFixed(1)} sn`);
   await step("İş özeti", () => writeJobSummary((Date.now() - started) / 1000), undefined);

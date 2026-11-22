@@ -381,20 +381,25 @@ export async function saveTrafficRanks(day: string, domains: string[], ranks: Ma
   const rows = domains.map((domain) => ({ domain, day, rank: ranks.get(domain) ?? null }));
   const { error } = await db().from("traffic_ranks").upsert(rows, { onConflict: "domain,day" });
   if (error) throw new Error(`traffic_ranks yazılamadı: ${error.message}`);
+  // Markanın sırası yalnızca değiştiyse yazılır (her marka için ayrı istek; çoğu her gün aynı).
+  const { data: cur, error: cErr } = await allRows((a, b) => db().from("brands").select("domain, tranco_rank").order("domain").range(a, b));
+  if (cErr) throw new Error(`brands okunamadı: ${cErr.message}`);
+  const before = new Map((cur as { domain: string; tranco_rank: number | null }[]).map((b) => [b.domain, b.tranco_rank]));
   for (const r of rows) {
+    if (before.has(r.domain) && before.get(r.domain) === r.rank) continue;
     const { error: bErr } = await db().from("brands").update({ tranco_rank: r.rank, tranco_day: day }).eq("domain", r.domain);
     if (bErr) throw new Error(`brands güncellenemedi: ${bErr.message}`);
   }
 }
 
 /** Tüm ürünlerin winner skorunu satış ölçümleri, trafik sırası ve trend skorundan yeniden hesaplar. */
-export async function updateWinnerScores(): Promise<number> {
+export async function updateWinnerScores(): Promise<{ total: number; updated: number }> {
   const since = new Date(Date.now() - 45 * 86_400_000).toISOString().slice(0, 10);
   const [products, snaps, ranks, ads, items, stores] = await Promise.all([
     allRows((a, b) =>
       db()
         .from("products")
-        .select("id, brand_domain, product_url, review_count, rating, price, currency, trend_score, score_breakdown, supplier_min_usd, margin_ratio, supplier_sold, supplier_sold_per_week, supplier_image_match")
+        .select("id, brand_domain, product_url, review_count, rating, price, currency, trend_score, score_breakdown, supplier_min_usd, margin_ratio, supplier_sold, supplier_sold_per_week, supplier_image_match, winner_score, momentum_score")
         .order("id")
         .range(a, b),
     ),
@@ -411,6 +416,7 @@ export async function updateWinnerScores(): Promise<number> {
     for (const row of rows) m.set(row[key], [...(m.get(row[key]) ?? []), row]);
     return m;
   };
+  let updated = 0;
   const snapsBy = group(snaps.data as { product_id: string; day: string; review_count: number | null }[], "product_id");
   const ranksBy = group(ranks.data as { domain: string; day: string; rank: number | null }[], "domain");
 
@@ -439,10 +445,13 @@ export async function updateWinnerScores(): Promise<number> {
       productStockDrops: item?.so ?? null,
       productCopies: item?.copies ?? null,
     });
+    // Skoru değişmeyen ürün yazılmaz (her çalıştırmada 8 bin ayrı istek).
+    if (p.winner_score !== null && Number(p.winner_score) === score && Number(p.momentum_score) === breakdown.momentum.score) continue;
     const { error } = await db().from("products").update({ winner_score: score, winner_breakdown: breakdown, momentum_score: breakdown.momentum.score }).eq("id", p.id);
     if (error) throw new Error(`winner skoru yazılamadı: ${error.message}`);
+    updated++;
   }
-  return products.data!.length;
+  return { total: products.data!.length, updated };
 }
 
 /** Verilen gün listesinde sırası kaydedilmemiş markalar (yeni eklenenler). */
